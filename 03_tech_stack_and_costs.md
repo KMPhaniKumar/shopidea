@@ -1,327 +1,591 @@
-# Document 3 — Tech Stack, Integrations & Maintenance Costs
-### Version 1.0 | Date: April 2026
+# Document 3 — Tech Stack, Integrations & Maintenance Costs (Supabase Edition)
+### Version 2.0 | Updated: April 2026
 
 ---
 
 ## 1. High Level System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      CLIENTS                            │
-│   Seller App (Android/iOS)  │  Buyer App (Android/iOS)  │
-│   Buyer Web (storefront)    │  Admin Dashboard (Web)     │
-└─────────────┬───────────────────────────┬───────────────┘
-              │                           │
-              ▼                           ▼
-┌─────────────────────────────────────────────────────────┐
-│                   API GATEWAY (AWS)                      │
-│              Rate limiting + Auth + Routing              │
-└─────────────┬───────────────────────────────────────────┘
-              │
-    ┌─────────┴──────────────────────────┐
-    ▼                                    ▼
-┌──────────────────┐          ┌──────────────────────────┐
-│  BACKEND SERVICES │          │     THIRD PARTY APIs      │
-│                  │          │                          │
-│  Auth Service    │          │  Razorpay (payments)     │
-│  Seller Service  │          │  Shiprocket (delivery)   │
-│  Buyer Service   │          │  Twilio (WhatsApp/SMS)   │
-│  Order Service   │          │  Firebase (push notifs)  │
-│  Product Service │          │  AWS S3 (image storage)  │
-│  Payment Service │          │  Google Maps (location)  │
-│  Delivery Service│          │  MSG91 (SMS OTP)         │
-└────────┬─────────┘          └──────────────────────────┘
-         │
-    ┌────┴────────────────────┐
-    ▼                         ▼
-┌──────────────┐    ┌─────────────────────┐
-│  PostgreSQL  │    │  Redis (cache)       │
-│  (main DB)   │    │  (sessions/OTP/feed) │
-└──────────────┘    └─────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                         CLIENTS                              │
+│   Seller App (Android/iOS)   │   Buyer App (Android/iOS)    │
+│   Buyer Web (storefront)     │   Admin Dashboard (Web)      │
+└──────────────┬───────────────────────────┬───────────────────┘
+               │                           │
+               ▼                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    SUPABASE (Core Backend)                   │
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────┐ │
+│  │  Auth       │  │  Database   │  │  Storage             │ │
+│  │  Phone OTP  │  │  PostgreSQL │  │  Product Images      │ │
+│  │  JWT tokens │  │  Row Level  │  │  Store Logos         │ │
+│  │             │  │  Security   │  │  Review Photos       │ │
+│  └─────────────┘  └─────────────┘  └──────────────────────┘ │
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────┐ │
+│  │  Realtime   │  │  Auto APIs  │  │  Edge Functions      │ │
+│  │  Order      │  │  REST +     │  │  Custom Logic        │ │
+│  │  Updates    │  │  GraphQL    │  │  Webhooks            │ │
+│  └─────────────┘  └─────────────┘  └──────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
+               │
+    ┌──────────┴──────────────────────────────┐
+    ▼                                         ▼
+┌──────────────────────┐         ┌────────────────────────────┐
+│  NODE.JS BACKEND     │         │    THIRD PARTY APIS        │
+│  (Custom logic only) │         │                            │
+│                      │         │  Razorpay (payments)       │
+│  Delivery booking    │         │  Shiprocket (delivery)     │
+│  WhatsApp bot logic  │         │  Gupshup (WhatsApp)        │
+│  Payout processing   │         │  Firebase FCM (push)       │
+│  Shiprocket webhooks │         │  Google Maps (location)    │
+└──────────────────────┘         └────────────────────────────┘
+
+HOSTING
+├── Supabase Cloud (database + auth + storage + realtime)
+├── Vercel (Next.js storefront + admin dashboard — free tier)
+└── Railway or Render (Node.js custom backend — ₹1,500/month)
 ```
 
 ---
 
-## 2. Tech Stack Recommendation
+## 2. What Supabase Replaces
 
-### 2.1 Backend
+| Old Stack | Supabase Replacement | Dev Time Saved | Cost Saved |
+|---|---|---|---|
+| AWS RDS PostgreSQL | Supabase Database | 1 week setup | ₹3,500/month |
+| Custom JWT Auth service | Supabase Auth | 2-3 weeks | ₹2,000/month |
+| AWS S3 image storage | Supabase Storage | 3 days | ₹500/month |
+| Custom REST API layer | Supabase Auto APIs | 1-2 weeks | Dev cost |
+| WebSocket server | Supabase Realtime | 1 week | ₹2,000/month |
+| Redis sessions | Supabase Auth sessions | 2 days | ₹2,000/month |
+| MSG91 OTP (partially) | Supabase Auth OTP | 1 day | ₹1,000/month |
+| **Total savings** | | **6-8 weeks faster** | **₹11,000/month** |
+
+---
+
+## 3. Full Tech Stack
+
+### 3.1 Backend — Supabase (Core)
+| Feature | How Supabase Handles It |
+|---|---|
+| Database | PostgreSQL — same as before, just fully managed |
+| Authentication | Built-in phone OTP — no custom code needed |
+| File storage | Built-in storage with CDN — replaces AWS S3 |
+| REST API | Auto-generated from your database tables |
+| Realtime | Postgres changes streamed to clients instantly |
+| Row Level Security | Database-level permissions — very secure |
+| Edge Functions | Serverless functions for custom logic (Deno runtime) |
+
+### 3.2 Backend — Node.js (Custom Logic Only)
+Only needed for things Supabase cannot handle directly:
+| Custom Logic | Why Node.js |
+|---|---|
+| Shiprocket delivery booking | Complex API calls + webhook handling |
+| WhatsApp bot conversation flow | Multi-step conversation state management |
+| Razorpay payout to sellers | Scheduled weekly payouts logic |
+| Seller store subdomain routing | yourstore.platform.com routing logic |
+
+### 3.3 Frontend — Mobile Apps
 | Component | Technology | Why |
 |---|---|---|
-| Primary backend | Node.js + Express | Fast development, huge community, good for APIs |
-| Alternative backend | Python + FastAPI | If team knows Python better |
-| Database | PostgreSQL | Reliable, handles complex queries, free |
-| Cache | Redis | Fast session management, OTP storage, feed caching |
-| File storage | AWS S3 | Product images, cheap, scalable |
-| Search | Elasticsearch (later) | Product and seller search at scale |
-| Queue | AWS SQS | Order processing, notifications queue |
-
-### 2.2 Frontend — Mobile Apps
-| Component | Technology | Why |
-|---|---|---|
-| Mobile framework | React Native | Single codebase for Android + iOS, saves 40% cost |
-| Alternative | Flutter | If team prefers Dart, also single codebase |
-| State management | Redux or Zustand | Clean state handling |
+| Framework | React Native | Single codebase Android + iOS |
+| Supabase SDK | @supabase/supabase-js | Official SDK, works perfectly |
+| State management | Zustand | Lightweight, simple |
 | Navigation | React Navigation | Industry standard |
+| Alternative | Flutter + supabase-flutter | If team prefers Flutter |
 
-### 2.3 Frontend — Web
+### 3.4 Frontend — Web
 | Component | Technology | Why |
 |---|---|---|
-| Buyer storefront (web) | Next.js | SEO friendly, fast load, server-side rendering |
-| Admin dashboard | React + Tailwind | Simple, fast to build |
-| Hosting | Vercel (storefront) + AWS (admin) | Cheap, fast |
+| Buyer storefront | Next.js + Supabase SDK | SEO friendly, fast, server-side rendering |
+| Admin dashboard | Next.js + Supabase SDK | Same codebase, reuse components |
+| Styling | Tailwind CSS | Fast UI development |
+| Hosting | Vercel | Free tier sufficient for long time |
 
-### 2.4 Infrastructure
+### 3.5 Infrastructure (Minimal with Supabase)
 | Component | Technology | Why |
 |---|---|---|
-| Cloud provider | AWS | Best India region support, reliable |
-| Container | Docker | Easy deployment, consistent environments |
-| Orchestration | AWS ECS (start) → Kubernetes (later) | Start simple, scale when needed |
-| CDN | AWS CloudFront | Fast image delivery across India |
-| DNS | AWS Route 53 | Subdomain management for seller stores |
+| Core backend | Supabase Cloud | Fully managed, zero DevOps needed |
+| Custom backend | Railway or Render | Simple Node.js hosting, cheap |
+| Web hosting | Vercel | Free, fast, global CDN |
+| DNS | Cloudflare | Free, fast, subdomain management |
+| SSL | Cloudflare / Vercel | Free automatic SSL |
+
+**No AWS needed at all for MVP and Phase 2. Saves massive complexity and cost.**
 
 ---
 
-## 3. Third Party Integrations
+## 4. Supabase Feature Implementation Guide
 
-### 3.1 Payments — Razorpay
-| Feature | Detail |
-|---|---|
-| What it does | Accepts UPI, cards, netbanking, COD |
-| Integration effort | 2-3 days |
-| Transaction fee | 2% per transaction (you pass to buyer or absorb) |
-| Payout to sellers | Razorpay Route — split payments automatically |
-| Escrow | Razorpay holds payment, releases on your trigger |
-| Monthly cost | Pay per transaction only, no monthly fee |
-| Estimated cost at 10,000 orders/month | ₹10,000-₹15,000/month |
+### 4.1 Phone OTP Authentication
+```javascript
+// Seller / Buyer login — just phone number + OTP, no passwords
 
-### 3.2 Delivery — Shiprocket
-| Feature | Detail |
-|---|---|
-| What it does | Aggregates 15+ courier partners — Delhivery, Bluedart, Xpressbees |
-| Integration effort | 3-4 days |
-| How it works | Seller books shipment via your app → Shiprocket handles rest |
-| Cost | Per shipment — ₹35-₹80 depending on weight and distance |
-| Who pays | Buyer pays delivery fee → you pay Shiprocket → keep margin |
-| Monthly fixed cost | ₹0 (pay per shipment only) |
-| API | REST API, well documented |
+// Step 1: Send OTP
+const { error } = await supabase.auth.signInWithOtp({
+  phone: '+919876543210'
+})
 
-### 3.3 WhatsApp Business — Twilio or Gupshup
-| Feature | Detail |
-|---|---|
-| What it does | Send order notifications, bot conversations via WhatsApp |
-| Integration effort | 5-7 days |
-| Provider options | Twilio (global, reliable) or Gupshup (India-focused, cheaper) |
-| Cost — Gupshup | ₹0.35-₹0.50 per WhatsApp message |
-| Cost — Twilio | $0.005 per message (~₹0.40) |
-| Monthly estimate at 50,000 messages | ₹17,500-₹25,000/month |
-| Recommendation | Start with Gupshup (cheaper, India support) |
+// Step 2: Verify OTP entered by user
+const { data, error } = await supabase.auth.verifyOtp({
+  phone: '+919876543210',
+  token: '123456',
+  type: 'sms'
+})
+// User is now logged in — JWT token auto-managed by Supabase
+```
 
-### 3.4 SMS OTP — MSG91
-| Feature | Detail |
-|---|---|
-| What it does | OTP for phone number verification |
-| Integration effort | 1 day |
-| Cost | ₹0.18-₹0.22 per SMS |
-| Monthly estimate at 5,000 OTPs | ₹900-₹1,100/month |
+### 4.2 Product Image Upload
+```javascript
+// Upload product photo directly from mobile app
+const { data, error } = await supabase.storage
+  .from('product-images')
+  .upload(`stores/${storeId}/${productId}_1.jpg`, imageFile, {
+    contentType: 'image/jpeg',
+    upsert: true
+  })
 
-### 3.5 Push Notifications — Firebase FCM
-| Feature | Detail |
-|---|---|
-| What it does | Push notifications to Android and iOS |
-| Integration effort | 1-2 days |
-| Cost | FREE up to 1M messages/day |
-| Monthly cost | ₹0 for most early stage usage |
+// Get public URL for displaying image
+const { data: urlData } = supabase.storage
+  .from('product-images')
+  .getPublicUrl(`stores/${storeId}/${productId}_1.jpg`)
 
-### 3.6 Maps & Location — Google Maps API
-| Feature | Detail |
-|---|---|
-| What it does | Address autocomplete, distance calculation, store locator |
-| Integration effort | 2 days |
-| Cost | $200 free credit/month, then $2-$7 per 1000 requests |
-| Monthly estimate at early stage | ₹0 (within free tier) |
-| At scale (100K requests/month) | ₹5,000-₹10,000/month |
+const imageUrl = urlData.publicUrl
+// Store this URL in products table
+```
 
-### 3.7 Image Storage — AWS S3 + CloudFront
-| Feature | Detail |
-|---|---|
-| What it does | Store all product images, seller photos |
-| Cost S3 | ₹1.8 per GB/month |
-| Cost CloudFront | ₹0.85 per GB delivered |
-| Monthly estimate at 100GB | ₹270/month (S3) + ₹85/month (CDN) = ₹355/month |
+### 4.3 Realtime Order Notifications (Seller App)
+```javascript
+// Seller app listens for new orders the moment buyer places them
+// No polling — instant push via WebSocket
+
+useEffect(() => {
+  const channel = supabase
+    .channel('new-orders')
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'orders',
+      filter: `store_id=eq.${storeId}`
+    }, (payload) => {
+      showNewOrderNotification(payload.new)
+      playNotificationSound()
+      refreshOrdersList()
+    })
+    .subscribe()
+
+  return () => supabase.removeChannel(channel)
+}, [storeId])
+```
+
+### 4.4 Realtime Order Status (Buyer App)
+```javascript
+// Buyer sees order status update in realtime
+// Seller accepts → buyer screen updates instantly
+
+const channel = supabase
+  .channel('my-order')
+  .on('postgres_changes', {
+    event: 'UPDATE',
+    schema: 'public',
+    table: 'orders',
+    filter: `order_id=eq.${orderId}`
+  }, (payload) => {
+    updateOrderStatus(payload.new.status)
+    // "Your order has been accepted!" — instant
+  })
+  .subscribe()
+```
+
+### 4.5 Row Level Security (Data Privacy)
+```sql
+-- Sellers can only see their own orders
+CREATE POLICY "Sellers see own orders"
+ON orders FOR SELECT
+USING (
+  store_id IN (
+    SELECT store_id FROM stores
+    WHERE seller_id = auth.uid()
+  )
+);
+
+-- Buyers can only see their own orders
+CREATE POLICY "Buyers see own orders"
+ON orders FOR SELECT
+USING (buyer_id = auth.uid());
+
+-- Products are public for reading
+CREATE POLICY "Products are publicly readable"
+ON products FOR SELECT
+USING (is_available = true);
+```
+
+### 4.6 Seller Store Subdomain (Edge Function)
+```javascript
+// Supabase Edge Function handles yourstore.platform.com routing
+
+Deno.serve(async (req) => {
+  const hostname = req.headers.get('host') // priya-cakes.platform.com
+  const storeSlug = hostname.split('.')[0]  // priya-cakes
+
+  const { data: store } = await supabase
+    .from('stores')
+    .select('*')
+    .eq('store_slug', storeSlug)
+    .single()
+
+  return new Response(JSON.stringify(store))
+})
+```
 
 ---
 
-## 4. Monthly Infrastructure Cost Estimate
+## 5. Database Schema in Supabase (PostgreSQL)
+
+```sql
+-- USERS TABLE
+CREATE TABLE users (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  phone TEXT UNIQUE NOT NULL,
+  name TEXT,
+  city TEXT,
+  role TEXT DEFAULT 'buyer',     -- 'seller', 'buyer', 'both'
+  referral_store_id UUID,        -- which seller link brought them
+  loyalty_coins INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- STORES TABLE
+CREATE TABLE stores (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  seller_id UUID REFERENCES users(id),
+  store_name TEXT NOT NULL,
+  store_slug TEXT UNIQUE NOT NULL,  -- for yourstore.platform.com
+  category TEXT NOT NULL,
+  description TEXT,
+  logo_url TEXT,
+  city TEXT,
+  area TEXT,
+  rating_avg DECIMAL DEFAULT 0,
+  total_orders INT DEFAULT 0,
+  total_reviews INT DEFAULT 0,
+  is_verified BOOLEAN DEFAULT false,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- PRODUCTS TABLE
+CREATE TABLE products (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  store_id UUID REFERENCES stores(id),
+  name TEXT NOT NULL,
+  description TEXT,
+  price DECIMAL NOT NULL,
+  compare_price DECIMAL,            -- original price for strikethrough
+  stock_quantity INT DEFAULT -1,    -- -1 means unlimited
+  images TEXT[],                    -- array of Supabase storage URLs
+  variants JSONB,                   -- [{name:"Size", options:["500g","1kg"]}]
+  is_available BOOLEAN DEFAULT true,
+  total_sold INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ORDERS TABLE
+CREATE TABLE orders (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  buyer_id UUID REFERENCES users(id),
+  store_id UUID REFERENCES stores(id),
+  items JSONB NOT NULL,             -- [{product_id, name, variant, qty, price}]
+  subtotal DECIMAL NOT NULL,
+  delivery_fee DECIMAL NOT NULL,
+  total_amount DECIMAL NOT NULL,
+  status TEXT DEFAULT 'pending',    -- pending/accepted/preparing/shipped/delivered/cancelled
+  delivery_address JSONB,           -- {name, phone, line1, city, pincode}
+  payment_status TEXT DEFAULT 'pending',
+  payment_id TEXT,                  -- Razorpay payment ID
+  tracking_id TEXT,                 -- Shiprocket tracking ID
+  tracking_url TEXT,
+  notes TEXT,                       -- buyer special instructions
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- REVIEWS TABLE
+CREATE TABLE reviews (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  order_id UUID REFERENCES orders(id) UNIQUE,
+  buyer_id UUID REFERENCES users(id),
+  store_id UUID REFERENCES stores(id),
+  rating INT CHECK (rating BETWEEN 1 AND 5),
+  review_text TEXT,
+  photos TEXT[],
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- PAYOUTS TABLE
+CREATE TABLE payouts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  store_id UUID REFERENCES stores(id),
+  amount DECIMAL NOT NULL,
+  orders_included UUID[],
+  status TEXT DEFAULT 'pending',    -- pending/processing/completed
+  razorpay_payout_id TEXT,
+  settlement_date DATE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- REFERRALS TABLE (track which seller brought which buyer)
+CREATE TABLE referrals (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  store_id UUID REFERENCES stores(id),
+  buyer_id UUID REFERENCES users(id),
+  installed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- WISHLISTS TABLE
+CREATE TABLE wishlists (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  buyer_id UUID REFERENCES users(id),
+  product_id UUID REFERENCES products(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(buyer_id, product_id)
+);
+
+-- FOLLOWED STORES TABLE
+CREATE TABLE followed_stores (
+  buyer_id UUID REFERENCES users(id),
+  store_id UUID REFERENCES stores(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (buyer_id, store_id)
+);
+```
+
+---
+
+## 6. Supabase Storage Buckets Setup
+
+```
+supabase/storage/
+├── product-images/          (public bucket)
+│   └── stores/{store_id}/{product_id}_{1,2,3}.jpg
+│
+├── store-logos/             (public bucket)
+│   └── {store_id}/logo.jpg
+│
+├── review-photos/           (public bucket)
+│   └── {review_id}/{1,2,3}.jpg
+│
+└── seller-documents/        (private bucket — verification only)
+    └── {seller_id}/aadhaar.jpg
+```
+
+---
+
+## 7. Third Party Integrations (Updated)
+
+### 7.1 Payments — Razorpay
+| Feature | Detail |
+|---|---|
+| What it does | UPI, cards, netbanking, COD, wallet |
+| Integration | Razorpay SDK + Supabase Edge Function webhook |
+| Payout to sellers | Razorpay X — automated weekly payouts |
+| Transaction fee | 2% per order |
+| Monthly cost at 5,000 orders | ₹10,000-₹15,000 |
+
+### 7.2 Delivery — Shiprocket
+| Feature | Detail |
+|---|---|
+| What it does | 15+ courier partners aggregated |
+| Integration | Node.js backend calls Shiprocket API |
+| Webhook flow | Shiprocket → Node.js → Supabase → Realtime to buyer |
+| Cost | ₹35-₹80 per shipment (buyer pays) |
+| Monthly platform fee | ₹0 |
+
+### 7.3 WhatsApp — Gupshup
+| Feature | Detail |
+|---|---|
+| What it does | Order notifications + WhatsApp bot |
+| Integration | Supabase Edge Function triggers on order events |
+| Cost per message | ₹0.35-₹0.50 |
+| Monthly at 20,000 messages | ₹7,000-₹10,000 |
+
+### 7.4 Push Notifications — Firebase FCM
+| Feature | Detail |
+|---|---|
+| Integration | Supabase Edge Function calls FCM on order events |
+| Cost | Free up to 1M/day |
+
+### 7.5 Maps — Google Maps
+| Feature | Detail |
+|---|---|
+| What it does | Address autocomplete, distance, store locator |
+| Cost | Free up to $200/month credit (fine for Phase 1-2) |
+
+### 7.6 SMS OTP — Via Supabase Auth + Twilio
+| Feature | Detail |
+|---|---|
+| How it works | Supabase Auth connects to Twilio — 10 min setup |
+| Cost | ~₹0.60 per OTP SMS |
+| Monthly at 3,000 OTPs | ₹1,800 |
+| At scale | Switch to custom MSG91 flow for cheaper rates |
+
+---
+
+## 8. Monthly Cost Estimate (Supabase Stack)
 
 ### Phase 1 — MVP (0-1,000 sellers, 10,000 buyers)
-| Service | Monthly Cost |
-|---|---|
-| AWS EC2 (2 small servers) | ₹4,000 |
-| AWS RDS PostgreSQL | ₹3,500 |
-| Redis (ElastiCache) | ₹2,000 |
-| AWS S3 + CloudFront | ₹500 |
-| Razorpay | ₹5,000 (at 5,000 orders) |
-| Gupshup WhatsApp | ₹7,000 (at 20,000 messages) |
-| MSG91 SMS | ₹1,000 |
-| Firebase | ₹0 |
-| Google Maps | ₹0 (free tier) |
-| Domain + SSL | ₹500 |
-| **Total Phase 1** | **~₹23,500/month** |
+| Service | Old Cost | New Cost with Supabase |
+|---|---|---|
+| Database (RDS → Supabase Free) | ₹3,500 | ₹0 |
+| Auth service (→ Supabase) | ₹2,000 | ₹0 |
+| Storage (S3 → Supabase) | ₹500 | ₹0 |
+| Redis (→ Supabase handles) | ₹2,000 | ₹0 |
+| Backend server (Railway) | ₹4,000 | ₹1,500 |
+| Web hosting (Vercel free) | ₹1,000 | ₹0 |
+| Razorpay | ₹5,000 | ₹5,000 |
+| Gupshup WhatsApp | ₹7,000 | ₹7,000 |
+| OTP SMS (Twilio via Supabase) | ₹1,000 | ₹1,800 |
+| Firebase FCM | ₹0 | ₹0 |
+| Google Maps | ₹0 | ₹0 |
+| Domain + Cloudflare | ₹500 | ₹500 |
+| **Total** | **₹23,500/month** | **₹15,800/month** |
+
+**Monthly saving: ₹7,700 | Annual saving: ₹92,400**
 
 ### Phase 2 — Growth (1,000-10,000 sellers, 1L buyers)
-| Service | Monthly Cost |
+| Service | Cost |
 |---|---|
-| AWS EC2 (scaled up) | ₹15,000 |
-| AWS RDS (upgraded) | ₹10,000 |
-| Redis | ₹5,000 |
-| AWS S3 + CloudFront | ₹3,000 |
-| Razorpay | ₹25,000 (at 50,000 orders) |
-| Gupshup WhatsApp | ₹35,000 (at 1,00,000 messages) |
-| MSG91 SMS | ₹5,000 |
+| Supabase Pro | ₹2,100 ($25/month) |
+| Railway Node.js (scaled) | ₹5,000 |
+| Vercel Pro (if needed) | ₹1,700 |
+| Razorpay (50,000 orders) | ₹25,000 |
+| Gupshup (1,00,000 messages) | ₹35,000 |
+| OTP SMS | ₹5,000 |
 | Google Maps | ₹5,000 |
-| Elasticsearch | ₹8,000 |
-| **Total Phase 2** | **~₹1,11,000/month** |
+| **Total Phase 2** | **~₹78,800/month** |
+
+**Saving vs old stack: ₹32,200/month**
 
 ### Phase 3 — Scale (10,000+ sellers, 10L+ buyers)
-| Service | Monthly Cost |
+| Service | Cost |
 |---|---|
-| AWS (full stack) | ₹1,00,000+ |
+| Supabase Team OR self-hosted | ₹50,000 |
+| Node.js backend (scaled) | ₹20,000 |
 | WhatsApp messages | ₹1,50,000+ |
-| All other services | ₹50,000+ |
-| **Total Phase 3** | **~₹3,00,000+/month** |
+| All other services | ₹30,000 |
+| **Total Phase 3** | **~₹2,50,000+/month** |
 
-*At Phase 3 revenue should be ₹1-2 Cr/month — infra cost is less than 3%*
+*At Phase 3 revenue is ₹1-2 Cr/month — infra is less than 3%*
 
 ---
 
-## 5. Development Team Needed
+## 9. Development Team (Supabase = Faster & Cheaper)
 
-### MVP Build (4-6 months)
-| Role | Count | Monthly Cost | Total for 6 months |
+### Why Supabase Reduces Dev Time
+- No backend setup for auth — saves 2-3 weeks
+- No API development for basic CRUD — saves 1-2 weeks
+- No realtime server setup — saves 1 week
+- No file storage setup — saves 3 days
+- **Total saved: 4-6 weeks of development**
+
+### MVP Build (8-10 weeks instead of 16-20 weeks)
+| Role | Count | Monthly Cost | Total for 3 months |
 |---|---|---|---|
-| Full Stack Developer (Node.js + React Native) | 2 | ₹80,000 each | ₹9,60,000 |
-| Frontend Developer (React Native) | 1 | ₹60,000 | ₹3,60,000 |
-| UI/UX Designer | 1 | ₹50,000 | ₹3,00,000 |
-| DevOps (part time) | 1 | ₹30,000 | ₹1,80,000 |
-| **Total dev cost for MVP** | | | **~₹18,00,000** |
+| Full Stack Developer (React Native + Supabase) | 2 | ₹80,000 each | ₹4,80,000 |
+| UI/UX Designer | 1 | ₹50,000 | ₹1,50,000 |
+| **Total** | | | **~₹6,30,000** |
 
-### Alternative — Freelancer Route (Cheaper)
-| Role | Cost |
+### Freelancer Route (Cheapest)
+| Role | Fixed Cost |
 |---|---|
-| Backend developer (freelance) | ₹3,00,000 fixed for MVP |
-| React Native developer (freelance) | ₹2,50,000 fixed for MVP |
-| UI/UX design | ₹80,000 fixed |
-| Total freelancer MVP | **~₹6,30,000** |
+| React Native developer | ₹2,00,000 |
+| Next.js developer | ₹1,00,000 |
+| Node.js (custom logic only) | ₹80,000 |
+| UI/UX design | ₹80,000 |
+| **Total** | **~₹4,60,000** |
 
 ---
 
-## 6. Total Initial Investment Needed
+## 10. Total Initial Investment (Updated with Supabase)
 
-| Category | Cost |
-|---|---|
-| Development (MVP) | ₹6-18 lakhs |
-| Infrastructure (6 months) | ₹1.5 lakhs |
-| Marketing (first 1000 sellers) | ₹2 lakhs |
-| Legal and company registration | ₹50,000 |
-| Buffer | ₹2 lakhs |
-| **Total to launch** | **₹12-24 lakhs** |
+| Category | Old Estimate | New Estimate |
+|---|---|---|
+| Development (MVP) | ₹6-18 lakhs | ₹4-7 lakhs |
+| Infrastructure (6 months) | ₹1.5 lakhs | ₹95,000 |
+| Marketing (first 1,000 sellers) | ₹2 lakhs | ₹2 lakhs |
+| Legal + registration | ₹50,000 | ₹50,000 |
+| Buffer | ₹2 lakhs | ₹1 lakh |
+| **Total to launch** | **₹12-24 lakhs** | **₹8-12 lakhs** |
 
----
-
-## 7. Database Schema (High Level)
-
-```
-USERS (sellers and buyers combined)
-├── user_id
-├── phone_number
-├── role (seller / buyer / both)
-├── name
-├── city
-├── created_at
-└── referral_source (which seller link they came from)
-
-STORES (seller's shop)
-├── store_id
-├── seller_id (user_id)
-├── store_name
-├── store_slug (for URL)
-├── category
-├── logo_url
-├── city / area
-├── rating_average
-├── total_orders
-└── is_verified
-
-PRODUCTS
-├── product_id
-├── store_id
-├── name
-├── description
-├── price
-├── stock_quantity
-├── images (array)
-├── variants (JSON)
-└── is_available
-
-ORDERS
-├── order_id
-├── buyer_id
-├── store_id
-├── items (JSON — product, variant, qty, price)
-├── total_amount
-├── delivery_fee
-├── status (pending/accepted/preparing/shipped/delivered)
-├── delivery_address
-├── payment_status
-├── payment_id (Razorpay)
-├── tracking_id (Shiprocket)
-└── created_at
-
-REVIEWS
-├── review_id
-├── order_id
-├── buyer_id
-├── store_id
-├── rating (1-5)
-├── review_text
-├── photos (array)
-└── created_at
-
-PAYOUTS
-├── payout_id
-├── store_id
-├── amount
-├── status (pending/processed)
-├── settlement_date
-└── razorpay_payout_id
-```
+**Supabase saves ₹4-12 lakhs on initial investment.**
 
 ---
 
-## 8. Security Considerations
+## 11. Security (Supabase Handles Most Of It)
 
-| Area | Approach |
+| Area | How Supabase Handles It |
 |---|---|
-| Authentication | JWT tokens + OTP based, no passwords |
+| Authentication | Built-in JWT, OTP, session management |
+| Database security | Row Level Security — users only see their own data |
+| API security | Auto rate limiting on all Supabase APIs |
+| Storage security | Bucket policies — control who reads/writes |
+| HTTPS | Auto SSL on all Supabase endpoints |
 | Payment security | Razorpay handles — PCI DSS compliant |
-| API security | Rate limiting, API gateway, HTTPS only |
-| Data privacy | No personal data shared between sellers and buyers |
-| Image uploads | Virus scan + size limit + type check |
-| Seller verification | OTP mandatory, Aadhaar optional for verified badge |
-| Fraud detection | Razorpay built-in fraud detection |
 
 ---
 
-## 9. Scalability Plan
+## 12. Scalability Plan
 
 | Users | Architecture |
 |---|---|
-| 0-10,000 | Single server, monolithic backend, managed DB |
-| 10,000-1,00,000 | Separate services, load balancer, read replicas |
-| 1,00,000+ | Microservices, Kubernetes, multi-region |
+| 0-50,000 | Supabase Free + Railway + Vercel |
+| 50,000-5,00,000 | Supabase Pro + scaled Railway + Vercel Pro |
+| 5,00,000+ | Supabase Team OR self-host on AWS |
 
-**Start simple. Do not over-engineer on day one.**
+**Supabase scales automatically. You don't touch infrastructure until 5L+ users.**
 
 ---
 
-*Document 3 of 4 — Next: App Name Options & Business Registration Guide*
+## 13. Supabase Limitations to Know
+
+| Limitation | Impact | Solution |
+|---|---|---|
+| Free plan: 500MB DB | Fine for MVP | Upgrade to Pro (₹2,100/month) when needed |
+| Free plan: 50,000 auth users | Fine for 6-12 months | Upgrade when hitting limit |
+| SMS OTP via Twilio only | Slightly expensive | Switch to MSG91 custom flow at scale |
+| Vendor lock-in | Medium risk | Supabase is open source — self-hostable anytime |
+
+---
+
+## 14. Local Development Setup
+
+```bash
+# Install Supabase CLI
+npm install -g supabase
+
+# Start local Supabase (PostgreSQL + Auth + Storage locally)
+supabase start
+
+# This gives you:
+# DB     → postgresql://localhost:54322/postgres
+# Studio → http://localhost:54323 (visual DB editor)
+# API    → http://localhost:54321
+
+# Push schema to local DB
+supabase db push
+
+# Generate TypeScript types from your schema
+supabase gen types typescript --local > types/supabase.ts
+
+# Deploy Edge Functions
+supabase functions deploy order-notifications
+
+# Link to production Supabase project
+supabase link --project-ref your-project-ref
+```
+
+---
+
+*Document 3 of 4 — Updated to Supabase Stack v2.0*
