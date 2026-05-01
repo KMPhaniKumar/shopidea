@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "ms-vscode.vscode-typescript-next",
+    "supabase.supabase",
+    "rangav.vscode-thunder-client",
+    "eamodio.gitlens",
+    "msjsdiag.vscode-react-native",
+    "ms-azuretools.vscode-docker",
+    "ckolkman.vscode-postgres"
+  ]
+}
