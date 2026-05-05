@@ -145,10 +145,10 @@ export default function OrderDetailScreen({ navigation, route }: Props) {
           </Text>
         </View>
 
-        {order.notes ? (
+        {(order as any).notes ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Customer Note</Text>
-            <Text style={styles.noteText}>{order.notes}</Text>
+            <Text style={styles.noteText}>{(order as any).notes}</Text>
           </View>
         ) : null}
 

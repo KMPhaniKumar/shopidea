@@ -41,7 +41,7 @@ export default function OrderTrackingScreen({ navigation, route }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('OrderHistory')}>
+        <TouchableOpacity onPress={() => navigation.navigate('Tabs', { screen: 'Orders' })}>
           <Text style={styles.back}>← Orders</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{localOrder.order_number}</Text>

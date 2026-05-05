@@ -6,25 +6,26 @@ import { useAuthStore } from '../store/authStore'
 import { useSellerStore } from '../store/sellerStore'
 import { colors } from '../constants/theme'
 
-// Auth
 import PhoneScreen from '../screens/auth/PhoneScreen'
 import OTPScreen from '../screens/auth/OTPScreen'
 import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen'
-
-// Onboarding
 import StoreNameScreen from '../screens/onboarding/StoreNameScreen'
 import CategoryScreen from '../screens/onboarding/CategoryScreen'
 import LocationScreen from '../screens/onboarding/LocationScreen'
+import LocationPickerScreen from '../screens/onboarding/LocationPickerScreen'
 import LogoScreen from '../screens/onboarding/LogoScreen'
 import StoreReadyScreen from '../screens/onboarding/StoreReadyScreen'
-
-// Products
-import ProductListScreen from '../screens/products/ProductListScreen'
 import AddProductScreen from '../screens/products/AddProductScreen'
 import EditProductScreen from '../screens/products/EditProductScreen'
-
-// Store
 import EditStoreScreen from '../screens/store/EditStoreScreen'
+import OrderDetailScreen from '../screens/orders/OrderDetailScreen'
+import StoreReviewsScreen from '../screens/reviews/StoreReviewsScreen'
+import AnalyticsScreen from '../screens/analytics/AnalyticsScreen'
+import PayoutHistoryScreen from '../screens/payouts/PayoutHistoryScreen'
+import BankAccountScreen from '../screens/payouts/BankAccountScreen'
+import CouponsScreen from '../screens/marketing/CouponsScreen'
+import BroadcastScreen from '../screens/marketing/BroadcastScreen'
+import SellerTabNavigator from './SellerTabNavigator'
 
 const Stack = createNativeStackNavigator()
 
@@ -69,15 +70,23 @@ export default function RootNavigator() {
             <Stack.Screen name="StoreName" component={StoreNameScreen} />
             <Stack.Screen name="Category" component={CategoryScreen} />
             <Stack.Screen name="Location" component={LocationScreen} />
+            <Stack.Screen name="LocationPicker" component={LocationPickerScreen} options={{ presentation: 'fullScreenModal' }} />
             <Stack.Screen name="Logo" component={LogoScreen} />
             <Stack.Screen name="StoreReady" component={StoreReadyScreen} />
           </>
         ) : (
           <>
-            <Stack.Screen name="ProductList" component={ProductListScreen} />
+            <Stack.Screen name="Tabs" component={SellerTabNavigator} />
             <Stack.Screen name="AddProduct" component={AddProductScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="EditProduct" component={EditProductScreen} options={{ presentation: 'modal' }} />
-            <Stack.Screen name="EditStore" component={EditStoreScreen} options={{ headerShown: true, title: 'Edit Store' }} />
+            <Stack.Screen name="EditStore" component={EditStoreScreen} />
+            <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+            <Stack.Screen name="StoreReviews" component={StoreReviewsScreen} />
+            <Stack.Screen name="Analytics" component={AnalyticsScreen} />
+            <Stack.Screen name="PayoutHistory" component={PayoutHistoryScreen} />
+            <Stack.Screen name="BankAccount" component={BankAccountScreen} />
+            <Stack.Screen name="Coupons" component={CouponsScreen} />
+            <Stack.Screen name="Broadcast" component={BroadcastScreen} />
           </>
         )}
       </Stack.Navigator>

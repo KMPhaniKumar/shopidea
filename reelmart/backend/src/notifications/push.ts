@@ -15,6 +15,14 @@ function getFirebaseApp() {
   return admin
 }
 
+export const pushNotify = {
+  newOrder: (userId: string, orderNumber: string) =>
+    sendPushToUser(userId, '🛍️ New Order!', `Order ${orderNumber} needs your attention`, { type: 'new_order', order_number: orderNumber }).catch(() => {}),
+
+  orderStatusUpdate: (userId: string, status: string, orderNumber: string) =>
+    sendPushToUser(userId, 'Order Update', `Your order ${orderNumber} is now ${status}`, { type: 'order_status', order_number: orderNumber, status }).catch(() => {}),
+}
+
 export async function sendPushToUser(userId: string, title: string, body: string, data?: Record<string, string>) {
   const { data: tokens } = await supabaseAdmin
     .from('device_tokens')

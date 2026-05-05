@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { registerFcmToken } from '../lib/api'
 import type { Database } from '../types/supabase'
 
 type UserProfile = Database['public']['Tables']['users']['Row']
@@ -32,10 +33,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (session?.user) await fetchProfile(session.user.id, set)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       set({ session })
       if (session?.user) {
         await fetchProfile(session.user.id, set)
+        if (event === 'SIGNED_IN') tryRegisterFcmToken(session.user.id)
       } else {
         set({ profile: null })
       }
@@ -92,4 +94,20 @@ async function fetchProfile(userId: string, set: (partial: Partial<AuthState>) =
     .eq('id', userId)
     .single()
   set({ profile: data ?? null })
+}
+
+async function tryRegisterFcmToken(userId: string) {
+  try {
+    // expo-notifications must be installed for push to work
+    const Notifications = require('expo-notifications')
+    const { Platform } = require('react-native')
+    const { status } = await Notifications.requestPermissionsAsync()
+    if (status !== 'granted') return
+    const { data: token } = await Notifications.getExpoPushTokenAsync()
+    if (token) {
+      await registerFcmToken(userId, token, Platform.OS === 'ios' ? 'ios' : 'android')
+    }
+  } catch {
+    // expo-notifications not installed or permissions denied — skip silently
+  }
 }

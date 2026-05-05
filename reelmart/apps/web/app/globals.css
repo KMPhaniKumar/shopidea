@@ -1,3 +1,20 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --color-primary:   #FF6B2B;
+  --color-black:     #1A1A1A;
+  --color-white:     #FFFFFF;
+  --color-surface:   #F9F9F9;
+  --color-border:    #EEEEEE;
+  --color-text:      #1A1A1A;
+  --color-secondary: #666666;
+  --color-muted:     #AAAAAA;
+  --color-success:   #25D366;
+  --color-error:     #E23744;
+  --radius-card:     12px;
+  --radius-btn:      8px;
+  --shadow:          0 1px 3px rgba(0,0,0,0.08);
+  --shadow-hover:    0 4px 12px rgba(0,0,0,0.12);
+}

@@ -89,6 +89,12 @@ export default function OTPScreen({ navigation, route }: Props) {
           <Text style={styles.phone}>{maskedPhone}</Text>
         </Text>
 
+        {__DEV__ && (
+          <View style={styles.devBanner}>
+            <Text style={styles.devBannerText}>🛠 DEV — Test numbers use OTP: 123456</Text>
+          </View>
+        )}
+
         <TextInput
           style={styles.otpInput}
           placeholder="• • • • • •"
@@ -172,4 +178,9 @@ const styles = StyleSheet.create({
   buttonText: { color: colors.white, fontSize: 16, fontWeight: '700' },
   resend: { fontSize: 15, color: colors.primary, textAlign: 'center', fontWeight: '600' },
   resendDisabled: { color: colors.textMuted },
+  devBanner: {
+    backgroundColor: '#FEF3C7', borderRadius: 8, padding: 10,
+    borderLeftWidth: 3, borderLeftColor: '#F59E0B', marginBottom: 16,
+  },
+  devBannerText: { fontSize: 13, color: '#92400E', fontWeight: '600' },
 })

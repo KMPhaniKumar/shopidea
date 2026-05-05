@@ -1,0 +1,110 @@
+version: '3.8'
+
+# Copy .env.example to .env in each service directory and fill in your values before running.
+# Start all: docker-compose up --build
+# Start one: docker-compose up catalog-service
+
+x-common-env: &common-env
+  SUPABASE_URL: ${SUPABASE_URL}
+  SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+
+x-internal: &internal-env
+  INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-internal-secret}
+
+services:
+  catalog-service:
+    build: ./catalog-service
+    ports: ["3001:3000"]
+    environment:
+      <<: *common-env
+      ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3001"
+    restart: unless-stopped
+
+  order-service:
+    build: ./order-service
+    ports: ["3002:3000"]
+    environment:
+      <<: [*common-env, *internal-env]
+      NOTIFICATION_SERVICE_URL: http://notification-service:3000
+      ALLOWED_ORIGINS: "http://localhost:3000"
+    depends_on: [notification-service]
+    restart: unless-stopped
+
+  payment-service:
+    build: ./payment-service
+    ports: ["3003:3000"]
+    environment:
+      <<: *common-env
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET}
+      ALLOWED_ORIGINS: "http://localhost:3000"
+    restart: unless-stopped
+
+  delivery-service:
+    build: ./delivery-service
+    ports: ["3004:3000"]
+    environment:
+      <<: *common-env
+      SHIPROCKET_EMAIL: ${SHIPROCKET_EMAIL}
+      SHIPROCKET_PASSWORD: ${SHIPROCKET_PASSWORD}
+      ALLOWED_ORIGINS: "http://localhost:3000"
+    restart: unless-stopped
+
+  notification-service:
+    build: ./notification-service
+    ports: ["3005:3000"]
+    environment:
+      <<: [*common-env, *internal-env]
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
+      GUPSHUP_API_KEY: ${GUPSHUP_API_KEY}
+      GUPSHUP_SENDER_NUMBER: ${GUPSHUP_SENDER_NUMBER}
+      GUPSHUP_APP_NAME: ${GUPSHUP_APP_NAME:-ReelMart}
+    restart: unless-stopped
+
+  whatsapp-service:
+    build: ./whatsapp-service
+    ports: ["3006:3000"]
+    environment:
+      <<: *common-env
+      GUPSHUP_API_KEY: ${GUPSHUP_API_KEY}
+      GUPSHUP_SENDER_NUMBER: ${GUPSHUP_SENDER_NUMBER}
+      GUPSHUP_APP_NAME: ${GUPSHUP_APP_NAME:-ReelMart}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+      PAYMENT_SERVICE_URL: http://payment-service:3000
+      ALLOWED_ORIGINS: "http://localhost:3000"
+    depends_on: [payment-service]
+    restart: unless-stopped
+
+  payout-service:
+    build: ./payout-service
+    ports: ["3007:3000"]
+    environment:
+      <<: *common-env
+    restart: unless-stopped
+
+  analytics-service:
+    build: ./analytics-service
+    ports: ["3008:3000"]
+    environment:
+      <<: *common-env
+    restart: unless-stopped
+
+  return-service:
+    build: ./return-service
+    ports: ["3009:3000"]
+    environment:
+      <<: *common-env
+      PAYMENT_SERVICE_URL: http://payment-service:3000
+      ALLOWED_ORIGINS: "http://localhost:3000"
+    depends_on: [payment-service]
+    restart: unless-stopped
+
+  admin-service:
+    build: ./admin-service
+    ports: ["3010:3000"]
+    environment:
+      <<: *common-env
+      ALLOWED_ORIGINS: "http://localhost:3000"
+    restart: unless-stopped

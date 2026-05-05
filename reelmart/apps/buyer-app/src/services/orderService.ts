@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import type { Database } from '../types/supabase'
 
 type Order = Database['public']['Tables']['orders']['Row']
@@ -41,44 +42,39 @@ export async function createOrder(params: {
   couponId?: string
   notes?: string
 }): Promise<{ orderId: string; orderNumber: string }> {
-  const { data, error } = await supabase
-    .from('orders')
-    .insert({
-      buyer_id: params.buyerId,
-      store_id: params.storeId,
-      items: params.items,
-      subtotal: params.subtotal,
-      delivery_fee: params.deliveryFee,
-      discount_amount: params.discountAmount,
-      total_amount: params.totalAmount,
-      delivery_address: params.deliveryAddress,
-      payment_method: params.paymentMethod,
-      payment_status: params.paymentMethod === 'cod' ? 'pending' : 'pending',
-      status: 'pending',
-    })
-    .select('id, order_number')
-    .single()
+  const addressLine = [params.deliveryAddress.line1, params.deliveryAddress.line2, params.deliveryAddress.area]
+    .filter(Boolean).join(', ')
 
-  if (error) throw new Error(error.message)
-  return { orderId: data.id, orderNumber: data.order_number }
+  const data = await api.post('/api/orders', {
+    store_id: params.storeId,
+    items: params.items,
+    subtotal: params.subtotal,
+    delivery_fee: params.deliveryFee,
+    discount: params.discountAmount,
+    total_amount: params.totalAmount,
+    delivery_address: {
+      name: params.deliveryAddress.name,
+      phone: params.deliveryAddress.phone,
+      address: addressLine,
+      city: params.deliveryAddress.city,
+      pincode: params.deliveryAddress.pincode,
+    },
+  })
+
+  return { orderId: data.id, orderNumber: data.order_number ?? '' }
 }
 
 export async function getBuyerOrders(buyerId: string): Promise<OrderWithStore[]> {
-  const { data } = await supabase
-    .from('orders')
-    .select('*, stores(store_name, logo_url, store_slug)')
-    .eq('buyer_id', buyerId)
-    .order('created_at', { ascending: false })
-  return (data as OrderWithStore[]) ?? []
+  const data = await api.get<OrderWithStore[]>(`/api/orders?buyerId=${buyerId}`)
+  return data ?? []
 }
 
 export async function getOrderById(orderId: string): Promise<OrderWithStore | null> {
-  const { data } = await supabase
-    .from('orders')
-    .select('*, stores(store_name, logo_url, store_slug)')
-    .eq('id', orderId)
-    .single()
-  return data as OrderWithStore ?? null
+  try {
+    return await api.get<OrderWithStore>(`/api/orders/${orderId}`)
+  } catch {
+    return null
+  }
 }
 
 export function subscribeToOrderStatus(orderId: string, onChange: (order: Order) => void) {

@@ -127,7 +127,7 @@ export async function updateProduct(
     updates.images = params.existingImages
   }
 
-  await supabase.from('products').update(updates).eq('id', productId)
+  await supabase.from('products').update(updates as any).eq('id', productId)
 }
 
 export async function deleteProduct(productId: string) {

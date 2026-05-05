@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "ReelMart Seller",
+    "slug": "reelmart-seller",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#FF6B2B"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "in.reelmart.seller",
+      "config": {
+        "googleMapsApiKey": "AIzaSyDtu00tuOZpIzPRASPFScWJRu1GkpaaSIU"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FF6B2B"
+      },
+      "package": "in.reelmart.seller",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDtu00tuOZpIzPRASPFScWJRu1GkpaaSIU"
+        }
+      }
+    },
+    "scheme": "reelmart-seller",
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow ReelMart Seller to use your location to set your store's address."
+        }
+      ]
+    ]
+  }
+}

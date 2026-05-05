@@ -14,9 +14,7 @@ CREATE TABLE public.returns (
   razorpay_refund_id TEXT,
   requested_at TIMESTAMPTZ DEFAULT NOW(),
   resolved_at TIMESTAMPTZ,
-  CONSTRAINT within_return_window CHECK (
-    requested_at <= (SELECT created_at + INTERVAL '24 hours' FROM public.orders WHERE id = order_id)
-  )
+  description TEXT
 );
 
 ALTER TABLE public.returns ENABLE ROW LEVEL SECURITY;

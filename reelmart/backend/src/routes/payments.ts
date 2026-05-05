@@ -84,3 +84,67 @@ paymentsRouter.post('/webhook', async (req, res) => {
   }
   res.json({ received: true })
 })
+
+// Process refund for an approved return — called by admin
+paymentsRouter.post('/refund', requireAuth, async (req: AuthRequest, res) => {
+  const { returnId, orderId, refundAmount } = req.body
+  if (!returnId || !orderId || !refundAmount) {
+    return res.status(400).json({ success: false, error: 'returnId, orderId, and refundAmount required' })
+  }
+
+  // Verify caller is admin
+  const { data: user } = await supabaseAdmin
+    .from('users')
+    .select('is_admin')
+    .eq('id', req.userId!)
+    .single()
+
+  if (!user?.is_admin) {
+    return res.status(403).json({ success: false, error: 'Admin access required' })
+  }
+
+  const { data: order } = await supabaseAdmin
+    .from('orders')
+    .select('razorpay_payment_id')
+    .eq('id', orderId)
+    .single()
+
+  if (!order?.razorpay_payment_id) {
+    return res.status(400).json({ success: false, error: 'No payment ID found for this order' })
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.razorpay.com/v1/payments/${order.razorpay_payment_id}/refund`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString('base64')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ amount: Math.round(refundAmount * 100) }),
+      }
+    )
+    const refund = await response.json()
+    if (refund.error) {
+      return res.status(400).json({ success: false, error: refund.error.description })
+    }
+
+    await Promise.all([
+      supabaseAdmin.from('returns').update({
+        status: 'refunded',
+        razorpay_refund_id: refund.id,
+        refund_amount: refundAmount,
+        resolved_at: new Date().toISOString(),
+      }).eq('id', returnId),
+      supabaseAdmin.from('orders').update({
+        payment_status: 'refunded',
+        status: 'refunded',
+      }).eq('id', orderId),
+    ])
+
+    res.json({ success: true, refundId: refund.id })
+  } catch {
+    res.status(500).json({ success: false, error: 'Refund processing failed' })
+  }
+})

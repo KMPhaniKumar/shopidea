@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  ReelMart — minimal test server (single t2.micro, free tier).
+  Cost: $0 within AWS free tier (750 hrs/month, first 12 months).
+  NOT for production — no TLS, no auto-scaling, no HA.
+
+Parameters:
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Your EC2 key pair for SSH access
+
+  GitRepo:
+    Type: String
+    Default: https://github.com/KMPhaniKumar/shopidea.git
+    Description: GitHub repo URL (must be public, or set up SSH key separately)
+
+  GitBranch:
+    Type: String
+    Default: main
+
+Resources:
+
+  # ── Security Group ────────────────────────────────────────────
+  ReelMartSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: reelmart-test-sg
+      GroupDescription: ReelMart test server — HTTP + SSH
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 22,  ToPort: 22,  CidrIp: 0.0.0.0/0, Description: SSH }
+        - { IpProtocol: tcp, FromPort: 80,  ToPort: 80,  CidrIp: 0.0.0.0/0, Description: HTTP }
+
+  # ── EC2 t2.micro (free tier) ──────────────────────────────────
+  ReelMartEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      KeyName: !Ref KeyPairName
+      # Latest Amazon Linux 2023 — resolves automatically per region
+      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      SecurityGroupIds: [!Ref ReelMartSG]
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20  # GB — free tier includes 30 GB
+            VolumeType: gp3
+      Tags:
+        - { Key: Name, Value: reelmart-test }
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          exec > /var/log/reelmart-setup.log 2>&1
+
+          echo "=== Installing packages ==="
+          dnf update -y
+          dnf install -y docker git nginx
+
+          echo "=== Starting Docker ==="
+          systemctl start docker
+          systemctl enable docker
+          usermod -aG docker ec2-user
+
+          echo "=== Installing docker-compose ==="
+          curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
+            -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+
+          echo "=== Cloning repo ==="
+          git clone --branch ${GitBranch} --depth 1 ${GitRepo} /home/ec2-user/shopidea
+          chown -R ec2-user:ec2-user /home/ec2-user/shopidea
+
+          echo "=== Writing nginx config ==="
+          cat > /etc/nginx/conf.d/reelmart.conf << 'NGINXEOF'
+          server {
+            listen 80;
+            server_name _;
+
+            # Health check
+            location = /health {
+              return 200 'ReelMart OK\n';
+              add_header Content-Type text/plain;
+            }
+
+            location /api/catalog     { proxy_pass http://localhost:3001; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+            location /api/orders      { proxy_pass http://localhost:3002; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+            location /api/payments    { proxy_pass http://localhost:3003; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+            location /api/delivery    { proxy_pass http://localhost:3004; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+            location /api/notifications { proxy_pass http://localhost:3005; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+            location /api/whatsapp    { proxy_pass http://localhost:3006; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+            location /api/payouts     { proxy_pass http://localhost:3007; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+            location /api/analytics   { proxy_pass http://localhost:3008; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+            location /api/returns     { proxy_pass http://localhost:3009; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+            location /api/admin       { proxy_pass http://localhost:3010; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+          }
+          NGINXEOF
+
+          # Remove default nginx site
+          rm -f /etc/nginx/conf.d/default.conf
+
+          echo "=== Starting nginx ==="
+          nginx -t
+          systemctl start nginx
+          systemctl enable nginx
+
+          echo "=== Setup complete. SSH in and run: cd /home/ec2-user/shopidea/reelmart/services && cp ../../infra/test/.env.example .env && nano .env ==="
+
+Outputs:
+  PublicIP:
+    Description: Server public IP — use this as your API_URL
+    Value: !GetAtt ReelMartEC2.PublicIp
+
+  ApiUrl:
+    Description: Base API URL for all client apps
+    Value: !Sub http://${ReelMartEC2.PublicIp}
+
+  SSHCommand:
+    Description: SSH into the server
+    Value: !Sub ssh -i ~/.ssh/${KeyPairName}.pem ec2-user@${ReelMartEC2.PublicIp}
+
+  SetupLog:
+    Description: Check setup progress on the server
+    Value: !Sub ssh -i ~/.ssh/${KeyPairName}.pem ec2-user@${ReelMartEC2.PublicIp} 'tail -f /var/log/reelmart-setup.log'

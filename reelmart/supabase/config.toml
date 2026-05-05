@@ -10,7 +10,7 @@ max_rows = 1000
 [db]
 port = 54322
 shadow_port = 54320
-major_version = 15
+major_version = 17
 
 [studio]
 port = 54323
@@ -36,6 +36,15 @@ enable_anonymous_sign_ins = false
 
 [auth.sms]
 enable_signup = true
+enable_phone_autoconfirm = true
+
+[auth.sms.test_otp]
+# Test phone numbers with fixed OTPs for local development
+# Use these numbers to log in without real SMS
+# +919999999999 → OTP: 123456
+"+919999999999" = "123456"
+"+918888888888" = "123456"
+"+917777777777" = "123456"
 
 [auth.sms.twilio]
 account_sid = ""

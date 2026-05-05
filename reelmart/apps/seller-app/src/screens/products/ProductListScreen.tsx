@@ -69,10 +69,13 @@ export default function ProductListScreen({ navigation }: Props) {
         onPress={() => navigation.navigate('EditProduct', { product: item })}
         onLongPress={() => handleDelete(item)}
       >
-        <Image
-          source={item.images[0] ? { uri: item.images[0] } : require('../../assets/placeholder.png')}
-          style={[styles.thumb, !item.is_available && styles.thumbDim]}
-        />
+        {item.images?.[0] ? (
+          <Image source={{ uri: item.images[0] }} style={[styles.thumb, !item.is_available && styles.thumbDim]} />
+        ) : (
+          <View style={[styles.thumb, !item.is_available && styles.thumbDim, styles.thumbPlaceholder]}>
+            <Text style={{ fontSize: 28 }}>📦</Text>
+          </View>
+        )}
         <View style={styles.info}>
           <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
           <View style={styles.priceRow}>
@@ -107,7 +110,17 @@ export default function ProductListScreen({ navigation }: Props) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Products</Text>
-        <Text style={styles.count}>{products.length} total</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.navigate('Analytics')}>
+            <Text style={styles.headerBtnText}>📊</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.navigate('StoreReviews')}>
+            <Text style={styles.headerBtnText}>⭐</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.navigate('EditStore')}>
+            <Text style={styles.headerBtnText}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.filterRow}>
@@ -165,7 +178,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   title: { fontSize: 22, fontWeight: '700', color: colors.textPrimary },
-  count: { fontSize: 14, color: colors.textMuted },
+  headerActions: { flexDirection: 'row', gap: spacing.xs, alignItems: 'center' },
+  headerBtn: {
+    paddingHorizontal: spacing.sm, paddingVertical: 6,
+    borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.border,
+  },
+  headerBtnText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   filterRow: {
     flexDirection: 'row', paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm, gap: spacing.xs,
@@ -186,6 +204,7 @@ const styles = StyleSheet.create({
   },
   thumb: { width: 72, height: 72, borderRadius: radius.md, backgroundColor: colors.surface },
   thumbDim: { opacity: 0.45 },
+  thumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   info: { flex: 1 },
   productName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginBottom: 4 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 4 },

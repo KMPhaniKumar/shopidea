@@ -3,11 +3,14 @@ import {
   View, Text, TextInput, TouchableOpacity, Switch,
   StyleSheet, ScrollView, ActivityIndicator, Alert,
 } from 'react-native'
+import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useSellerStore } from '../../store/sellerStore'
 import { colors, radius, spacing } from '../../constants/theme'
 import { getStoreUrl } from '../../services/storeService'
 
-export default function EditStoreScreen() {
+type Props = { navigation: NativeStackNavigationProp<any> }
+
+export default function EditStoreScreen({ navigation }: Props) {
   const { store, updateStore } = useSellerStore()
   const [storeName, setStoreName] = useState(store?.store_name ?? '')
   const [description, setDescription] = useState(store?.description ?? '')
@@ -43,6 +46,16 @@ export default function EditStoreScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.inner}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={styles.back}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>Edit Store</Text>
+        {loading
+          ? <ActivityIndicator size="small" color={colors.primary} />
+          : <TouchableOpacity onPress={handleSave}><Text style={styles.saveBtn}>Save</Text></TouchableOpacity>
+        }
+      </View>
       <View style={styles.urlCard}>
         <Text style={styles.urlLabel}>Your store link</Text>
         <Text style={styles.url}>{getStoreUrl(store.store_slug)}</Text>
@@ -124,6 +137,13 @@ export default function EditStoreScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   inner: { padding: spacing.lg, paddingBottom: 40 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingTop: spacing.md, marginBottom: spacing.lg,
+  },
+  back: { fontSize: 16, color: colors.primary, fontWeight: '600' },
+  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  saveBtn: { fontSize: 16, color: colors.primary, fontWeight: '700' },
   urlCard: {
     backgroundColor: colors.surface, borderRadius: radius.lg,
     padding: spacing.md, marginBottom: spacing.xl,

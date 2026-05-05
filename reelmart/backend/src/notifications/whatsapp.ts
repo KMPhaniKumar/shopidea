@@ -30,13 +30,25 @@ export function buildOrderConfirmationMessage(orderNumber: string, storeName: st
   return `✅ Order Confirmed!\n\nYour order ${orderNumber} from ${storeName} has been placed.\nAmount: ₹${amount}\n\nWe'll update you when the seller accepts your order.`
 }
 
-export function buildOrderStatusMessage(orderNumber: string, status: string): string {
+export function buildOrderStatusMessage(orderNumber: string, status: string, extra?: { trackingUrl?: string; rejectionReason?: string }): string {
   const messages: Record<string, string> = {
     accepted: `✅ Your order ${orderNumber} has been accepted and is being prepared!`,
     packed: `📦 Your order ${orderNumber} is packed and ready for pickup.`,
-    shipped: `🚚 Your order ${orderNumber} is on the way!`,
-    delivered: `🎉 Your order ${orderNumber} has been delivered. Enjoy!`,
-    rejected: `❌ Your order ${orderNumber} was rejected. You will receive a full refund.`,
+    shipped: `🚚 Your order ${orderNumber} is on the way!${extra?.trackingUrl ? `\n\nTrack here: ${extra.trackingUrl}` : ''}`,
+    delivered: `🎉 Your order ${orderNumber} has been delivered. Enjoy your purchase!\n\nLeave a review on ReelMart to earn loyalty coins 🪙`,
+    rejected: `❌ Your order ${orderNumber} was not accepted.${extra?.rejectionReason ? `\nReason: ${extra.rejectionReason}` : ''}\n\nYour payment will be refunded in 3–5 business days.`,
   }
-  return messages[status] || `Order ${orderNumber} status: ${status}`
+  return messages[status] || `Your order ${orderNumber} status: ${status}`
+}
+
+// Unified notify object — call from notification route handlers
+export const notify = {
+  newOrder: (sellerPhone: string, orderNumber: string, buyerName: string, amount: number) =>
+    sendWhatsApp(sellerPhone, buildNewOrderMessage(orderNumber, buyerName, amount)).catch(() => {}),
+
+  orderConfirmed: (buyerPhone: string, orderNumber: string, storeName: string, amount: number) =>
+    sendWhatsApp(buyerPhone, buildOrderConfirmationMessage(orderNumber, storeName, amount)).catch(() => {}),
+
+  orderStatusChanged: (buyerPhone: string, orderNumber: string, status: string, extra?: { trackingUrl?: string; rejectionReason?: string }) =>
+    sendWhatsApp(buyerPhone, buildOrderStatusMessage(orderNumber, status, extra)).catch(() => {}),
 }

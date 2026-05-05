@@ -9,10 +9,11 @@ import { colors, radius, spacing } from '../../constants/theme'
 import { useAuthStore } from '../../store/authStore'
 import { createOrder, CartItem, DeliveryAddress } from '../../services/orderService'
 import { useOrderStore } from '../../store/orderStore'
+import { PickedLocation } from '../shared/LocationPickerScreen'
 
 type Props = {
   navigation: NativeStackNavigationProp<any>
-  route: RouteProp<{ Checkout: { storeId: string; storeName: string; items: CartItem[]; subtotal: number } }, 'Checkout'>
+  route: RouteProp<{ Checkout: { storeId: string; storeName: string; items: CartItem[]; subtotal: number; pickedLocation?: PickedLocation } }, 'Checkout'>
 }
 
 const DELIVERY_FEE = 60
@@ -20,6 +21,7 @@ const FREE_DELIVERY_THRESHOLD = 500
 
 export default function CheckoutScreen({ navigation, route }: Props) {
   const { storeId, storeName, items, subtotal } = route.params
+  const pickedLocation = route.params?.pickedLocation
   const session = useAuthStore(s => s.session)
   const profile = useAuthStore(s => s.profile)
   const prependOrder = useOrderStore(s => s.prependOrder)
@@ -29,9 +31,26 @@ export default function CheckoutScreen({ navigation, route }: Props) {
     phone: session?.user?.phone?.replace('+91', '') ?? '',
     line1: '', line2: '', area: '', city: '', state: '', pincode: '',
   })
-  const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('online')
+  const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('cod')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
+  const [mapPinned, setMapPinned] = useState(false)
+
+  // Apply picked location from map picker
+  useEffect(() => {
+    if (pickedLocation) {
+      setAddress(a => ({
+        ...a,
+        line1: pickedLocation.line1 || a.line1,
+        area: pickedLocation.area || a.area,
+        city: pickedLocation.city || a.city,
+        state: pickedLocation.state || a.state,
+        pincode: pickedLocation.pincode || a.pincode,
+      }))
+      setMapPinned(true)
+      navigation.setParams({ pickedLocation: undefined })
+    }
+  }, [pickedLocation])
 
   const deliveryFee = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE
   const total = subtotal + deliveryFee
@@ -149,6 +168,26 @@ export default function CheckoutScreen({ navigation, route }: Props) {
         {/* Delivery Address */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Delivery Address</Text>
+
+          {/* Map picker button */}
+          <TouchableOpacity
+            style={styles.mapPickerBtn}
+            onPress={() => navigation.navigate('LocationPicker', { callbackScreen: 'Checkout' })}
+          >
+            <Text style={styles.mapPickerIcon}>🗺️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.mapPickerLabel}>
+                {mapPinned ? 'Location pinned ✓' : 'Pick delivery location on map'}
+              </Text>
+              <Text style={styles.mapPickerSub}>
+                {mapPinned
+                  ? [address.area, address.city].filter(Boolean).join(', ')
+                  : 'Auto-fill address from Google Maps'}
+              </Text>
+            </View>
+            <Text style={styles.mapPickerArrow}>›</Text>
+          </TouchableOpacity>
+
           <Field label="Full Name *" value={address.name} onChange={v => setAddress(a => ({ ...a, name: v }))} />
           <Field label="Phone *" value={address.phone} onChange={v => setAddress(a => ({ ...a, phone: v }))} keyboardType="number-pad" maxLength={10} />
           <Field label="Address Line 1 *" value={address.line1} onChange={v => setAddress(a => ({ ...a, line1: v }))} placeholder="Flat/House No, Street" />
@@ -313,4 +352,14 @@ const styles = StyleSheet.create({
   },
   placeBtnDisabled: { opacity: 0.6 },
   placeBtnText: { color: colors.white, fontWeight: '700', fontSize: 15 },
+
+  mapPickerBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    borderWidth: 1.5, borderColor: colors.primary, borderRadius: radius.md,
+    padding: spacing.sm, marginBottom: spacing.md, backgroundColor: '#FFF8F5',
+  },
+  mapPickerIcon: { fontSize: 20 },
+  mapPickerLabel: { fontSize: 14, fontWeight: '700', color: colors.primary },
+  mapPickerSub: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
+  mapPickerArrow: { fontSize: 20, color: colors.primary },
 })

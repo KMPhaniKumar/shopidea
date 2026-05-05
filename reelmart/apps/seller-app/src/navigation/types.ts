@@ -8,9 +8,20 @@ export type AuthStackParamList = {
 export type OnboardingStackParamList = {
   StoreName: undefined
   Category: { storeName: string }
-  Location: { storeName: string; category: string }
-  Logo: { storeName: string; category: string; city: string; area?: string; whatsappNumber?: string }
+  Location: { storeName: string; category: string; pickedLocation?: PickedLocation }
+  LocationPicker: { callbackScreen: string }
+  Logo: { storeName: string; category: string; city: string; area?: string; whatsappNumber?: string; latitude?: number; longitude?: number }
   StoreReady: { storeId: string; storeName: string; slug: string }
+}
+
+export interface PickedLocation {
+  line1: string
+  area: string
+  city: string
+  state: string
+  pincode: string
+  latitude: number
+  longitude: number
 }
 
 export type MainTabParamList = {

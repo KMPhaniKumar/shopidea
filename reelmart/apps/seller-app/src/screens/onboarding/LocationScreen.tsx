@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform,
@@ -22,13 +22,29 @@ const CITIES = [
 
 export default function LocationScreen({ navigation, route }: Props) {
   const { storeName, category } = route.params
+  const pickedLocation = route.params?.pickedLocation
+
   const [city, setCity] = useState('')
   const [area, setArea] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [citySuggestions, setCitySuggestions] = useState<string[]>([])
+  const [pickedLatLng, setPickedLatLng] = useState<{ latitude: number; longitude: number } | null>(null)
+
+  // Apply returned location from map picker
+  useEffect(() => {
+    if (pickedLocation) {
+      setCity(pickedLocation.city || '')
+      setArea(pickedLocation.area || '')
+      setPickedLatLng({ latitude: pickedLocation.latitude, longitude: pickedLocation.longitude })
+      setCitySuggestions([])
+      // clear the param so re-navigating back doesn't re-apply
+      navigation.setParams({ pickedLocation: undefined })
+    }
+  }, [pickedLocation])
 
   function onCityChange(text: string) {
     setCity(text)
+    setPickedLatLng(null)
     if (text.length >= 2) {
       setCitySuggestions(
         CITIES.filter(c => c.toLowerCase().startsWith(text.toLowerCase())).slice(0, 4)
@@ -49,6 +65,8 @@ export default function LocationScreen({ navigation, route }: Props) {
       city: city.trim(),
       area: area.trim() || undefined,
       whatsappNumber: whatsapp.trim() || undefined,
+      latitude: pickedLatLng?.latitude,
+      longitude: pickedLatLng?.longitude,
     })
   }
 
@@ -70,6 +88,27 @@ export default function LocationScreen({ navigation, route }: Props) {
 
         <Text style={styles.heading}>Where is your store?</Text>
         <Text style={styles.sub}>Buyers nearby will discover you first</Text>
+
+        {/* Map picker button */}
+        <TouchableOpacity
+          style={styles.mapPickerBtn}
+          onPress={() => navigation.navigate('LocationPicker', { callbackScreen: 'Location' })}
+        >
+          <Text style={styles.mapPickerIcon}>🗺️</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.mapPickerLabel}>
+              {pickedLatLng ? 'Location pinned on map ✓' : 'Pick on map'}
+            </Text>
+            <Text style={styles.mapPickerSub}>
+              {pickedLatLng
+                ? `${[area, city].filter(Boolean).join(', ')}`
+                : 'Tap to open Google Maps and pin your store location'}
+            </Text>
+          </View>
+          <Text style={styles.mapPickerArrow}>›</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.orDividerText}>— or type manually —</Text>
 
         <Text style={styles.label}>City *</Text>
         <TextInput
@@ -141,7 +180,20 @@ const styles = StyleSheet.create({
   step: { flex: 1, height: 4, borderRadius: radius.pill, backgroundColor: colors.border },
   stepActive: { backgroundColor: colors.primary },
   heading: { fontSize: 26, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.xs },
-  sub: { fontSize: 15, color: colors.textSecondary, marginBottom: spacing.xl },
+  sub: { fontSize: 15, color: colors.textSecondary, marginBottom: spacing.lg },
+
+  mapPickerBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    borderWidth: 1.5, borderColor: colors.primary, borderRadius: radius.md,
+    padding: spacing.md, marginBottom: spacing.md, backgroundColor: '#FFF8F5',
+  },
+  mapPickerIcon: { fontSize: 24 },
+  mapPickerLabel: { fontSize: 15, fontWeight: '700', color: colors.primary },
+  mapPickerSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  mapPickerArrow: { fontSize: 22, color: colors.primary },
+
+  orDividerText: { fontSize: 13, color: colors.textMuted, textAlign: 'center', marginBottom: spacing.md },
+
   label: { fontSize: 14, fontWeight: '600', color: colors.textPrimary, marginBottom: spacing.xs },
   input: {
     borderWidth: 1.5, borderColor: colors.border,
