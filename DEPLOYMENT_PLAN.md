@@ -6,36 +6,48 @@
 ## Architecture Overview
 
 ```
-Internet
-    │
-    ▼
-Route 53 (api.reelmart.in)
-    │
-    ▼
-ALB (HTTPS:443)  ← path-based routing
-    │
-    ├── /api/stores,/api/products  → catalog-service
-    ├── /api/orders                → order-service
-    ├── /api/payments              → payment-service
-    ├── /api/delivery              → delivery-service
-    ├── /api/notifications         → notification-service
-    ├── /api/whatsapp              → whatsapp-service
-    ├── /api/payouts               → payout-service
-    ├── /api/analytics             → analytics-service
-    ├── /api/returns               → return-service
-    └── /api/admin                 → admin-service
-          │
-          ▼
-    ECS Cluster (EC2 launch type)
-    ┌─────────────────────────────┐
-    │  EC2 t3.medium #1  (AZ-a)  │  ← always running
-    │  EC2 t3.medium #2  (AZ-b)  │  ← always running
-    │  EC2 t3.medium #3  (AZ-a)  │  ← auto-added on high load
-    └─────────────────────────────┘
-    Auto Scaling Group: min=2, max=5
-          │
-          ▼
-    Supabase Cloud (DB + Auth + Storage)
+                        USERS
+          ┌──────────────┼──────────────┐
+          │              │              │
+     Sellers          Buyers         Admins
+    (browser)        (mobile)       (browser)
+          │              │              │
+          ▼              │              ▼
+   Vercel CDN            │       Vercel CDN
+   seller.reelmart.in    │       admin.reelmart.in
+   (Next.js SSR)         │       (Next.js SSR)
+          │              │              │
+          └──────────────┼──────────────┘
+                         │
+                         │ API calls (https)
+                         ▼
+              Route 53 (api.reelmart.in)
+                         │
+                         ▼
+               ALB (HTTPS:443)  ← path-based routing
+                         │
+          ┌──────────────┼──────────────────────┐
+          │              │                      │
+          ▼              ▼                      ▼
+  /api/stores     /api/orders          /api/payments
+  /api/products   /api/returns         /api/payouts
+  /api/reviews    /api/delivery        /api/analytics
+          │              │             /api/whatsapp   │
+          │              │             /api/notifications
+          │              │             /api/admin       │
+          └──────────────┴─────────────────────────────┘
+                         │
+                         ▼
+          ECS Cluster (EC2 launch type, ap-south-1)
+          ┌──────────────────────────────────────────┐
+          │  EC2 t3.medium #1 (AZ-a) always running  │
+          │  EC2 t3.medium #2 (AZ-b) always running  │
+          │  EC2 t3.medium #3 (AZ-a) auto on load    │
+          └──────────────────────────────────────────┘
+          Auto Scaling Group: min=2, max=5
+                         │
+                         ▼
+          Supabase Cloud (DB + Auth + Storage + Realtime)
 ```
 
 ### Why ECS on EC2 (not Fargate)?
