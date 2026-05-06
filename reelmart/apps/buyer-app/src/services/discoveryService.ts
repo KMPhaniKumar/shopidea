@@ -73,6 +73,39 @@ export async function getNewStores(city: string): Promise<StoreCard[]> {
   return (data as StoreCard[]) ?? []
 }
 
+export async function getAllStoresByCategory(category: string): Promise<StoreCard[]> {
+  const { data } = await supabase
+    .from('stores')
+    .select(STORE_SELECT)
+    .eq('category', category)
+    .eq('is_active', true)
+    .order('rating_avg', { ascending: false })
+    .limit(30)
+  return (data as StoreCard[]) ?? []
+}
+
+export async function getAllTopRated(): Promise<StoreCard[]> {
+  const { data } = await supabase
+    .from('stores')
+    .select(STORE_SELECT)
+    .eq('is_active', true)
+    .order('rating_avg', { ascending: false })
+    .limit(10)
+  return (data as StoreCard[]) ?? []
+}
+
+export async function getAllNewStores(): Promise<StoreCard[]> {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 864e5).toISOString()
+  const { data } = await supabase
+    .from('stores')
+    .select(STORE_SELECT)
+    .eq('is_active', true)
+    .gte('created_at', thirtyDaysAgo)
+    .order('created_at', { ascending: false })
+    .limit(10)
+  return (data as StoreCard[]) ?? []
+}
+
 export async function getFollowedStores(buyerId: string): Promise<StoreCard[]> {
   const { data } = await supabase
     .from('followed_stores')

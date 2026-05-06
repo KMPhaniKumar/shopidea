@@ -25,22 +25,19 @@ export async function getSavedAddresses(): Promise<SavedAddress[]> {
   }
 }
 
-export async function saveAddress(addr: Omit<SavedAddress, 'id' | 'usedAt'>): Promise<void> {
-  try {
-    const existing = await getSavedAddresses()
-    // dedup by line1+pincode
-    const filtered = existing.filter(
-      a => !(a.line1 === addr.line1 && a.pincode === addr.pincode)
-    )
-    const next: SavedAddress = {
-      ...addr,
-      id: Date.now().toString(),
-      usedAt: Date.now(),
-    }
-    // keep most recent MAX addresses
-    const updated = [next, ...filtered].slice(0, MAX)
-    await AsyncStorage.setItem(KEY, JSON.stringify(updated))
-  } catch {}
+export async function saveAddress(addr: Omit<SavedAddress, 'id' | 'usedAt'>): Promise<SavedAddress> {
+  const existing = await getSavedAddresses()
+  const filtered = existing.filter(
+    a => !(a.line1 === addr.line1 && a.pincode === addr.pincode)
+  )
+  const next: SavedAddress = {
+    ...addr,
+    id: Date.now().toString(),
+    usedAt: Date.now(),
+  }
+  const updated = [next, ...filtered].slice(0, MAX)
+  await AsyncStorage.setItem(KEY, JSON.stringify(updated))
+  return next
 }
 
 export async function removeAddress(id: string): Promise<SavedAddress[]> {

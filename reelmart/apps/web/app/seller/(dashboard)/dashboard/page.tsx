@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { TrendingUp, IndianRupee, ShoppingBag, Package } from 'lucide-react'
@@ -9,6 +10,7 @@ import { useSellerStore } from '@/store/sellerStore'
 
 export default function DashboardPage() {
   const supabase = createClient()
+  const router = useRouter()
   const { setStore, setPendingOrderCount } = useSellerStore()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<any>(null)
@@ -23,9 +25,13 @@ export default function DashboardPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
-      const storeQuery = user
+      let storeQuery = user
         ? supabase.from('stores').select('*').eq('seller_id', user.id).single()
-        : supabase.from('stores').select('*').limit(1).single()
+        : process.env.NODE_ENV === 'development'
+          ? supabase.from('stores').select('*').limit(1).single()
+          : null
+
+      if (!storeQuery) { router.push('/seller/login'); return }
 
       const { data: store, error: storeError } = await storeQuery
       

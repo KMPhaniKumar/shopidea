@@ -8,6 +8,7 @@ import { RouteProp } from '@react-navigation/native'
 import { colors, radius, spacing } from '../../constants/theme'
 import { useAuthStore } from '../../store/authStore'
 import { getStoreBySlug, getStoreProducts, toggleFollowStore, CATEGORIES } from '../../services/discoveryService'
+import { getWishlist, toggleWishlist } from '../../services/profileService'
 import { getFirstImage, getImageUrl } from '../../lib/imageUrl'
 import { CartItem } from '../../services/orderService'
 
@@ -25,7 +26,9 @@ export default function StorefrontScreen({ navigation, route }: Props) {
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isFollowing, setIsFollowing] = useState(false)
-  const [cart, setCart] = useState<Record<string, CartEntry>>({}) // keyed by productId
+  const [cart, setCart] = useState<Record<string, CartEntry>>({})
+  const [wishlist, setWishlist] = useState<Set<string>>(new Set())
+  const [togglingWishlist, setTogglingWishlist] = useState<Set<string>>(new Set()) // keyed by productId
 
   useEffect(() => {
     Promise.all([getStoreBySlug(slug), getStoreProducts('__placeholder__')]).then(([s]) => {
@@ -33,6 +36,11 @@ export default function StorefrontScreen({ navigation, route }: Props) {
       if (s) getStoreProducts(s.id).then(setProducts)
       setLoading(false)
     })
+    if (session?.user) {
+      getWishlist(session.user.id).then(items => {
+        setWishlist(new Set(items.map(i => i.product_id)))
+      })
+    }
   }, [slug])
 
   useEffect(() => {
@@ -83,6 +91,19 @@ export default function StorefrontScreen({ navigation, route }: Props) {
       items: cartItems,
       subtotal,
     })
+  }
+
+  async function handleToggleWishlist(productId: string) {
+    if (!session?.user) { Alert.alert('Sign in required', 'Please sign in to save to wishlist'); return }
+    if (togglingWishlist.has(productId)) return
+    setTogglingWishlist(prev => new Set(prev).add(productId))
+    const isNowWishlisted = await toggleWishlist(session.user.id, productId)
+    setWishlist(prev => {
+      const next = new Set(prev)
+      isNowWishlisted ? next.add(productId) : next.delete(productId)
+      return next
+    })
+    setTogglingWishlist(prev => { const next = new Set(prev); next.delete(productId); return next })
   }
 
   async function handleFollow() {
@@ -166,17 +187,28 @@ export default function StorefrontScreen({ navigation, route }: Props) {
               const qty = cart[product.id]?.qty ?? 0
               return (
                 <View key={product.id} style={styles.productCard}>
-                  {getFirstImage(product.images) ? (
-                    <Image
-                      source={{ uri: getFirstImage(product.images)! }}
-                      style={styles.productImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={[styles.productImage, styles.productImagePlaceholder]}>
-                      <Text style={{ fontSize: 32 }}>📦</Text>
-                    </View>
-                  )}
+                  <View style={{ position: 'relative' }}>
+                    {getFirstImage(product.images) ? (
+                      <Image
+                        source={{ uri: getFirstImage(product.images)! }}
+                        style={styles.productImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.productImage, styles.productImagePlaceholder]}>
+                        <Text style={{ fontSize: 32 }}>📦</Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={styles.wishlistBtn}
+                      onPress={() => handleToggleWishlist(product.id)}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Text style={[styles.wishlistIcon, wishlist.has(product.id) && styles.wishlistIconActive]}>
+                        {wishlist.has(product.id) ? '♥' : '♡'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
                   <Text style={styles.productPrice}>₹{product.price}</Text>
                   {product.stock !== null && product.stock === 0 ? (
@@ -266,6 +298,15 @@ const styles = StyleSheet.create({
   },
   productImage: { width: '100%', height: 140 },
   productImagePlaceholder: { backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
+  wishlistBtn: {
+    position: 'absolute', top: 8, right: 8,
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
+  },
+  wishlistIcon: { fontSize: 18, color: '#CCCCCC' },
+  wishlistIconActive: { color: '#EF4444' },
   productName: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, padding: spacing.xs, paddingBottom: 2 },
   productPrice: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, paddingHorizontal: spacing.xs, paddingBottom: spacing.xs },
   addBtn: {

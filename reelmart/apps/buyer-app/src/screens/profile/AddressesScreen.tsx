@@ -9,6 +9,7 @@ import { getSavedAddresses, removeAddress, SavedAddress } from '../../lib/savedA
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const CITY_KEY = '@reelmart_city'
+const ADDR_KEY = '@reelmart_default_address_id'
 
 type Props = { navigation: NativeStackNavigationProp<any> }
 
@@ -60,24 +61,27 @@ function AddressCard({
 
 export default function AddressesScreen({ navigation }: Props) {
   const [addresses, setAddresses] = useState<SavedAddress[]>([])
-  const [defaultCity, setDefaultCity] = useState<string | null>(null)
+  const [defaultId, setDefaultId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
-    const [addrs, city] = await Promise.all([
+    const [addrs, addrId] = await Promise.all([
       getSavedAddresses(),
-      AsyncStorage.getItem(CITY_KEY),
+      AsyncStorage.getItem(ADDR_KEY),
     ])
     setAddresses(addrs)
-    setDefaultCity(city)
+    setDefaultId(addrId ?? addrs[0]?.id ?? null)
     setLoading(false)
   }, [])
 
   useEffect(() => { load() }, [])
 
   async function handleSetDefault(addr: SavedAddress) {
-    await AsyncStorage.setItem(CITY_KEY, addr.city)
-    setDefaultCity(addr.city)
+    await Promise.all([
+      AsyncStorage.setItem(CITY_KEY, addr.city),
+      AsyncStorage.setItem(ADDR_KEY, addr.id),
+    ])
+    setDefaultId(addr.id)
   }
 
   async function handleDelete(id: string) {
@@ -88,9 +92,21 @@ export default function AddressesScreen({ navigation }: Props) {
         onPress: async () => {
           const updated = await removeAddress(id)
           setAddresses(updated)
-          if (updated.length > 0 && defaultCity === addresses.find(a => a.id === id)?.city) {
-            await AsyncStorage.setItem(CITY_KEY, updated[0].city)
-            setDefaultCity(updated[0].city)
+          if (id === defaultId) {
+            const next = updated[0] ?? null
+            if (next) {
+              await Promise.all([
+                AsyncStorage.setItem(CITY_KEY, next.city),
+                AsyncStorage.setItem(ADDR_KEY, next.id),
+              ])
+              setDefaultId(next.id)
+            } else {
+              await Promise.all([
+                AsyncStorage.removeItem(CITY_KEY),
+                AsyncStorage.removeItem(ADDR_KEY),
+              ])
+              setDefaultId(null)
+            }
           }
         },
       },
@@ -121,7 +137,7 @@ export default function AddressesScreen({ navigation }: Props) {
             <AddressCard
               key={addr.id}
               address={addr}
-              isDefault={addr.city === defaultCity}
+              isDefault={addr.id === defaultId}
               onSetDefault={() => handleSetDefault(addr)}
               onDelete={() => handleDelete(addr.id)}
             />

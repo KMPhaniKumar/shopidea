@@ -4,16 +4,17 @@ import {
   StyleSheet, ActivityIndicator, Alert, TextInput,
   KeyboardAvoidingView, Platform,
 } from 'react-native'
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RouteProp } from '@react-navigation/native'
 import { colors, radius, spacing } from '../../constants/theme'
 import { useAuthStore } from '../../store/authStore'
 import { createOrder, CartItem, DeliveryAddress } from '../../services/orderService'
 import { useOrderStore } from '../../store/orderStore'
-import { PickedLocation } from '../shared/LocationPickerScreen'
-import { detectCurrentAddress } from '../../lib/geocode'
-import { saveAddress } from '../../lib/savedAddresses'
+import { getSavedAddresses, SavedAddress } from '../../lib/savedAddresses'
+import LocationPromptModal from '../../components/LocationPromptModal'
+
+const ADDR_KEY = '@reelmart_default_address_id'
 
 type Props = {
   navigation: NativeStackNavigationProp<any>
@@ -23,24 +24,20 @@ type Props = {
       storeName: string
       items: CartItem[]
       subtotal: number
-      pickedLocation?: PickedLocation
     }
   }, 'Checkout'>
 }
 
 const DELIVERY_FEE = 60
 const FREE_DELIVERY_THRESHOLD = 500
-const MAPS_KEY = 'AIzaSyDtu00tuOZpIzPRASPFScWJRu1GkpaaSIU'
 
 function stripPhone(raw?: string | null): string {
   if (!raw) return ''
-  // handles +919876543210 or 919876543210 or 9876543210
   return raw.replace(/^\+?91/, '').slice(-10)
 }
 
 export default function CheckoutScreen({ navigation, route }: Props) {
   const { storeId, storeName, items, subtotal } = route.params
-  const pickedLocation = route.params?.pickedLocation
   const session = useAuthStore(s => s.session)
   const profile = useAuthStore(s => s.profile)
   const prependOrder = useOrderStore(s => s.prependOrder)
@@ -52,55 +49,39 @@ export default function CheckoutScreen({ navigation, route }: Props) {
     phone: stripPhone(session?.user?.phone),
     line1: '', line2: '', area: '', city: '', state: '', pincode: '',
   })
+  const [selectedSaved, setSelectedSaved] = useState<SavedAddress | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('cod')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
-  const [locLoading, setLocLoading] = useState(false)
-  const [mapPinned, setMapPinned] = useState(false)
-  const [showManual, setShowManual] = useState(false)
-  const [searchFocused, setSearchFocused] = useState(false)
+  const [addrModalVisible, setAddrModalVisible] = useState(false)
 
-  useEffect(() => {
-    if (pickedLocation) {
+  async function loadDefaultAddress() {
+    const [addrs, savedId] = await Promise.all([
+      getSavedAddresses(),
+      AsyncStorage.getItem(ADDR_KEY),
+    ])
+    const match = (savedId ? addrs.find(a => a.id === savedId) : null) ?? addrs[0] ?? null
+    if (match) {
+      setSelectedSaved(match)
       setAddress(a => ({
         ...a,
-        line1: pickedLocation.line1 || a.line1,
-        area: pickedLocation.area || a.area,
-        city: pickedLocation.city || a.city,
-        state: pickedLocation.state || a.state,
-        pincode: pickedLocation.pincode || a.pincode,
+        line1: match.line1,
+        area: match.area,
+        city: match.city,
+        state: match.state,
+        pincode: match.pincode,
+        name: match.name || a.name,
+        phone: match.phone || a.phone,
       }))
-      setMapPinned(true)
-      setShowManual(true)
-      navigation.setParams({ pickedLocation: undefined })
     }
-  }, [pickedLocation])
+  }
+
+  useEffect(() => { loadDefaultAddress() }, [])
 
   const deliveryFee = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE
   const total = subtotal + deliveryFee
 
-  async function handleDetectLocation() {
-    setLocLoading(true)
-    try {
-      const geo = await detectCurrentAddress()
-      setAddress(a => ({
-        ...a,
-        line1: geo.line1 || a.line1,
-        area: geo.area || a.area,
-        city: geo.city || a.city,
-        state: geo.state || a.state,
-        pincode: geo.pincode || a.pincode,
-      }))
-      setMapPinned(true)
-      setShowManual(true)
-    } catch (e: any) {
-      Alert.alert('Location Error', e.message || 'Could not detect location')
-    } finally {
-      setLocLoading(false)
-    }
-  }
-
-  function validateAddress(): string | null {
+function validateAddress(): string | null {
     if (!address.name.trim()) return 'Enter your name'
     if (!/^[6-9]\d{9}$/.test(address.phone)) return 'Enter a valid 10-digit phone number'
     if (!address.line1.trim()) return 'Enter address line 1'
@@ -160,17 +141,6 @@ export default function CheckoutScreen({ navigation, route }: Props) {
         stores: { store_name: storeName, logo_url: null, store_slug: '' },
       } as any)
 
-      // persist address for future orders
-      await saveAddress({
-        label: address.area || address.line1 || 'Address',
-        line1: address.line1,
-        area: address.area ?? '',
-        city: address.city,
-        state: address.state,
-        pincode: address.pincode,
-        name: address.name,
-        phone: address.phone,
-      })
 
       if (paymentMethod === 'online') {
         navigation.replace('Payment', { orderId, orderNumber, amount: total })
@@ -190,6 +160,12 @@ export default function CheckoutScreen({ navigation, route }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
+      <LocationPromptModal
+        visible={addrModalVisible}
+        onClose={() => { setAddrModalVisible(false); loadDefaultAddress() }}
+        onCitySet={() => {}}
+      />
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -238,151 +214,56 @@ export default function CheckoutScreen({ navigation, route }: Props) {
         </View>
 
         {/* ── Delivery Address ── */}
-        <View style={[styles.section, { zIndex: 10 }]}>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Delivery Address</Text>
 
-          {/* Use current location */}
-          <TouchableOpacity
-            style={styles.detectBtn}
-            onPress={handleDetectLocation}
-            disabled={locLoading}
-            activeOpacity={0.8}
-          >
-            {locLoading ? (
-              <ActivityIndicator color={colors.white} size="small" />
-            ) : (
-              <>
-                <Text style={styles.detectBtnIcon}>📍</Text>
-                <View>
-                  <Text style={styles.detectBtnTitle}>Use Current Location</Text>
-                  <Text style={styles.detectBtnSub}>Auto-fill address from GPS</Text>
+          {selectedSaved ? (
+            <View style={styles.savedAddrCard}>
+              <View style={styles.savedAddrTop}>
+                <View style={styles.savedAddrBadge}>
+                  <Text style={styles.savedAddrBadgeText}>{selectedSaved.label || 'Home'}</Text>
                 </View>
-              </>
-            )}
-          </TouchableOpacity>
-
-          {/* Search address */}
-          <Text style={styles.fieldLabel}>Or Search Address</Text>
-          <View style={styles.placesWrapper}>
-            <GooglePlacesAutocomplete
-              placeholder="Search area, street, landmark..."
-              fetchDetails
-              onPress={(_data, details) => {
-                if (!details) return
-                const components = details.address_components ?? []
-                const get = (...types: string[]) =>
-                  components.find((c: any) => types.some((t: string) => c.types.includes(t)))?.long_name ?? ''
-                setAddress(a => ({
-                  ...a,
-                  line1: details.name || get('street_number', 'route', 'premise') || a.line1,
-                  area: get('sublocality_level_1', 'sublocality', 'neighborhood', 'locality'),
-                  city: get('administrative_area_level_2', 'locality'),
-                  state: get('administrative_area_level_1'),
-                  pincode: get('postal_code'),
-                }))
-                setMapPinned(true)
-                setShowManual(true)
-              }}
-              query={{ key: MAPS_KEY, language: 'en', components: 'country:in' }}
-              textInputProps={{
-                onFocus: () => setSearchFocused(true),
-                onBlur: () => setSearchFocused(false),
-              }}
-              styles={{
-                container: { flex: 0, zIndex: 10 },
-                textInputContainer: { backgroundColor: 'transparent' },
-                textInput: {
-                  height: 48, borderRadius: 12, fontSize: 15,
-                  backgroundColor: colors.white, color: colors.textPrimary,
-                  paddingHorizontal: 14, borderWidth: 1.5, marginBottom: 0,
-                  borderColor: searchFocused ? colors.primary : colors.border,
-                },
-                listView: {
-                  backgroundColor: colors.white,
-                  borderWidth: 1, borderColor: colors.border,
-                  borderRadius: 12, marginTop: 2,
-                  shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 8,
-                  zIndex: 20,
-                },
-                row: { paddingVertical: 12, paddingHorizontal: 14 },
-                description: { fontSize: 14, color: colors.textPrimary },
-                separator: { height: 1, backgroundColor: colors.border },
-              }}
-              enablePoweredByContainer={false}
-              keyboardShouldPersistTaps="handled"
-            />
-          </View>
-
-          {/* Pinned badge */}
-          {mapPinned && (
-            <View style={styles.pinnedBadge}>
-              <Text style={styles.pinnedText}>
-                ✓ {[address.area, address.city].filter(Boolean).join(', ') || 'Address selected'}
+                <TouchableOpacity onPress={() => setAddrModalVisible(true)}>
+                  <Text style={styles.changeAddrText}>Change →</Text>
+                </TouchableOpacity>
+              </View>
+              {selectedSaved.name ? <Text style={styles.savedAddrName}>{selectedSaved.name}{selectedSaved.phone ? ` · ${selectedSaved.phone}` : ''}</Text> : null}
+              {selectedSaved.line1 ? <Text style={styles.savedAddrLine}>{selectedSaved.line1}</Text> : null}
+              <Text style={styles.savedAddrLine}>
+                {[selectedSaved.area, selectedSaved.city].filter(Boolean).join(', ')}
               </Text>
+              {(selectedSaved.state || selectedSaved.pincode) ? (
+                <Text style={styles.savedAddrLine}>
+                  {[selectedSaved.state, selectedSaved.pincode].filter(Boolean).join(' – ')}
+                </Text>
+              ) : null}
             </View>
+          ) : (
+            <TouchableOpacity style={styles.selectAddrBtn} onPress={() => setAddrModalVisible(true)} activeOpacity={0.8}>
+              <Text style={styles.selectAddrIcon}>📍</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectAddrTitle}>Select Delivery Address</Text>
+                <Text style={styles.selectAddrSub}>Choose from saved or add a new address</Text>
+              </View>
+              <Text style={styles.selectAddrArrow}>→</Text>
+            </TouchableOpacity>
           )}
 
-          {/* Name & Phone — always visible */}
+          {/* Name & Phone */}
           <Field
             label="Full Name *"
             value={address.name}
-            onChange={v => setAddress(a => ({ ...a, name: v }))}
+            onChange={(v: string) => setAddress(a => ({ ...a, name: v }))}
           />
           <Field
             label="Phone *"
             value={address.phone}
-            onChange={v => setAddress(a => ({ ...a, phone: v.replace(/\D/g, '').slice(0, 10) }))}
+            onChange={(v: string) => setAddress(a => ({ ...a, phone: v.replace(/\D/g, '').slice(0, 10) }))}
             keyboardType="number-pad"
             maxLength={10}
             placeholder="10-digit mobile number"
             prefix="+91"
           />
-
-          {/* Manual fields toggle */}
-          <TouchableOpacity onPress={() => setShowManual(v => !v)} style={styles.manualToggle}>
-            <Text style={styles.manualToggleText}>
-              {showManual ? '▲ Hide address fields' : '▼ Enter address manually'}
-            </Text>
-          </TouchableOpacity>
-
-          {showManual && (
-            <>
-              <Field
-                label="Address Line 1 *"
-                value={address.line1}
-                onChange={v => setAddress(a => ({ ...a, line1: v }))}
-                placeholder="Flat/House No, Street"
-              />
-              <Field
-                label="Locality / Area"
-                value={address.area ?? ''}
-                onChange={v => setAddress(a => ({ ...a, area: v }))}
-              />
-              <View style={styles.twoCol}>
-                <View style={{ flex: 1 }}>
-                  <Field
-                    label="City *"
-                    value={address.city}
-                    onChange={v => setAddress(a => ({ ...a, city: v }))}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Field
-                    label="Pincode *"
-                    value={address.pincode}
-                    onChange={v => setAddress(a => ({ ...a, pincode: v }))}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                  />
-                </View>
-              </View>
-              <Field
-                label="State *"
-                value={address.state}
-                onChange={v => setAddress(a => ({ ...a, state: v }))}
-              />
-            </>
-          )}
         </View>
 
         {/* ── Payment ── */}
@@ -504,21 +385,32 @@ const styles = StyleSheet.create({
     fontSize: 13, fontWeight: '700', color: colors.textMuted,
     marginBottom: spacing.sm, textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  fieldLabel: {
-    fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 4,
+  savedAddrCard: {
+    backgroundColor: '#F9FAFB', borderRadius: 12,
+    padding: 12, marginBottom: 14,
+    borderWidth: 1.5, borderColor: colors.primary,
   },
-  placesWrapper: { marginBottom: spacing.sm, zIndex: 10 },
+  savedAddrTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  savedAddrBadge: {
+    backgroundColor: '#FFF0E9', borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 3,
+  },
+  savedAddrBadgeText: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  changeAddrText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  savedAddrName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
+  savedAddrLine: { fontSize: 13, color: '#666666', lineHeight: 20 },
 
-  detectBtn: {
+  selectAddrBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: colors.primary, borderRadius: 14,
+    backgroundColor: '#FFF5F0', borderRadius: 14,
     padding: 14, marginBottom: 14,
-    shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+    borderWidth: 1.5, borderColor: colors.primary,
+    borderStyle: 'dashed',
   },
-  detectBtnIcon: { fontSize: 22 },
-  detectBtnTitle: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-  detectBtnSub: { fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
+  selectAddrIcon: { fontSize: 22 },
+  selectAddrTitle: { fontSize: 14, fontWeight: '700', color: colors.primary },
+  selectAddrSub: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  selectAddrArrow: { fontSize: 16, color: colors.primary, fontWeight: '700' },
 
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   itemName: { flex: 1, fontSize: 14, color: colors.textPrimary, marginRight: spacing.sm },
@@ -533,16 +425,6 @@ const styles = StyleSheet.create({
   totalLabel: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
   totalVal: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
 
-  pinnedBadge: {
-    backgroundColor: '#F0FFF8', borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 7,
-    marginBottom: spacing.sm, borderWidth: 1, borderColor: '#00B98E',
-    flexDirection: 'row', alignItems: 'center',
-  },
-  pinnedText: { fontSize: 13, color: '#00B98E', fontWeight: '700' },
-
-  manualToggle: { paddingVertical: spacing.sm, marginBottom: spacing.xs },
-  manualToggleText: { fontSize: 13, color: colors.primary, fontWeight: '600', textAlign: 'center' },
   twoCol: { flexDirection: 'row', gap: spacing.sm },
 
   payOpt: {

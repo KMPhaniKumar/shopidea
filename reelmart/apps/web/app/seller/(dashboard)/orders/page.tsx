@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Search, Download, Printer } from 'lucide-react'
 import { format } from 'date-fns'
@@ -20,44 +21,74 @@ const STATUS_FLOW = ['pending', 'accepted', 'packed', 'shipped', 'delivered']
 
 export default function OrdersPage() {
   const supabase = createClient()
+  const router = useRouter()
   const [orders, setOrders] = useState<any[]>([])
+  const [storeId, setStoreId] = useState<string | null>(null)
+  const [storeError, setStoreError] = useState<string | null>(null)
   const [tab, setTab] = useState('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<any>(null)
+  const [loadingOrders, setLoadingOrders] = useState(true)
 
-  useEffect(() => { loadOrders() }, [tab])
+  // Resolve store once on mount
+  useEffect(() => {
+    async function resolveStore() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        if (process.env.NODE_ENV === 'development') {
+          // Dev mode: load first available store
+          const { data: store } = await supabase.from('stores').select('id').limit(1).single()
+          if (store) { setStoreId(store.id); return }
+        }
+        router.push('/seller/login'); return
+      }
+      const { data: store, error: storeErr } = await supabase.from('stores').select('id').eq('seller_id', user.id).single()
+      if (storeErr || !store) { setStoreError('No store found for your account. Please complete store setup.'); setLoadingOrders(false); return }
+      setStoreId(store.id)
+    }
+    resolveStore()
+  }, [])
 
-  async function loadOrders() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { data: store } = await supabase.from('stores').select('id').eq('seller_id', user.id).single()
-    if (!store) return
+  // Load orders whenever storeId or tab changes
+  useEffect(() => {
+    if (!storeId) return
+    loadOrders(storeId)
+  }, [storeId, tab])
 
-    let q = supabase.from('orders').select('*').eq('store_id', store.id).order('created_at', { ascending: false }).limit(100)
-    if (tab !== 'all') q = q.eq('status', tab)
-    const { data } = await q
-    setOrders(data ?? [])
-
-    const ch = supabase.channel('orders-page')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `store_id=eq.${store.id}` }, (p: any) => {
+  // Realtime subscription (separate from query)
+  useEffect(() => {
+    if (!storeId) return
+    const ch = supabase.channel(`orders-page-${storeId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `store_id=eq.${storeId}` }, (p: any) => {
         toast.custom(() => (
           <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-[#FF6B2B]">
             <p className="font-semibold text-sm">🛍️ New Order {p.new.order_number}</p>
             <p className="text-xs text-[#666666]">₹{p.new.total_amount}</p>
           </div>
         ), { duration: 6000 })
-        loadOrders()
+        loadOrders(storeId)
       })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
+  }, [storeId])
+
+  async function loadOrders(sid: string) {
+    setLoadingOrders(true)
+    let q = supabase.from('orders').select('*').eq('store_id', sid).order('created_at', { ascending: false }).limit(100)
+    if (tab !== 'all') q = q.eq('status', tab)
+    const { data, error } = await q
+    if (error) { setStoreError(`Failed to load orders: ${error.message}`); setLoadingOrders(false); return }
+    setOrders(data ?? [])
+    setLoadingOrders(false)
   }
 
   async function updateStatus(orderId: string, status: string) {
     const updates: any = { status }
     if (status === 'delivered') updates.delivered_at = new Date().toISOString()
-    await supabase.from('orders').update(updates).eq('id', orderId)
+    const { error } = await supabase.from('orders').update(updates).eq('id', orderId)
+    if (error) { toast.error(`Failed to update: ${error.message}`); return }
     toast.success(`Order ${status}`)
-    loadOrders()
+    if (storeId) loadOrders(storeId)
     if (selected?.id === orderId) setSelected((prev: any) => ({ ...prev, status }))
   }
 
@@ -99,15 +130,32 @@ export default function OrdersPage() {
     o.delivery_address?.name?.toLowerCase().includes(search.toLowerCase())
   )
 
+  if (storeError) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center p-8 bg-white rounded-xl border border-[#EEEEEE] max-w-md">
+          <p className="text-4xl mb-4">⚠️</p>
+          <p className="font-semibold text-[#1A1A1A] mb-2">Unable to load orders</p>
+          <p className="text-sm text-[#666666]">{storeError}</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex gap-4 h-full">
       <Toaster />
       <div className="flex-1 space-y-4 min-w-0">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-[#1A1A1A]">Orders</h1>
-          <button onClick={exportExcel} className="px-3 py-2 border border-[#EEEEEE] text-sm rounded-lg flex items-center gap-2 hover:bg-[#F9F9F9]">
-            <Download size={15} /> Export
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => storeId && loadOrders(storeId)} className="px-3 py-2 border border-[#EEEEEE] text-sm rounded-lg flex items-center gap-2 hover:bg-[#F9F9F9]">
+              ↻ Refresh
+            </button>
+            <button onClick={exportExcel} className="px-3 py-2 border border-[#EEEEEE] text-sm rounded-lg flex items-center gap-2 hover:bg-[#F9F9F9]">
+              <Download size={15} /> Export
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-1 overflow-x-auto">
@@ -158,9 +206,11 @@ export default function OrdersPage() {
                 ))}
               </tbody>
             </table>
-            {filtered.length === 0 && (
+            {loadingOrders ? (
+              <p className="text-center py-12 text-[#AAAAAA] text-sm">Loading orders...</p>
+            ) : filtered.length === 0 ? (
               <p className="text-center py-12 text-[#AAAAAA] text-sm">No orders found</p>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

@@ -9,6 +9,7 @@ import { colors, radius, spacing } from '../constants/theme'
 import { getSavedAddresses, saveAddress, removeAddress, SavedAddress } from '../lib/savedAddresses'
 
 const CITY_KEY = '@reelmart_city'
+const ADDR_KEY = '@reelmart_default_address_id'
 const MAPS_KEY = 'AIzaSyDtu00tuOZpIzPRASPFScWJRu1GkpaaSIU'
 const { height: SCREEN_H } = Dimensions.get('window')
 
@@ -74,6 +75,7 @@ function SimpleInput({
 
 export default function LocationPromptModal({ visible, onClose, onCitySet }: Props) {
   const [savedCity, setSavedCity] = useState<string | null>(null)
+  const [defaultAddrId, setDefaultAddrId] = useState<string | null>(null)
   const [addresses, setAddresses] = useState<SavedAddress[]>([])
   const [step, setStep] = useState<'search' | 'form'>('search')
   const [isManual, setIsManual] = useState(false)
@@ -85,11 +87,13 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
 
   useEffect(() => {
     async function init() {
-      const [city, addrs] = await Promise.all([
+      const [city, addrId, addrs] = await Promise.all([
         AsyncStorage.getItem(CITY_KEY),
+        AsyncStorage.getItem(ADDR_KEY),
         getSavedAddresses(),
       ])
       if (city) { setSavedCity(city); onCitySet(city) }
+      setDefaultAddrId(addrId)
       setAddresses(addrs)
     }
     init()
@@ -161,7 +165,7 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
 
   async function handleSaveAddress() {
     const city = draft.city || draft.area
-    await saveAddress({
+    const saved = await saveAddress({
       label: draft.addressType,
       line1: draft.line1,
       area: draft.area,
@@ -171,15 +175,22 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
       name: draft.name,
       phone: draft.phone,
     })
-    await AsyncStorage.setItem(CITY_KEY, city)
+    await Promise.all([
+      AsyncStorage.setItem(CITY_KEY, city),
+      AsyncStorage.setItem(ADDR_KEY, saved.id),
+    ])
     setSavedCity(city)
     onCitySet(city)
     onClose()
   }
 
   async function pickSavedAddress(addr: SavedAddress) {
-    await AsyncStorage.setItem(CITY_KEY, addr.city)
+    await Promise.all([
+      AsyncStorage.setItem(CITY_KEY, addr.city),
+      AsyncStorage.setItem(ADDR_KEY, addr.id),
+    ])
     setSavedCity(addr.city)
+    setDefaultAddrId(addr.id)
     onCitySet(addr.city)
     onClose()
   }
@@ -249,7 +260,7 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
                         <View style={styles.addrIconBox}>
                           <Text style={{ fontSize: 22 }}>🏠</Text>
                           <Text style={styles.addrIconLabel}>
-                            {addr.city === savedCity ? "You're here" : addr.label || 'Saved'}
+                            {addr.id === defaultAddrId ? "You're here" : addr.label || 'Saved'}
                           </Text>
                         </View>
                         <View style={styles.addrInfo}>
@@ -257,7 +268,7 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
                             <Text style={styles.addrName} numberOfLines={1}>
                               {addr.name || addr.label || addr.line1}
                             </Text>
-                            {addr.city === savedCity && (
+                            {addr.id === defaultAddrId && (
                               <View style={styles.selectedBadge}>
                                 <Text style={styles.selectedBadgeText}>Selected</Text>
                               </View>
