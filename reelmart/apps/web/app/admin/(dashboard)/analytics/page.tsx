@@ -1,10 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { createClient } from '@/lib/supabase/client'
-
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/$/, '')
 
 interface PlatformStats {
   gmv: number
@@ -20,7 +18,6 @@ interface PlatformStats {
 interface TopStore {
   storeId: string
   name: string
-  slug: string
   gmv: number
   orderCount: number
 }
@@ -32,16 +29,6 @@ const PERIODS = [
 ]
 
 const PIE_COLORS = ['#FF6B2B', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16']
-
-async function fetchWithAuth<T>(path: string): Promise<T> {
-  const { data: { session } } = await createClient().auth.getSession()
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { Authorization: `Bearer ${session?.access_token}` },
-  })
-  const json = await res.json()
-  if (!json.success) throw new Error(json.error)
-  return json.data as T
-}
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
@@ -63,14 +50,96 @@ export default function AdminAnalyticsPage() {
   useEffect(() => {
     setLoading(true)
     setError('')
-    Promise.all([
-      fetchWithAuth<PlatformStats>(`/api/analytics/platform?period=${period}`),
-      fetchWithAuth<TopStore[]>('/api/analytics/platform/stores?limit=10'),
-    ])
-      .then(([s, ts]) => {
-        setStats(s)
-        setTopStores(ts)
+
+    const supabase = createClient()
+    const since = new Date()
+    since.setDate(since.getDate() - parseInt(period))
+    const sinceISO = since.toISOString()
+
+    async function load() {
+      // Orders in period
+      const { data: orders, error: ordErr } = await supabase
+        .from('orders')
+        .select('total_amount, payment_status, store_id')
+        .gte('created_at', sinceISO)
+
+      if (ordErr) throw new Error(ordErr.message)
+
+      const totalOrders = orders?.length ?? 0
+      const paidOrders = orders?.filter(o => o.payment_status === 'paid') ?? []
+      const gmv = paidOrders.reduce((s, o) => s + Number(o.total_amount), 0)
+      const platformFee = gmv * 0.05
+
+      // Top stores
+      const storeMap: Record<string, { gmv: number; orderCount: number }> = {}
+      for (const o of paidOrders) {
+        if (!storeMap[o.store_id]) storeMap[o.store_id] = { gmv: 0, orderCount: 0 }
+        storeMap[o.store_id].gmv += Number(o.total_amount)
+        storeMap[o.store_id].orderCount += 1
+      }
+
+      const topStoreIds = Object.entries(storeMap)
+        .sort((a, b) => b[1].gmv - a[1].gmv)
+        .slice(0, 10)
+        .map(([id]) => id)
+
+      let topStoresList: TopStore[] = []
+      if (topStoreIds.length > 0) {
+        const { data: stores } = await supabase
+          .from('stores')
+          .select('id, store_name')
+          .in('id', topStoreIds)
+
+        topStoresList = topStoreIds.map(id => ({
+          storeId: id,
+          name: stores?.find(s => s.id === id)?.store_name ?? id.slice(0, 8),
+          gmv: storeMap[id].gmv,
+          orderCount: storeMap[id].orderCount,
+        }))
+      }
+
+      // New stores in period
+      const { count: newStores } = await supabase
+        .from('stores')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', sinceISO)
+
+      // New buyers & sellers in period
+      const { count: newBuyers } = await supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'buyer')
+        .gte('created_at', sinceISO)
+
+      const { count: newSellers } = await supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'seller')
+        .gte('created_at', sinceISO)
+
+      // Payouts paid in period
+      const { data: payoutsData } = await supabase
+        .from('payouts')
+        .select('amount')
+        .eq('status', 'done')
+        .gte('created_at', sinceISO)
+
+      const payoutsPaid = payoutsData?.reduce((s, p) => s + Number(p.amount), 0) ?? 0
+
+      setStats({
+        gmv,
+        platformFee,
+        totalOrders,
+        paidOrders: paidOrders.length,
+        newStores: newStores ?? 0,
+        newBuyers: newBuyers ?? 0,
+        newSellers: newSellers ?? 0,
+        payoutsPaid,
       })
+      setTopStores(topStoresList)
+    }
+
+    load()
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }, [period])
@@ -98,17 +167,16 @@ export default function AdminAnalyticsPage() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6 text-sm text-red-600">
-          Failed to load analytics: {error}. Check that analytics-service is running.
+          Failed to load analytics: {error}
         </div>
       )}
 
       {loading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 animate-pulse">
-          {[1,2,3,4].map(i => <div key={i} className="h-32 bg-gray-100 rounded-2xl" />)}
+          {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-gray-100 rounded-2xl" />)}
         </div>
       ) : stats ? (
         <>
-          {/* Key metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <StatCard
               label={`GMV (${period}d)`}
@@ -133,13 +201,12 @@ export default function AdminAnalyticsPage() {
             />
           </div>
 
-          {/* Top stores bar chart */}
           {topStores.length > 0 && (
             <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-              <h2 className="text-base font-bold text-gray-900 mb-6">Top Stores by GMV (Last 30 days)</h2>
+              <h2 className="text-base font-bold text-gray-900 mb-6">Top Stores by GMV</h2>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={topStores} layout="vertical" margin={{ left: 80 }}>
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
                   <YAxis dataKey="name" type="category" tick={{ fontSize: 12 }} width={80} />
                   <Tooltip formatter={(v: number) => [`₹${v.toLocaleString('en-IN')}`, 'GMV']} />
                   <Bar dataKey="gmv" radius={[0, 6, 6, 0]}>
@@ -152,9 +219,7 @@ export default function AdminAnalyticsPage() {
             </div>
           )}
 
-          {/* Stats breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-            {/* GMV vs payouts */}
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <h2 className="text-base font-bold text-gray-900 mb-4">Revenue Breakdown</h2>
               <div className="space-y-3">
@@ -179,7 +244,6 @@ export default function AdminAnalyticsPage() {
               </div>
             </div>
 
-            {/* Top stores pie */}
             {topStores.length > 0 && (
               <div className="bg-white rounded-2xl border border-gray-200 p-6">
                 <h2 className="text-base font-bold text-gray-900 mb-4">GMV Share by Store</h2>
@@ -207,7 +271,6 @@ export default function AdminAnalyticsPage() {
             )}
           </div>
 
-          {/* Growth summary */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6">
             <h2 className="text-base font-bold text-gray-900 mb-4">Growth Summary ({period}d)</h2>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center">

@@ -7,7 +7,20 @@ import { useDropzone } from 'react-dropzone'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
-import { X } from 'lucide-react'
+import { X, Upload } from 'lucide-react'
+
+const BUSINESS_CATEGORIES: Record<string, string[]> = {
+  'Food & Beverages': ['Cakes & Bakery', 'Tiffin & Meals', 'Sweets & Mithai', 'Beverages', 'Pickles & Snacks', 'Dry Fruits'],
+  'Fashion': ['Sarees', 'Kurtis', 'Lehengas', 'Men\'s Wear', 'Kids Wear', 'Western Wear'],
+  'Jewellery': ['Gold Jewellery', 'Silver Jewellery', 'Artificial Jewellery', 'Bangles', 'Necklaces'],
+  'Electronics': ['Mobile Accessories', 'Earphones', 'Chargers', 'Gadgets', 'Smart Watches'],
+  'Home & Kitchen': ['Cookware', 'Home Decor', 'Furniture', 'Bedding', 'Storage'],
+  'Beauty & Wellness': ['Skincare', 'Haircare', 'Makeup', 'Perfumes', 'Organic Products'],
+  'Handicrafts': ['Pottery', 'Paintings', 'Handmade Bags', 'Embroidery', 'Wood Craft'],
+  'Books & Stationery': ['Books', 'Notebooks', 'Art Supplies', 'Gifts'],
+  'Grocery': ['Spices', 'Rice & Grains', 'Oils', 'Organic Produce'],
+  'Fitness': ['Equipment', 'Supplements', 'Yoga Products', 'Sports Gear'],
+}
 
 const schema = z.object({
   name: z.string().min(2, 'Name required'),
@@ -26,6 +39,7 @@ export default function NewProductPage() {
   const supabase = createClient()
   const router = useRouter()
   const [storeId, setStoreId] = useState('')
+  const [storeCategory, setStoreCategory] = useState('')
   const [images, setImages] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -39,51 +53,71 @@ export default function NewProductPage() {
   useEffect(() => {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: store } = await supabase.from('stores').select('id').eq('seller_id', user.id).single()
-      if (store) setStoreId(store.id)
+      const storeQuery = user
+        ? supabase.from('stores').select('id, category').eq('seller_id', user.id).single()
+        : supabase.from('stores').select('id, category').limit(1).single()
+      const { data: store } = await storeQuery
+      if (store) {
+        setStoreId(store.id)
+        setStoreCategory(store.category ?? '')
+      }
     }
     init()
   }, [])
+
+  async function uploadImage(file: File, sid: string): Promise<string | null> {
+    if (!sid) { toast.error('Store not loaded yet, please wait'); return null }
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+    const path = `${sid}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    const { error } = await supabase.storage.from('product-images').upload(path, file, {
+      upsert: true,
+      contentType: file.type,
+    })
+    if (error) { toast.error(`Upload failed: ${error.message}`); return null }
+    const { data } = supabase.storage.from('product-images').getPublicUrl(path)
+    return data.publicUrl
+  }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp'] },
     maxFiles: 5,
     maxSize: 2 * 1024 * 1024,
-    disabled: images.length >= 5 || uploading,
+    disabled: images.length >= 5 || uploading || !storeId,
+    onDropRejected: (files) => {
+      files.forEach(f => f.errors.forEach(e => toast.error(e.message)))
+    },
     onDrop: async (files) => {
+      if (!storeId) { toast.error('Store not loaded yet'); return }
       setUploading(true)
       const urls = await Promise.all(
-        files.slice(0, 5 - images.length).map(async (file) => {
-          const path = `stores/${storeId}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`
-          const { error } = await supabase.storage.from('product-images').upload(path, file, { upsert: true })
-          if (error) { toast.error('Upload failed'); return null }
-          const { data } = supabase.storage.from('product-images').getPublicUrl(path)
-          return data.publicUrl
-        })
+        files.slice(0, 5 - images.length).map(f => uploadImage(f, storeId))
       )
       setImages(prev => [...prev, ...(urls.filter(Boolean) as string[])])
       setUploading(false)
     },
   })
 
+  const productCategories = storeCategory
+    ? (BUSINESS_CATEGORIES[storeCategory] ?? Object.values(BUSINESS_CATEGORIES).flat())
+    : Object.values(BUSINESS_CATEGORIES).flat()
+
   async function onSubmit(data: FormData) {
+    if (!storeId) { toast.error('Store not loaded'); return }
     setSaving(true)
-    const payload = {
+    const { error } = await supabase.from('products').insert({
       store_id: storeId,
       name: data.name,
       description: data.description,
       price: data.price,
-      compare_price: data.compare_price,
+      compare_price: data.compare_price || null,
       category: data.category,
       stock_quantity: data.track_stock ? (data.stock_quantity ?? 0) : -1,
       low_stock_threshold: data.low_stock_threshold,
       is_available: data.is_available,
       images,
-    }
-    await supabase.from('products').insert(payload)
-    toast.success('Product added')
-    setSaving(false)
+    })
+    if (error) { toast.error(error.message); setSaving(false); return }
+    toast.success('Product added!')
     router.push('/seller/products')
   }
 
@@ -93,6 +127,7 @@ export default function NewProductPage() {
       <h1 className="text-xl font-bold text-[#1A1A1A] mb-6">Add Product</h1>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
 
+        {/* Photos */}
         <div className="bg-white rounded-xl p-5 shadow-sm space-y-3">
           <h2 className="font-semibold text-[#1A1A1A]">Product Photos</h2>
           <div className="flex gap-2 flex-wrap">
@@ -108,17 +143,25 @@ export default function NewProductPage() {
             {images.length < 5 && (
               <div {...getRootProps()}
                 className={`w-20 h-20 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors text-center ${
+                  !storeId ? 'opacity-50 cursor-not-allowed border-[#EEEEEE]' :
                   isDragActive ? 'border-[#FF6B2B] bg-[#FF6B2B]/5' : 'border-[#EEEEEE] hover:border-[#FF6B2B]'
                 }`}>
                 <input {...getInputProps()} />
-                <span className="text-xl text-[#AAAAAA]">+</span>
-                <span className="text-[10px] text-[#AAAAAA] mt-0.5">{uploading ? 'Uploading' : 'Add photo'}</span>
+                {uploading ? (
+                  <div className="w-5 h-5 border-2 border-[#FF6B2B] border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Upload size={16} className="text-[#AAAAAA]" />
+                    <span className="text-[10px] text-[#AAAAAA] mt-0.5">Add photo</span>
+                  </>
+                )}
               </div>
             )}
           </div>
-          <p className="text-xs text-[#AAAAAA]">Max 5 photos, 2MB each. First photo is the cover.</p>
+          <p className="text-xs text-[#AAAAAA]">Max 5 photos, 2MB each. First photo is the cover. JPG/PNG/WebP only.</p>
         </div>
 
+        {/* Details */}
         <div className="bg-white rounded-xl p-5 shadow-sm space-y-4">
           <h2 className="font-semibold text-[#1A1A1A]">Product Details</h2>
           <div>
@@ -143,10 +186,16 @@ export default function NewProductPage() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Category</label>
-            <input {...register('category')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="e.g. Cakes, Jewellery, Clothing..." />
+            <select {...register('category')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] bg-white">
+              <option value="">Select category</option>
+              {productCategories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
           </div>
         </div>
 
+        {/* Inventory */}
         <div className="bg-white rounded-xl p-5 shadow-sm space-y-4">
           <h2 className="font-semibold text-[#1A1A1A]">Inventory</h2>
           <label className="flex items-center gap-3 cursor-pointer">
@@ -174,7 +223,7 @@ export default function NewProductPage() {
           </label>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 pb-6">
           <button type="button" onClick={() => router.back()} className="flex-1 border border-[#EEEEEE] py-2.5 rounded-lg text-sm font-medium hover:bg-[#F9F9F9]">Cancel</button>
           <button type="submit" disabled={saving} className="flex-1 bg-[#FF6B2B] text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50">
             {saving ? 'Saving...' : 'Add Product'}

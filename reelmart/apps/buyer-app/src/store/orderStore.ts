@@ -15,8 +15,12 @@ export const useOrderStore = create<OrderState>((set) => ({
 
   fetchOrders: async (buyerId) => {
     set({ loading: true })
-    const orders = await getBuyerOrders(buyerId)
-    set({ orders, loading: false })
+    try {
+      const orders = await getBuyerOrders(buyerId)
+      set({ orders, loading: false })
+    } catch {
+      set({ loading: false })
+    }
   },
 
   updateOrder: (orderId, data) =>

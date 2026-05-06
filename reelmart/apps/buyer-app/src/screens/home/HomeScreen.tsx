@@ -1,8 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, TextInput, Image, ActivityIndicator, RefreshControl,
+  StyleSheet, TextInput, Image, ActivityIndicator, RefreshControl, Dimensions,
 } from 'react-native'
+import LocationPromptModal from '../../components/LocationPromptModal'
+import { getSavedAddresses, SavedAddress } from '../../lib/savedAddresses'
+
+const { width } = Dimensions.get('window')
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, radius, spacing } from '../../constants/theme'
 import { useAuthStore } from '../../store/authStore'
@@ -12,7 +16,6 @@ import {
   search, CATEGORIES, StoreCard,
 } from '../../services/discoveryService'
 
-const CITIES = ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Hyderabad', 'Pune', 'Kolkata', 'Ahmedabad', 'Jaipur', 'Surat']
 
 type Props = { navigation: NativeStackNavigationProp<any> }
 
@@ -61,9 +64,10 @@ function StoreRow({ store, onPress }: { store: StoreCard; onPress: () => void })
 
 export default function HomeScreen({ navigation }: Props) {
   const session = useAuthStore(s => s.session)
-  const { itemCount: cartCount, fetchCart } = useCartStore()
+  const { fetchCart } = useCartStore()
   const [city, setCity] = useState('Mumbai')
-  const [showCityPicker, setShowCityPicker] = useState(false)
+  const [defaultAddress, setDefaultAddress] = useState<SavedAddress | null>(null)
+  const [locationModalVisible, setLocationModalVisible] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [topRated, setTopRated] = useState<StoreCard[]>([])
@@ -75,20 +79,29 @@ export default function HomeScreen({ navigation }: Props) {
   const [searching, setSearching] = useState(false)
 
   const loadAll = useCallback(async () => {
-    const [tr, ns, fw] = await Promise.all([
-      getTopRatedStores(city),
-      getNewStores(city),
-      session?.user ? getFollowedStores(session.user.id) : Promise.resolve([]),
-    ])
-    setTopRated(tr)
-    setNewStores(ns)
-    setFollowed(fw)
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      const [tr, ns, fw] = await Promise.all([
+        getTopRatedStores(city).catch(() => []),
+        getNewStores(city).catch(() => []),
+        session?.user ? getFollowedStores(session.user.id).catch(() => []) : Promise.resolve([]),
+      ])
+      setTopRated(tr)
+      setNewStores(ns)
+      setFollowed(fw)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [city, session?.user?.id])
 
   useEffect(() => { if (session?.user) fetchCart(session.user.id) }, [session?.user?.id])
   useEffect(() => { setLoading(true); loadAll() }, [loadAll])
+
+  function refreshDefaultAddress() {
+    getSavedAddresses().then(addrs => setDefaultAddress(addrs[0] ?? null))
+  }
+
+  useEffect(() => { refreshDefaultAddress() }, [])
 
   useEffect(() => {
     if (!searchQuery.trim() && !selectedCategory) { setFiltered([]); setSearching(false); return }
@@ -112,53 +125,51 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => setShowCityPicker(v => !v)} style={styles.cityBtn}>
-          <Text style={styles.cityIcon}>📍</Text>
-          <Text style={styles.cityName}>{city}</Text>
-          <Text style={styles.cityChevron}>▾</Text>
-        </TouchableOpacity>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Cart')}>
-            <Text style={styles.iconBtnText}>🛒</Text>
-            {cartCount > 0 && (
-              <View style={styles.cartBadge}><Text style={styles.cartBadgeText}>{cartCount}</Text></View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Profile')}>
-            <Text style={styles.iconBtnText}>👤</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <LocationPromptModal
+        visible={locationModalVisible}
+        onClose={() => { setLocationModalVisible(false); refreshDefaultAddress() }}
+        onCitySet={detectedCity => setCity(detectedCity)}
+      />
 
-      {/* City picker dropdown */}
-      {showCityPicker && (
-        <View style={styles.cityDropdown}>
-          {CITIES.map(c => (
-            <TouchableOpacity key={c} style={styles.cityOption} onPress={() => { setCity(c); setShowCityPicker(false) }}>
-              <Text style={[styles.cityOptionText, c === city && styles.cityOptionActive]}>{c}</Text>
+      {/* Hero Header */}
+      <View style={styles.hero}>
+        {/* Logo row */}
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroLogoCard}>
+            <Image source={require('../../../assets/logo.png')} style={styles.heroLogo} resizeMode="contain" />
+          </View>
+        </View>
+
+        {/* Search bar */}
+        <View style={styles.searchBar}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search stores or products..."
+            placeholderTextColor="rgba(255,255,255,0.55)"
+            value={searchQuery}
+            onChangeText={t => { setSearchQuery(t); setSelectedCategory(null) }}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Text style={styles.searchClear}>✕</Text>
             </TouchableOpacity>
-          ))}
+          )}
         </View>
-      )}
 
-      {/* Search bar */}
-      <View style={styles.searchBar}>
-        <Text style={styles.searchIcon}>🔍</Text>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search stores or products..."
-          placeholderTextColor={colors.textMuted}
-          value={searchQuery}
-          onChangeText={t => { setSearchQuery(t); setSelectedCategory(null) }}
-          returnKeyType="search"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Text style={styles.searchClear}>✕</Text>
-          </TouchableOpacity>
-        )}
+        {/* Address bar */}
+        <TouchableOpacity style={styles.addressBar} onPress={() => setLocationModalVisible(true)} activeOpacity={0.75}>
+          <Text style={styles.addressPin}>📍</Text>
+          {defaultAddress ? (
+            <Text style={styles.addressText} numberOfLines={1}>
+              {[defaultAddress.area, defaultAddress.city].filter(Boolean).join(', ')}
+            </Text>
+          ) : (
+            <Text style={[styles.addressText, styles.addressPlaceholder]}>Set your address</Text>
+          )}
+          <Text style={styles.addressChevron}>▾</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Category chips */}
@@ -246,47 +257,54 @@ export default function HomeScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.white },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg, paddingTop: 56, paddingBottom: spacing.sm,
+  container: { flex: 1, backgroundColor: '#F5F5F7' },
+
+  /* ── Hero header ── */
+  hero: {
+    backgroundColor: '#1A1A1A',
+    paddingTop: 54, paddingBottom: 16,
+    paddingHorizontal: spacing.lg,
   },
-  cityBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  cityIcon: { fontSize: 16 },
-  cityName: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
-  cityChevron: { fontSize: 12, color: colors.textSecondary, marginLeft: 2 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  iconBtnText: { fontSize: 22 },
-  cartBadge: {
-    position: 'absolute', top: 4, right: 4,
-    backgroundColor: colors.primary, borderRadius: 8, minWidth: 16, height: 16,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+  heroTopRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 14,
   },
-  cartBadgeText: { fontSize: 10, fontWeight: '800', color: colors.white },
-  cityDropdown: {
-    position: 'absolute', top: 96, left: spacing.lg, right: spacing.lg, zIndex: 100,
-    backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border,
-    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 8,
+  heroLogoCard: {
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 8,
   },
-  cityOption: { paddingHorizontal: spacing.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-  cityOptionText: { fontSize: 15, color: colors.textPrimary },
-  cityOptionActive: { color: colors.primary, fontWeight: '700' },
+  heroLogo: { width: width * 0.42, height: 48 },
+
+  addressBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+    marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    alignSelf: 'flex-start',
+  },
+  addressPin: { fontSize: 13 },
+  addressText: { fontSize: 13, fontWeight: '700', color: colors.white, maxWidth: 200 },
+  addressPlaceholder: { color: 'rgba(255,255,255,0.55)', fontWeight: '500' },
+  addressChevron: { fontSize: 11, color: '#AAAAAA' },
+
   searchBar: {
     flexDirection: 'row', alignItems: 'center',
-    marginHorizontal: spacing.lg, marginVertical: spacing.sm,
-    backgroundColor: colors.surface, borderRadius: radius.pill,
-    paddingHorizontal: spacing.md, height: 44,
-    borderWidth: 1, borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.13)',
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md, height: 46,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
   },
   searchIcon: { fontSize: 16, marginRight: spacing.xs },
-  searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary },
-  searchClear: { fontSize: 14, color: colors.textMuted, paddingLeft: spacing.xs },
-  categoryScroll: { flexGrow: 0 },
-  categoryContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: spacing.xs },
+  searchInput: { flex: 1, fontSize: 15, color: colors.white },
+  searchClear: { fontSize: 14, color: 'rgba(255,255,255,0.6)', paddingLeft: spacing.xs },
+
+  /* ── Category chips ── */
+  categoryScroll: { flexGrow: 0, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },
+  categoryContent: { paddingHorizontal: spacing.lg, paddingVertical: 10, gap: spacing.xs },
   catChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: spacing.sm, paddingVertical: 6,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 14, paddingVertical: 7,
     borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.border,
     backgroundColor: colors.white, marginRight: spacing.xs,
   },
@@ -294,34 +312,50 @@ const styles = StyleSheet.create({
   catIcon: { fontSize: 16 },
   catLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   catLabelActive: { color: colors.primary },
+
+  /* ── Feed ── */
   body: { padding: spacing.md, paddingBottom: 40 },
   section: { marginBottom: spacing.lg },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.sm },
-  chipRow: { flexDirection: 'row', gap: spacing.sm },
-  chip: {
-    width: 100, alignItems: 'center', padding: spacing.sm,
-    borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border,
-    backgroundColor: colors.surface,
+  sectionTitle: {
+    fontSize: 16, fontWeight: '800', color: colors.textPrimary,
+    marginBottom: spacing.sm, letterSpacing: -0.3,
   },
-  chipLogo: { width: 52, height: 52, borderRadius: 26, marginBottom: 6 },
-  chipLogoPlaceholder: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  chipName: { fontSize: 12, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' },
+  chipRow: { flexDirection: 'row', gap: spacing.sm },
+
+  /* Store chip (horizontal scroll cards) */
+  chip: {
+    width: 108, alignItems: 'center', padding: 12,
+    borderRadius: 16, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.white,
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
+  },
+  chipLogo: { width: 56, height: 56, borderRadius: 28, marginBottom: 8 },
+  chipLogoPlaceholder: { backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
+  chipName: { fontSize: 12, fontWeight: '700', color: colors.textPrimary, textAlign: 'center' },
   chipRating: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+
+  /* Store row (list card) */
   storeRow: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.md,
-    backgroundColor: colors.surface, borderRadius: radius.lg,
-    padding: spacing.sm, marginBottom: spacing.sm,
-    borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.white, borderRadius: 16,
+    padding: 14, marginBottom: 10,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
   },
-  storeRowLogo: { width: 56, height: 56, borderRadius: radius.md },
+  storeRowLogo: { width: 62, height: 62, borderRadius: 14 },
   storeRowLogoPlaceholder: { backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
   storeRowHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  storeRowName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, flex: 1 },
-  verifiedBadge: { fontSize: 13, color: colors.primary, fontWeight: '700' },
-  storeRowMeta: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  storeRowRating: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  empty: { alignItems: 'center', paddingVertical: 60 },
-  emptyIcon: { fontSize: 48, marginBottom: spacing.md },
-  emptyText: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
-  emptySubText: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
+  storeRowName: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, flex: 1 },
+  verifiedBadge: {
+    fontSize: 11, color: '#00B98E', fontWeight: '800',
+    backgroundColor: '#E6FAF4', borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 2,
+  },
+  storeRowMeta: { fontSize: 12, color: colors.textMuted, marginTop: 3 },
+  storeRowRating: { fontSize: 12, color: '#F59E0B', fontWeight: '600', marginTop: 2 },
+
+  /* Empty */
+  empty: { alignItems: 'center', paddingVertical: 70 },
+  emptyIcon: { fontSize: 52, marginBottom: spacing.md },
+  emptyText: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
+  emptySubText: { fontSize: 13, color: colors.textMuted, marginTop: 6 },
 })

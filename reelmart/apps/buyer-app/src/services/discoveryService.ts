@@ -1,5 +1,4 @@
 import { supabase } from '../lib/supabase'
-import { api } from '../lib/api'
 
 export interface StoreCard {
   id: string
@@ -34,22 +33,38 @@ export const CATEGORIES = [
   { id: 'other',       label: 'Other',       icon: '🎁' },
 ]
 
+const STORE_SELECT = 'id, store_name, store_slug, category, logo_url, city, area, rating_avg, total_reviews, total_orders, is_verified'
+
 export async function getStoresByCity(city: string, category?: string): Promise<StoreCard[]> {
-  const params = new URLSearchParams({ city })
-  if (category) params.set('category', category)
-  return api.get<StoreCard[]>(`/api/catalog/stores?${params}`)
+  let query = supabase
+    .from('stores')
+    .select(STORE_SELECT)
+    .eq('city', city)
+    .eq('is_active', true)
+    .order('rating_avg', { ascending: false })
+    .limit(20)
+  if (category) query = query.eq('category', category)
+  const { data } = await query
+  return (data as StoreCard[]) ?? []
 }
 
 export async function getTopRatedStores(city: string): Promise<StoreCard[]> {
-  const stores = await api.get<StoreCard[]>(`/api/catalog/stores?city=${encodeURIComponent(city)}`)
-  return stores.filter(s => s.rating_avg >= 4.0 && s.total_reviews >= 3).slice(0, 10)
+  const { data } = await supabase
+    .from('stores')
+    .select(STORE_SELECT)
+    .eq('city', city)
+    .eq('is_active', true)
+    .gte('rating_avg', 0)
+    .order('rating_avg', { ascending: false })
+    .limit(10)
+  return (data as StoreCard[]) ?? []
 }
 
 export async function getNewStores(city: string): Promise<StoreCard[]> {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 864e5).toISOString()
   const { data } = await supabase
     .from('stores')
-    .select('id, store_name, store_slug, category, logo_url, city, area, rating_avg, total_reviews, is_verified')
+    .select(STORE_SELECT)
     .eq('city', city)
     .eq('is_active', true)
     .gte('created_at', thirtyDaysAgo)
@@ -61,15 +76,20 @@ export async function getNewStores(city: string): Promise<StoreCard[]> {
 export async function getFollowedStores(buyerId: string): Promise<StoreCard[]> {
   const { data } = await supabase
     .from('followed_stores')
-    .select('stores(id, store_name, store_slug, category, logo_url, city, area, rating_avg, total_reviews, is_verified)')
+    .select(`stores(${STORE_SELECT})`)
     .eq('buyer_id', buyerId)
   return (data?.map((d: any) => d.stores).filter(Boolean) as StoreCard[]) ?? []
 }
 
 export async function search(query: string, city: string): Promise<{ stores: StoreCard[]; products: ProductCard[] }> {
   const term = query.trim()
-  const [stores, productRes] = await Promise.all([
-    api.get<StoreCard[]>(`/api/catalog/stores?q=${encodeURIComponent(term)}`),
+  const [storeRes, productRes] = await Promise.all([
+    supabase
+      .from('stores')
+      .select(STORE_SELECT)
+      .eq('is_active', true)
+      .ilike('store_name', `%${term}%`)
+      .limit(6),
     supabase
       .from('products')
       .select('id, name, price, images, store_id, stores(store_name, store_slug, city)')
@@ -78,20 +98,44 @@ export async function search(query: string, city: string): Promise<{ stores: Sto
       .limit(12),
   ])
   return {
-    stores: stores.slice(0, 6),
+    stores: (storeRes.data as StoreCard[]) ?? [],
     products: (productRes.data as ProductCard[]) ?? [],
   }
 }
 
-export async function toggleFollowStore(_buyerId: string, storeId: string): Promise<boolean> {
-  const result = await api.post<{ following: boolean }>(`/api/catalog/stores/${storeId}/follow`, {})
-  return result.following
-}
-
 export async function getStoreBySlug(slug: string) {
-  return api.get(`/api/catalog/stores/${slug}`)
+  const { data } = await supabase
+    .from('stores')
+    .select('*, users:seller_id(name, phone)')
+    .eq('store_slug', slug)
+    .eq('is_active', true)
+    .single()
+  return data
 }
 
 export async function getStoreProducts(storeId: string) {
-  return api.get(`/api/catalog/stores/${storeId}/products`)
+  const { data } = await supabase
+    .from('products')
+    .select('*')
+    .eq('store_id', storeId)
+    .eq('is_available', true)
+    .order('created_at', { ascending: false })
+  return data ?? []
+}
+
+export async function toggleFollowStore(buyerId: string, storeId: string): Promise<boolean> {
+  const { data: existing } = await supabase
+    .from('followed_stores')
+    .select('id')
+    .eq('buyer_id', buyerId)
+    .eq('store_id', storeId)
+    .single()
+
+  if (existing) {
+    await supabase.from('followed_stores').delete().eq('buyer_id', buyerId).eq('store_id', storeId)
+    return false
+  } else {
+    await supabase.from('followed_stores').insert({ buyer_id: buyerId, store_id: storeId })
+    return true
+  }
 }

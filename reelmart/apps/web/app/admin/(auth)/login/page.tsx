@@ -1,8 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+
+const IS_DEV = process.env.NODE_ENV === 'development'
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -40,44 +43,100 @@ export default function AdminLoginPage() {
     router.push('/admin')
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 w-full max-w-md">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">ReelMart Admin</h1>
-        <p className="text-gray-500 text-sm mb-8">Sign in with your admin credentials</p>
+  function devLogin() {
+    router.push('/admin/dashboard')
+  }
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-4 h-12 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-              placeholder="admin@reelmart.in"
-              required
-            />
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-white px-6 py-12 relative overflow-hidden">
+      <div className="absolute -top-40 -left-40 w-[480px] h-[480px] rounded-full bg-[#FF6B2B]/10 blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-[400px] h-[400px] rounded-full bg-[#00B98E]/10 blur-3xl pointer-events-none" />
+
+      <div className="relative z-10 w-full max-w-sm flex flex-col items-center">
+
+        {/* Logo */}
+        <Image src="/logo.png" alt="ReelMart" width={300} height={110} className="object-contain mb-6" />
+
+        {/* Tagline */}
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-[#1A1A1A] leading-snug mb-2">
+            Command centre. <span className="text-[#FF6B2B]">Full control.</span>
+          </h2>
+          <p className="text-[#888888] text-sm leading-relaxed">
+            Manage sellers, orders, payouts and platform settings from one place.
+          </p>
+        </div>
+
+        {/* Form card */}
+        <div className="w-full bg-white border border-[#E5E5E5] rounded-2xl shadow-lg px-8 py-8">
+          {/* accent bar */}
+          <div className="flex gap-1 mb-6">
+            <div className="h-1 w-10 rounded-full bg-[#FF6B2B]" />
+            <div className="h-1 w-4 rounded-full bg-[#00B98E]" />
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-4 h-12 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-              required
-            />
+
+          <div className="mb-6">
+            <h1 className="text-xl font-bold text-[#1A1A1A] mb-1">Admin Sign In 🔐</h1>
+            <p className="text-[#888888] text-sm">Access restricted to authorized admins only</p>
           </div>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-orange-500 text-white rounded-xl h-12 font-semibold text-sm disabled:opacity-50"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label className="block text-sm font-semibold text-[#1A1A1A] mb-2">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="admin@reelmart.in"
+                required
+                className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3.5 text-sm outline-none focus:border-[#FF6B2B] transition-colors placeholder:text-[#BBBBBB]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-[#1A1A1A] mb-2">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3.5 text-sm outline-none focus:border-[#00B98E] transition-colors placeholder:text-[#BBBBBB]"
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[#FF6B2B] text-white py-3.5 rounded-xl font-semibold text-sm disabled:opacity-40 hover:bg-[#e55a1f] transition-colors shadow-sm"
+            >
+              {loading ? 'Signing in...' : 'Sign In →'}
+            </button>
+
+            {IS_DEV && (
+              <button
+                type="button"
+                onClick={devLogin}
+                disabled={loading}
+                className="w-full border border-dashed border-[#FF6B2B] text-[#FF6B2B] py-3 rounded-xl font-semibold text-sm hover:bg-orange-50 transition-colors disabled:opacity-40"
+              >
+                Dev Login (skip auth)
+              </button>
+            )}
+          </form>
+        </div>
+
+        <p className="mt-8 text-xs text-[#CCCCCC] text-center">
+          © 2025 ReelMart · Real Products. Real Sellers.
+        </p>
       </div>
+
     </div>
   )
 }

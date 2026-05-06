@@ -1,13 +1,11 @@
-import { adminApi } from '@/lib/admin-api'
+import { createClient } from '@/lib/supabase/server'
 
 interface Buyer {
   id: string
-  full_name: string | null
+  name: string | null
   phone: string
-  email: string | null
   role: string
   created_at: string
-  is_active: boolean
 }
 
 export default async function BuyersPage({
@@ -16,25 +14,30 @@ export default async function BuyersPage({
   searchParams: { search?: string; page?: string }
 }) {
   const { search, page = '1' } = searchParams
-  const params = new URLSearchParams({ role: 'buyer', page })
-  if (search) params.set('search', search)
+  const pageNum = Math.max(1, parseInt(page))
+  const pageSize = 20
+  const offset = (pageNum - 1) * pageSize
 
-  let buyers: Buyer[] = []
-  let total = 0
+  const supabase = createClient()
 
-  try {
-    const res = await adminApi.get<{ data: Buyer[]; total: number }>(`/api/admin/users?${params}`)
-    buyers = (res as any).data ?? (res as any) ?? []
-    total = (res as any).total ?? buyers.length
-  } catch {
-    // Service unavailable
+  let query = supabase
+    .from('users')
+    .select('id, name, phone, role, created_at', { count: 'exact' })
+    .eq('role', 'buyer')
+    .order('created_at', { ascending: false })
+    .range(offset, offset + pageSize - 1)
+
+  if (search) {
+    query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
   }
+
+  const { data: buyers, count, error } = await query
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-black text-gray-900">Buyers</h1>
-        <span className="text-sm text-gray-400">{total} total</span>
+        <span className="text-sm text-gray-400">{count ?? 0} total</span>
       </div>
 
       <form className="flex gap-3 mb-4">
@@ -49,30 +52,26 @@ export default async function BuyersPage({
         </button>
       </form>
 
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 text-red-600 rounded-xl text-sm">
+          Failed to load buyers: {error.message}
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
             <tr>
               <th className="text-left px-4 py-3 font-semibold">Name</th>
               <th className="text-left px-4 py-3 font-semibold">Phone</th>
-              <th className="text-left px-4 py-3 font-semibold">Email</th>
-              <th className="text-left px-4 py-3 font-semibold">Status</th>
               <th className="text-left px-4 py-3 font-semibold">Joined</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {buyers.map(b => (
+            {(buyers ?? []).map(b => (
               <tr key={b.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-semibold text-gray-900">{b.full_name ?? '—'}</td>
+                <td className="px-4 py-3 font-semibold text-gray-900">{b.name ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-500">{b.phone}</td>
-                <td className="px-4 py-3 text-gray-400 text-xs">{b.email ?? '—'}</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                    b.is_active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                  }`}>
-                    {b.is_active !== false ? 'Active' : 'Banned'}
-                  </span>
-                </td>
                 <td className="px-4 py-3 text-gray-400 text-xs">
                   {new Date(b.created_at).toLocaleDateString('en-IN')}
                 </td>
@@ -80,22 +79,25 @@ export default async function BuyersPage({
             ))}
           </tbody>
         </table>
-        {buyers.length === 0 && (
+        {(buyers ?? []).length === 0 && !error && (
           <p className="text-center py-12 text-gray-400">No buyers found</p>
         )}
       </div>
 
-      {/* Pagination */}
       <div className="flex gap-2 mt-4 justify-end">
-        {parseInt(page) > 1 && (
-          <a href={`/admin/buyers?page=${parseInt(page) - 1}${search ? `&search=${search}` : ''}`}
-            className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">
+        {pageNum > 1 && (
+          <a
+            href={`/admin/buyers?page=${pageNum - 1}${search ? `&search=${search}` : ''}`}
+            className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+          >
             ← Prev
           </a>
         )}
-        {buyers.length === 20 && (
-          <a href={`/admin/buyers?page=${parseInt(page) + 1}${search ? `&search=${search}` : ''}`}
-            className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">
+        {(buyers ?? []).length === pageSize && (
+          <a
+            href={`/admin/buyers?page=${pageNum + 1}${search ? `&search=${search}` : ''}`}
+            className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+          >
             Next →
           </a>
         )}

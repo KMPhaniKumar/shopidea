@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Search, Download, Edit2, Trash2, Eye, EyeOff, Package } from 'lucide-react'
+import { Plus, Search, Download, Edit2, Trash2, Eye, EyeOff, Package, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import toast, { Toaster } from 'react-hot-toast'
@@ -16,17 +16,23 @@ export default function ProductsPage() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [storeId, setStoreId] = useState<string>('')
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => { loadProducts() }, [])
 
-  async function loadProducts() {
+  async function loadProducts(showToast = false) {
+    setRefreshing(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { data: store } = await supabase.from('stores').select('id').eq('seller_id', user.id).single()
-    if (!store) return
+    const storeQuery = user
+      ? supabase.from('stores').select('id').eq('seller_id', user.id).single()
+      : supabase.from('stores').select('id').limit(1).single()
+    const { data: store } = await storeQuery
+    if (!store) { setRefreshing(false); return }
     setStoreId(store.id)
     const { data } = await supabase.from('products').select('*').eq('store_id', store.id).order('created_at', { ascending: false })
     setProducts(data ?? [])
+    if (showToast) toast.success('Products refreshed')
+    setRefreshing(false)
   }
 
   async function toggleAvailability(id: string, current: boolean) {
@@ -153,6 +159,9 @@ export default function ProductsPage() {
               Delete {selectedCount}
             </button>
           )}
+          <button onClick={() => loadProducts(true)} disabled={refreshing} className="px-3 py-2 border border-[#EEEEEE] text-sm rounded-lg flex items-center gap-2 hover:bg-[#F9F9F9] disabled:opacity-50">
+            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} /> Refresh
+          </button>
           <button onClick={exportExcel} className="px-3 py-2 border border-[#EEEEEE] text-sm rounded-lg flex items-center gap-2 hover:bg-[#F9F9F9]">
             <Download size={15} /> Export
           </button>

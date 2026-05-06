@@ -31,13 +31,14 @@ export default function ProfileScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!session?.user) return
+    if (!session?.user) { setLoading(false); return }
     Promise.all([
-      getCoinBalance(session.user.id),
-      fetchOrders(session.user.id),
-      fetchCart(session.user.id),
+      getCoinBalance(session.user.id).catch(() => 0),
+      fetchOrders(session.user.id).catch(() => {}),
+      fetchCart(session.user.id).catch(() => {}),
     ]).then(([c]) => {
-      setCoins(c)
+      setCoins(c as number)
+    }).finally(() => {
       setLoading(false)
     })
   }, [session?.user?.id])
@@ -144,7 +145,6 @@ export default function ProfileScreen({ navigation }: Props) {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>ACCOUNT</Text>
-          <NavRow icon="🛒" label="My Cart" value={itemCount > 0 ? `${itemCount} items` : undefined} onPress={() => navigation.navigate('Cart')} />
           <NavRow icon="🚪" label="Sign Out" onPress={handleSignOut} />
         </View>
       </ScrollView>

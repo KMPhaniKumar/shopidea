@@ -8,6 +8,7 @@ import { RouteProp } from '@react-navigation/native'
 import { colors, radius, spacing } from '../../constants/theme'
 import { useAuthStore } from '../../store/authStore'
 import { getStoreBySlug, getStoreProducts, toggleFollowStore, CATEGORIES } from '../../services/discoveryService'
+import { getFirstImage, getImageUrl } from '../../lib/imageUrl'
 import { CartItem } from '../../services/orderService'
 
 type Props = {
@@ -115,8 +116,8 @@ export default function StorefrontScreen({ navigation, route }: Props) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
-        {store.logo_url ? (
-          <Image source={{ uri: store.logo_url }} style={styles.headerLogo} />
+        {getImageUrl(store.logo_url) ? (
+          <Image source={{ uri: getImageUrl(store.logo_url)! }} style={styles.headerLogo} />
         ) : (
           <Text style={{ fontSize: 24 }}>{cat?.icon ?? '🏪'}</Text>
         )}
@@ -165,8 +166,12 @@ export default function StorefrontScreen({ navigation, route }: Props) {
               const qty = cart[product.id]?.qty ?? 0
               return (
                 <View key={product.id} style={styles.productCard}>
-                  {product.images?.[0] ? (
-                    <Image source={{ uri: product.images[0] }} style={styles.productImage} />
+                  {getFirstImage(product.images) ? (
+                    <Image
+                      source={{ uri: getFirstImage(product.images)! }}
+                      style={styles.productImage}
+                      resizeMode="cover"
+                    />
                   ) : (
                     <View style={[styles.productImage, styles.productImagePlaceholder]}>
                       <Text style={{ fontSize: 32 }}>📦</Text>

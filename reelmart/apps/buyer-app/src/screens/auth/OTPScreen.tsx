@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, Image, Dimensions,
 } from 'react-native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RouteProp } from '@react-navigation/native'
@@ -15,6 +15,8 @@ type Props = {
   route: RouteProp<AuthStackParamList, 'OTP'>
 }
 
+const { width } = Dimensions.get('window')
+const GREEN = '#00B98E'
 const OTP_EXPIRY = 60
 
 export default function OTPScreen({ navigation, route }: Props) {
@@ -44,14 +46,8 @@ export default function OTPScreen({ navigation, route }: Props) {
   }
 
   async function handleVerify() {
-    if (otp.length !== 6) {
-      Alert.alert('Invalid OTP', 'Enter the 6-digit code sent to your number.')
-      return
-    }
-    if (attempts >= 3) {
-      Alert.alert('Too many attempts', 'Please request a new OTP.')
-      return
-    }
+    if (otp.length !== 6) { Alert.alert('Invalid OTP', 'Enter the 6-digit code.'); return }
+    if (attempts >= 3) { Alert.alert('Too many attempts', 'Please request a new OTP.'); return }
     setLoading(true)
     const { error, isNewUser } = await verifyOTP(phone, otp)
     setLoading(false)
@@ -78,10 +74,31 @@ export default function OTPScreen({ navigation, route }: Props) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.inner}>
+      {/* Top dark brand panel */}
+      <View style={styles.topPanel}>
+        <View style={styles.orangeGlow} />
+        <View style={styles.greenGlow} />
+        <View style={styles.logoCard}>
+          <Image
+            source={require('../../../assets/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+        <Text style={styles.tagline}>Real Products. Real Sellers.</Text>
+      </View>
+
+      {/* Bottom form panel */}
+      <View style={styles.formPanel}>
         <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
+
+        {/* accent bar */}
+        <View style={styles.accentBar}>
+          <View style={[styles.accentPill, { backgroundColor: colors.primary, width: 36 }]} />
+          <View style={[styles.accentPill, { backgroundColor: GREEN, width: 14 }]} />
+        </View>
 
         <Text style={styles.heading}>Enter OTP</Text>
         <Text style={styles.sub}>
@@ -121,7 +138,7 @@ export default function OTPScreen({ navigation, route }: Props) {
         >
           {loading
             ? <ActivityIndicator color={colors.white} />
-            : <Text style={styles.buttonText}>Verify & Continue</Text>
+            : <Text style={styles.buttonText}>Verify & Continue →</Text>
           }
         </TouchableOpacity>
 
@@ -136,21 +153,71 @@ export default function OTPScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.white },
-  inner: { flex: 1, padding: spacing.lg, justifyContent: 'center' },
-  back: { position: 'absolute', top: spacing.xl, left: spacing.lg },
-  backText: { fontSize: 16, color: colors.primary, fontWeight: '600' },
+  container: { flex: 1, backgroundColor: '#1A1A1A' },
+
+  topPanel: {
+    backgroundColor: '#1A1A1A',
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingBottom: 36,
+    overflow: 'hidden',
+  },
+  orangeGlow: {
+    position: 'absolute', top: -60, left: -60,
+    width: 220, height: 220, borderRadius: 110,
+    backgroundColor: '#FF6B2B', opacity: 0.15,
+  },
+  greenGlow: {
+    position: 'absolute', bottom: -40, right: -40,
+    width: 180, height: 180, borderRadius: 90,
+    backgroundColor: '#00B98E', opacity: 0.12,
+  },
+  logoCard: {
+    backgroundColor: colors.white,
+    borderRadius: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 18,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  logo: { width: width * 0.5, height: 64 },
+  tagline: { fontSize: 13, color: '#AAAAAA', letterSpacing: 1.2 },
+
+  formPanel: {
+    flex: 1,
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: spacing.lg,
+    paddingTop: 28,
+  },
+  back: { marginBottom: 16 },
+  backText: { fontSize: 15, color: colors.primary, fontWeight: '600' },
+  accentBar: { flexDirection: 'row', gap: 6, marginBottom: 20 },
+  accentPill: { height: 4, borderRadius: 99 },
+
   heading: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '700',
     color: colors.textPrimary,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
-  sub: { fontSize: 15, color: colors.textSecondary, marginBottom: spacing.xl, lineHeight: 22 },
+  sub: { fontSize: 14, color: colors.textSecondary, marginBottom: spacing.xl, lineHeight: 22 },
   phone: { fontWeight: '700', color: colors.textPrimary },
+
+  devBanner: {
+    backgroundColor: '#FEF3C7', borderRadius: 8, padding: 10,
+    borderLeftWidth: 3, borderLeftColor: '#F59E0B', marginBottom: 16,
+  },
+  devBannerText: { fontSize: 13, color: '#92400E', fontWeight: '600' },
+
   otpInput: {
     borderWidth: 2,
-    borderColor: colors.primary,
+    borderColor: GREEN,
     borderRadius: radius.md,
     height: 64,
     fontSize: 28,
@@ -160,13 +227,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   attemptsText: {
-    fontSize: 13,
-    color: colors.error,
-    textAlign: 'center',
-    marginBottom: spacing.md,
+    fontSize: 13, color: colors.error,
+    textAlign: 'center', marginBottom: spacing.md,
   },
   button: {
-    backgroundColor: colors.primary,
+    backgroundColor: GREEN,
     borderRadius: radius.pill,
     height: 52,
     alignItems: 'center',
@@ -178,9 +243,4 @@ const styles = StyleSheet.create({
   buttonText: { color: colors.white, fontSize: 16, fontWeight: '700' },
   resend: { fontSize: 15, color: colors.primary, textAlign: 'center', fontWeight: '600' },
   resendDisabled: { color: colors.textMuted },
-  devBanner: {
-    backgroundColor: '#FEF3C7', borderRadius: 8, padding: 10,
-    borderLeftWidth: 3, borderLeftColor: '#F59E0B', marginBottom: 16,
-  },
-  devBannerText: { fontSize: 13, color: '#92400E', fontWeight: '600' },
 })

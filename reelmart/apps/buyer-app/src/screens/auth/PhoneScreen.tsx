@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, Image, Dimensions,
 } from 'react-native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useAuthStore } from '../../store/authStore'
@@ -10,6 +10,9 @@ import { colors, radius, spacing } from '../../constants/theme'
 import { AuthStackParamList } from '../../navigation/types'
 
 type Props = { navigation: NativeStackNavigationProp<AuthStackParamList, 'Phone'> }
+
+const { width } = Dimensions.get('window')
+const GREEN = '#00B98E'
 
 function isValidIndianPhone(phone: string): boolean {
   return /^[6-9]\d{9}$/.test(phone.replace(/\s/g, ''))
@@ -29,10 +32,7 @@ export default function PhoneScreen({ navigation }: Props) {
     setLoading(true)
     const { error } = await sendOTP(cleaned)
     setLoading(false)
-    if (error) {
-      Alert.alert('Error', error)
-      return
-    }
+    if (error) { Alert.alert('Error', error); return }
     navigation.navigate('OTP', { phone: cleaned })
   }
 
@@ -41,14 +41,29 @@ export default function PhoneScreen({ navigation }: Props) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.inner}>
-        <View style={styles.logoRow}>
-          <Text style={styles.logoReel}>Reel</Text>
-          <Text style={styles.logoMart}>Mart</Text>
+      {/* Top dark brand panel */}
+      <View style={styles.topPanel}>
+        <View style={styles.orangeGlow} />
+        <View style={styles.greenGlow} />
+        <View style={styles.logoCard}>
+          <Image
+            source={require('../../../assets/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
         <Text style={styles.tagline}>Real Products. Real Sellers.</Text>
+      </View>
 
-        <Text style={styles.heading}>Login / Sign Up</Text>
+      {/* Bottom form panel */}
+      <View style={styles.formPanel}>
+        {/* accent bar */}
+        <View style={styles.accentBar}>
+          <View style={[styles.accentPill, { backgroundColor: colors.primary, width: 36 }]} />
+          <View style={[styles.accentPill, { backgroundColor: GREEN, width: 14 }]} />
+        </View>
+
+        <Text style={styles.heading}>Login / Sign Up 👋</Text>
         <Text style={styles.sub}>Discover and shop from local sellers near you</Text>
 
         <View style={styles.phoneRow}>
@@ -75,7 +90,7 @@ export default function PhoneScreen({ navigation }: Props) {
         >
           {loading
             ? <ActivityIndicator color={colors.white} />
-            : <Text style={styles.buttonText}>Continue</Text>
+            : <Text style={styles.buttonText}>Continue →</Text>
           }
         </TouchableOpacity>
 
@@ -88,25 +103,65 @@ export default function PhoneScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.white },
-  inner: { flex: 1, padding: spacing.lg, justifyContent: 'center' },
-  logoRow: { flexDirection: 'row', marginBottom: spacing.xs },
-  logoReel: { fontSize: 32, fontWeight: '800', color: colors.primary },
-  logoMart: { fontSize: 32, fontWeight: '800', color: colors.black },
+  container: { flex: 1, backgroundColor: '#1A1A1A' },
+
+  topPanel: {
+    backgroundColor: '#1A1A1A',
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingBottom: 36,
+    overflow: 'hidden',
+  },
+  orangeGlow: {
+    position: 'absolute', top: -60, left: -60,
+    width: 220, height: 220, borderRadius: 110,
+    backgroundColor: '#FF6B2B',
+    opacity: 0.15,
+  },
+  greenGlow: {
+    position: 'absolute', bottom: -40, right: -40,
+    width: 180, height: 180, borderRadius: 90,
+    backgroundColor: '#00B98E',
+    opacity: 0.12,
+  },
+  logoCard: {
+    backgroundColor: colors.white,
+    borderRadius: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 18,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  logo: { width: width * 0.68, height: 80 },
   tagline: {
     fontSize: 13,
-    color: colors.textMuted,
-    letterSpacing: 1.5,
-    marginBottom: spacing.xxl,
+    color: '#AAAAAA',
+    letterSpacing: 1.2,
   },
+
+  formPanel: {
+    flex: 1,
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: spacing.lg,
+    paddingTop: 28,
+  },
+  accentBar: { flexDirection: 'row', gap: 6, marginBottom: 20 },
+  accentPill: { height: 4, borderRadius: 99 },
+
   heading: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: colors.textPrimary,
     marginBottom: spacing.xs,
   },
   sub: {
-    fontSize: 15,
+    fontSize: 14,
     color: colors.textSecondary,
     marginBottom: spacing.xl,
   },

@@ -31,18 +31,20 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   fetchCart: async (userId) => {
     set({ loading: true })
-    const items = await getCart(userId)
-    const { subtotal, itemCount } = calculateCartTotals(items)
-    const store = items[0]?.stores ?? null
-    set({
-      items,
-      subtotal,
-      itemCount,
-      storeId: store?.id ?? null,
-      storeName: store?.store_name ?? null,
-      storeSlug: store?.store_slug ?? null,
-      loading: false,
-    })
+    try {
+      const items = await getCart(userId)
+      const { subtotal, itemCount } = calculateCartTotals(items)
+      const store = items[0]?.stores ?? null
+      set({
+        items, subtotal, itemCount,
+        storeId: store?.id ?? null,
+        storeName: store?.store_name ?? null,
+        storeSlug: store?.store_slug ?? null,
+        loading: false,
+      })
+    } catch {
+      set({ loading: false })
+    }
   },
 
   addItem: async (params) => {

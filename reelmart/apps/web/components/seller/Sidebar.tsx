@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Package, ShoppingBag, BarChart2,
@@ -20,24 +21,22 @@ const items = [
 export function Sidebar() {
   const pathname = usePathname()
   return (
-    <aside className="w-60 bg-[#1A1A1A] flex flex-col shrink-0">
-      <div className="p-6">
-        <span className="text-2xl font-bold">
-          <span className="text-[#FF6B2B]">Reel</span>
-          <span className="text-white">Mart</span>
-        </span>
+    <aside className="w-60 bg-white border-r border-gray-200 flex flex-col shrink-0">
+      <div className="p-6 border-b border-gray-100">
+        <Image src="/logo.png" alt="ReelMart" width={140} height={48} className="object-contain" />
+        <div className="text-xs text-gray-400 mt-1">Seller Panel</div>
       </div>
-      <nav className="flex-1 px-3 pb-6 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1">
         {items.map(({ icon: Icon, label, href }) => {
           const active = pathname.startsWith(href)
           return (
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                 active
-                  ? 'bg-[#FF6B2B] text-white'
-                  : 'text-[#AAAAAA] hover:text-white hover:bg-white/10'
+                  ? 'bg-orange-50 text-orange-600'
+                  : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
               <Icon size={18} />
