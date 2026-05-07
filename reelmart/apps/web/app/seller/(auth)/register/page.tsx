@@ -253,6 +253,12 @@ export default function SellerRegister() {
                       />
                     </div>
                   </div>
+                  {process.env.NODE_ENV === 'development' && (
+                    <button type="button" onClick={() => setPhone('9999999999')}
+                      className="w-full bg-[#FEF3C7] border-l-4 border-[#F59E0B] rounded-lg px-3 py-2 text-xs font-semibold text-[#92400E] text-left hover:bg-[#FDE68A] transition-colors">
+                      🛠 DEV — Click to use 9999999999 (OTP: 123456)
+                    </button>
+                  )}
                   <button onClick={sendOTP} disabled={phone.length !== 10 || loading}
                     className="w-full bg-[#FF6B2B] text-white py-3.5 rounded-xl font-semibold text-sm disabled:opacity-40 hover:bg-[#e55a1f] transition-colors shadow-sm">
                     {loading ? 'Sending...' : 'Send OTP →'}
@@ -271,6 +277,12 @@ export default function SellerRegister() {
                 <div className="mb-6">
                   <h1 className="text-xl font-bold text-[#1A1A1A] mb-1">Verify your number</h1>
                   <p className="text-[#888888] text-sm">OTP sent to +91 {phone}</p>
+                  {process.env.NODE_ENV === 'development' && (
+                    <button type="button" onClick={() => setOtp('123456')}
+                      className="w-full bg-[#FEF3C7] border-l-4 border-[#F59E0B] rounded-lg px-3 py-2 text-xs font-semibold text-[#92400E] text-left hover:bg-[#FDE68A] transition-colors mt-3">
+                      🛠 DEV — Click to fill OTP 123456
+                    </button>
+                  )}
                 </div>
                 <div className="space-y-5">
                   <div>

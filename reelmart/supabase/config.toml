@@ -50,3 +50,11 @@ enable_phone_autoconfirm = true
 account_sid = ""
 message_service_sid = ""
 auth_token = ""
+
+[auth.hook.send_sms]
+enabled = true
+uri = "https://nysgwdpmpxqmfwelfaxo.functions.supabase.co/send-sms-msg91"
+secrets = "env(SMS_HOOK_SECRET)"
+
+[functions.send-sms-msg91]
+verify_jwt = false

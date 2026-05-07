@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
 
+const DEV_PHONE = '9999999999'
 const IS_DEV = process.env.NODE_ENV === 'development'
 
 export default function SellerLogin() {
@@ -51,11 +52,11 @@ export default function SellerLogin() {
     }
   }
 
-  function devLogin() {
+  function devSkipLogin() {
     router.push('/seller/dashboard')
   }
 
-  return (
+return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-white px-6 py-12 relative overflow-hidden">
       <Toaster />
       <div className="absolute -top-40 -left-40 w-[480px] h-[480px] rounded-full bg-[#FF6B2B]/10 blur-3xl pointer-events-none" />
@@ -93,9 +94,7 @@ export default function SellerLogin() {
               <div>
                 <label className="block text-sm font-semibold text-[#1A1A1A] mb-2">Phone Number</label>
                 <div className="flex rounded-xl overflow-hidden border border-[#E5E5E5] focus-within:border-[#FF6B2B] transition-colors">
-                  <span className="inline-flex items-center px-4 bg-[#F9F9F9] text-[#666666] text-sm font-medium border-r border-[#E5E5E5]">
-                    +91
-                  </span>
+                  <span className="inline-flex items-center px-4 bg-[#F9F9F9] text-[#666666] text-sm font-medium border-r border-[#E5E5E5]">+91</span>
                   <input
                     type="tel"
                     value={phone}
@@ -116,10 +115,11 @@ export default function SellerLogin() {
 
               {IS_DEV && (
                 <button
-                  onClick={devLogin}
+                  type="button"
+                  onClick={devSkipLogin}
                   className="w-full border border-dashed border-[#FF6B2B] text-[#FF6B2B] py-3 rounded-xl font-semibold text-sm hover:bg-orange-50 transition-colors"
                 >
-                  Dev Login (skip OTP)
+                  🛠 Dev Login (skip OTP)
                 </button>
               )}
 
@@ -133,6 +133,15 @@ export default function SellerLogin() {
               <div>
                 <label className="block text-sm font-semibold text-[#1A1A1A] mb-2">Enter OTP</label>
                 <p className="text-xs text-[#888888] mb-3">Sent to +91 {phone}</p>
+                {IS_DEV && (
+                  <button
+                    type="button"
+                    onClick={() => setOtp('123456')}
+                    className="w-full bg-[#FEF3C7] border-l-4 border-[#F59E0B] rounded-lg px-3 py-2 text-xs font-semibold text-[#92400E] text-left hover:bg-[#FDE68A] transition-colors mb-3"
+                  >
+                    🛠 DEV — Click to fill OTP 123456
+                  </button>
+                )}
                 <input
                   type="text"
                   value={otp}

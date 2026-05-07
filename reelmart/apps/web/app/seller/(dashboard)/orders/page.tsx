@@ -36,8 +36,7 @@ export default function OrdersPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         if (process.env.NODE_ENV === 'development') {
-          // Dev mode: load first available store
-          const { data: store } = await supabase.from('stores').select('id').limit(1).single()
+          const { data: store } = await supabase.from('stores').select('id').limit(1).maybeSingle()
           if (store) { setStoreId(store.id); return }
         }
         router.push('/seller/login'); return
@@ -92,21 +91,87 @@ export default function OrdersPage() {
     if (selected?.id === orderId) setSelected((prev: any) => ({ ...prev, status }))
   }
 
+  function fullAddressLines(addr: any): string[] {
+    if (!addr) return []
+    return [
+      addr.line1,
+      addr.line2,
+      addr.area,
+      [addr.city, addr.state, addr.pincode].filter(Boolean).join(' - '),
+    ].filter(Boolean) as string[]
+  }
+
   function printInvoice(order: any) {
+    const addr = order.delivery_address ?? {}
     const w = window.open('', '_blank')!
     w.document.write(`<html><head><title>Invoice ${order.order_number}</title>
-    <style>body{font-family:sans-serif;padding:24px}table{width:100%}td,th{padding:6px;border-bottom:1px solid #eee}</style>
+    <style>body{font-family:sans-serif;padding:24px}table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid #eee;text-align:left}</style>
     </head><body>
-    <h1 style="color:#FF6B2B">ReelMart</h1>
-    <p><strong>Order:</strong> ${order.order_number}</p>
-    <p><strong>Date:</strong> ${format(new Date(order.created_at), 'dd/MM/yyyy')}</p>
-    <p><strong>Customer:</strong> ${order.delivery_address?.name}</p>
-    <p><strong>Address:</strong> ${order.delivery_address?.address}, ${order.delivery_address?.city} - ${order.delivery_address?.pincode}</p>
+    <h1 style="color:#FF6B2B;margin:0 0 8px">ReelMart</h1>
+    <p style="margin:4px 0"><strong>Order:</strong> ${order.order_number}</p>
+    <p style="margin:4px 0"><strong>Date:</strong> ${format(new Date(order.created_at), 'dd/MM/yyyy hh:mm a')}</p>
+    <hr/>
+    <p style="margin:4px 0"><strong>Customer:</strong> ${addr.name ?? ''} ${addr.phone ? '· ' + addr.phone : ''}</p>
+    <p style="margin:4px 0"><strong>Address:</strong></p>
+    <p style="margin:4px 0;white-space:pre-line">${fullAddressLines(addr).join('\n')}</p>
+    <hr/>
     <table><thead><tr><th>Item</th><th>Qty</th><th>Price</th></tr></thead><tbody>
-    ${(order.items ?? []).map((i: any) => `<tr><td>${i.name}</td><td>${i.qty}</td><td>₹${i.price * i.qty}</td></tr>`).join('')}
+    ${(order.items ?? []).map((i: any) => `<tr><td>${i.name}${i.variant ? ' · ' + i.variant : ''}</td><td>${i.qty}</td><td>₹${i.price * i.qty}</td></tr>`).join('')}
     </tbody></table>
-    <p><strong>Total: ₹${order.total_amount}</strong></p>
+    <p style="text-align:right;margin-top:12px"><strong>Total: ₹${order.total_amount}</strong></p>
+    <p style="text-align:right;color:#666;font-size:13px;margin-top:4px">Payment: ${order.payment_method === 'cod' ? 'Cash on Delivery' : 'Online'} · ${order.payment_status}</p>
     </body></html>`)
+    w.document.close()
+    w.focus()
+    w.print()
+  }
+
+  function printShippingLabel(order: any) {
+    const addr = order.delivery_address ?? {}
+    const items = order.items ?? []
+    const itemsSummary = items.map((i: any) => `${i.qty} × ${i.name}${i.variant ? ' (' + i.variant + ')' : ''}`).join(', ')
+    const w = window.open('', '_blank')!
+    w.document.write(`<html><head><title>Shipping Label ${order.order_number}</title>
+    <style>
+      @page { size: A6; margin: 8mm; }
+      body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 16px; }
+      .label { border: 2px solid #1A1A1A; border-radius: 8px; padding: 16px; }
+      .row { display: flex; justify-content: space-between; align-items: center; }
+      .meta { font-size: 11px; color: #666; }
+      .from { font-size: 11px; color: #666; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #ccc; }
+      h2 { margin: 0 0 4px; font-size: 13px; color: #FF6B2B; letter-spacing: 1px; text-transform: uppercase; }
+      h3 { margin: 0; font-size: 22px; line-height: 1.3; }
+      .addr { font-size: 16px; line-height: 1.5; margin-top: 6px; white-space: pre-line; }
+      .phone { font-size: 18px; font-weight: bold; margin-top: 8px; }
+      .barcode { text-align: center; font-family: monospace; font-size: 14px; letter-spacing: 2px; margin-top: 10px; padding: 6px; background: #F3F4F6; border-radius: 4px; }
+      .items { font-size: 11px; color: #444; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #ccc; }
+      .pay { font-weight: bold; font-size: 13px; padding: 4px 10px; border-radius: 6px; display: inline-block; margin-top: 8px; }
+      .pay-cod { background: #FEF3C7; color: #92400E; border: 1px solid #F59E0B; }
+      .pay-paid { background: #DCFCE7; color: #166534; border: 1px solid #16A34A; }
+      @media print { body { padding: 0; } .no-print { display: none; } }
+    </style>
+    </head><body>
+    <div class="label">
+      <div class="row">
+        <h2>Deliver To</h2>
+        <span class="meta">${order.order_number}</span>
+      </div>
+      <h3>${addr.name ?? '—'}</h3>
+      <div class="addr">${fullAddressLines(addr).join('\n')}</div>
+      <div class="phone">📞 ${addr.phone ?? '—'}</div>
+      <div class="barcode">${order.order_number}</div>
+      <span class="pay ${order.payment_status === 'paid' ? 'pay-paid' : 'pay-cod'}">
+        ${order.payment_status === 'paid' ? '✓ PREPAID' : `COD: ₹${order.total_amount}`}
+      </span>
+      <div class="items"><strong>Items:</strong> ${itemsSummary}</div>
+      <div class="from">From: ReelMart · ${format(new Date(order.created_at), 'dd MMM yyyy, hh:mm a')}</div>
+    </div>
+    <div class="no-print" style="margin-top:16px;text-align:center;color:#888;font-size:12px">
+      Use Cmd/Ctrl + P → choose A6 paper → Print
+    </div>
+    </body></html>`)
+    w.document.close()
+    w.focus()
     w.print()
   }
 
@@ -198,9 +263,14 @@ export default function OrdersPage() {
                     </td>
                     <td className="px-4 py-3 text-sm text-[#666666]">{format(new Date(order.created_at), 'dd/MM/yyyy')}</td>
                     <td className="px-4 py-3">
-                      <button onClick={e => { e.stopPropagation(); printInvoice(order) }} className="p-1.5 hover:bg-[#EEEEEE] rounded">
-                        <Printer size={14} className="text-[#666666]" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={e => { e.stopPropagation(); printShippingLabel(order) }} className="p-1.5 hover:bg-[#EEEEEE] rounded" title="Print shipping label">
+                          <span className="text-base leading-none">📦</span>
+                        </button>
+                        <button onClick={e => { e.stopPropagation(); printInvoice(order) }} className="p-1.5 hover:bg-[#EEEEEE] rounded" title="Print invoice">
+                          <Printer size={14} className="text-[#666666]" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -225,8 +295,10 @@ export default function OrdersPage() {
             <div>
               <p className="text-xs text-[#AAAAAA] mb-1">Customer</p>
               <p className="text-sm font-medium">{selected.delivery_address?.name}</p>
-              <p className="text-sm text-[#666666]">{selected.delivery_address?.address}, {selected.delivery_address?.city}</p>
-              <p className="text-sm text-[#666666]">{selected.delivery_address?.pincode}</p>
+              <p className="text-sm text-[#666666]">{selected.delivery_address?.phone}</p>
+              {fullAddressLines(selected.delivery_address).map((line, i) => (
+                <p key={i} className="text-sm text-[#666666] leading-relaxed">{line}</p>
+              ))}
             </div>
             <div>
               <p className="text-xs text-[#AAAAAA] mb-1">Items</p>
@@ -257,6 +329,9 @@ export default function OrdersPage() {
                   </button>
                 ) : null
               })()}
+              <button onClick={() => printShippingLabel(selected)} className="w-full bg-[#1A1A1A] text-white py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 hover:bg-black">
+                📦 Print Shipping Label
+              </button>
               <button onClick={() => printInvoice(selected)} className="w-full border border-[#EEEEEE] py-2 rounded-lg text-sm flex items-center justify-center gap-2 hover:bg-[#F9F9F9]">
                 <Printer size={14} /> Print Invoice
               </button>

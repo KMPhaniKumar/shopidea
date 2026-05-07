@@ -1,19 +1,24 @@
 # Shopidea — Development Tracker
 ### Social Commerce Platform for Indian Micro-Sellers
-### Last Updated: 2026-05-03
+### Last Updated: 2026-05-08
 
 ---
 
 ## Overall Progress
 
 ```
-Total Agents:     17
-Completed:        17  (ALL AGENTS COMPLETE ✅)
+Total Agents:     18
+Completed:        18  (ALL AGENTS COMPLETE ✅)
 In Progress:       0
 Pending:           0
 
 Progress: ████████████████████ 100%
 ```
+
+**Production-blockers remaining (see [`agents/AUDIT_gaps.md`](agents/AUDIT_gaps.md) for the full list):**
+- Razorpay web checkout SDK wiring (~30 min)
+- DLT/SMS provider for production OTP delivery to +91 numbers
+- App store submission (Play Store + App Store)
 
 ---
 
@@ -30,6 +35,7 @@ Progress: ████████████████████ 100%
 | 2026-05-01 | Seller Dashboard+Payouts — payoutService.ts (getPayoutSummary, getBankAccount, saveBankAccount, getSellerPreferences, saveSellerPreferences), DashboardScreen (greeting, today stats, open/close toggle, quick actions grid, pending orders alert, low stock alert, recent orders, realtime subscription), BankAccountScreen (IFSC validation, account number masking, verified badge), PayoutHistoryScreen (orange balance card, total earned/paid, payout list with status badges), SettingsScreen (profile card, auto-accept toggle, notification prefs with live save, nav rows, sign out); seller RootNavigator updated with Dashboard as entry + Payouts+Settings screens | Agent 11 | 6 files |
 | 2026-05-03 | Buyer Cart+Profile — cartService.ts (addToCart single-store enforce, calculateCartTotals, cartItemsToCheckout, validateCoupon), cartStore.ts (Zustand: items/itemCount/subtotal/storeId, addItem/removeItem/updateQty/fetchCart), profileService.ts (saveAddress, toggleWishlist, getCoinBalance, getCoinHistory, buildReferralLink), CartScreen.tsx (delivery fee logic, store banner, qty controls, coupon input+validation, summary, fixed checkout footer), ProfileScreen.tsx (avatar, coins card, referral card, stats row, nav sections), AddressesScreen.tsx (address cards, inline AddAddressForm, phone+pincode validation), WishlistScreen.tsx (2-col grid, remove with optimistic UI, unavailable badge), buyer RootNavigator updated (Cart/Profile/Addresses/Wishlist/Payment/WriteReview/ReturnRequest screens), HomeScreen updated (cart badge, fetchCart on mount) | Agent 12+14 | 9 files |
 | 2026-05-03 | WhatsApp Bot — backend/src/whatsapp/bot.ts (in-memory sessions with 30-min TTL, handleBotMessage: menu→product→variant→quantity→address→Razorpay payment link flow), whatsapp route updated (POST /webhook + GET /payment-callback + POST /broadcast with requireAuth); Coupons+Broadcast — seller couponService.ts (CRUD coupons, sendBroadcast via backend), CouponsScreen.tsx (create form with %, ₹ types; toggle active/inactive; delete), BroadcastScreen.tsx (compose WhatsApp blast to all past customers, history list); Returns — returnService.ts (requestReturn with 24h window validation, getReturnForOrder), ReturnRequestScreen.tsx (reason picker, photo upload, 24h warning), backend /api/payments/refund endpoint (Razorpay refund + DB update, admin-only); Admin Panel — Next.js /admin/* pages: login (email+password+is_admin guard), layout (SSR auth check), AdminNav, Dashboard (GMV, seller/buyer counts), Sellers (verify/suspend actions), Orders (paginated with status filter), Returns (approve/reject/refund actions), Payouts (pending by store, process button); CI/CD — .github/workflows/deploy.yml (lint+build+deploy backend/web/supabase on main push); Web Storefront — /s/[slug] with SSR metadata, StorefrontClient (product grid, in-page cart, WhatsApp order, app install banner, reviews) | Agents 13-17 + Storefront | 26 files |
+| 2026-05-08 | **Buyer experience polish + Public Web Buyer Flow**. Mobile: header redesign (orange hero, circular logo, white categories, search + address bar), seller-group sections (Clothing/Jewellery/Beauty with colored backgrounds), wishlist heart overlay on product cards, order date/time everywhere, **realtime status updates on Orders tab** (useFocusEffect + Supabase channel UPDATE filter), pull-to-refresh, address-id-based default tracking, RootNavigator waits for profile load before routing (no banner flicker post-login). LocationPromptModal: custom Places API search (replaced component), 2-step search→form, manual entry fallback, Swiggy-style form. Address persistence migrated from AsyncStorage to Supabase `addresses` table — guest addresses auto-merge into account on login (cross-device sync). **Public Web Buyer Flow**: `/store/[slug]` storefront (RSC + ISR `revalidate:60`), `/store/[slug]/checkout` (multi-step: cart → phone OTP → address selection → payment), `/order/[id]` confirmation with prominent "Track in ReelMart app" CTA, `/s/[slug]` legacy redirect. Seller orders page realtime subscription rewritten (proper cleanup, refresh button, error states). Auth: dev OTP banner (9999999999 / 123456) on buyer + seller; middleware redirects to `/seller/register` if no seller role; dev-mode bypass. | Web Storefront v2 + Buyer Polish | ~20 files |
 
 ---
 
@@ -46,9 +52,10 @@ Progress: ████████████████████ 100%
 | 6 | agent_11 | Seller dashboard + payouts + bank | 2 | ✅ DONE | 2026-05-01 | 2026-05-01 |
 | 7 | agent_12 | Buyer cart + addresses + wishlist | 3 | ✅ DONE | 2026-05-03 | 2026-05-03 |
 | 8 | agent_13_17 | WhatsApp bot + coupons + returns + admin + infra | 5 | ✅ DONE | 2026-05-03 | 2026-05-03 |
-| 9 | agent_00 (storefront) | Buyer web storefront (Next.js) | 3 | ✅ DONE | 2026-05-03 | 2026-05-03 |
+| 9 | agent_00 (storefront v1) | Buyer web storefront (Next.js) — `/s/[slug]` with WhatsApp checkout | 3 | ✅ DONE | 2026-05-03 | 2026-05-03 |
+| 10 | agent_18 (storefront v2) | Public web buyer flow at `/store/[slug]` — full checkout (phone OTP + addresses + place order), order confirmation page with app download CTA, cross-device address sync, realtime order updates on buyer Orders tab | 2 | ✅ DONE | 2026-05-08 | 2026-05-08 |
 
-**Total Estimated: ~27 days**
+**Total Estimated: ~29 days**
 
 ---
 
@@ -232,24 +239,25 @@ Progress: ████████████████████ 100%
 
 ## Database Migrations Status
 
-| Migration | File | Status |
-|-----------|------|--------|
-| 001 | users.sql | ⬜ PENDING |
-| 002 | stores.sql | ⬜ PENDING |
-| 003 | products.sql | ⬜ PENDING |
-| 004 | orders.sql | ⬜ PENDING |
-| 005 | reviews.sql | ⬜ PENDING |
-| 006 | seller_payouts.sql | ⬜ PENDING |
-| 007 | buyer_features.sql | ⬜ PENDING |
-| 008 | marketing.sql | ⬜ PENDING |
-| 009 | returns.sql | ⬜ PENDING |
-| 010 | followed_stores.sql | ⬜ PENDING |
-| 011 | admin_platform.sql | ⬜ PENDING |
-| 012 | coupon_uses.sql | ⬜ PENDING |
-| 013 | rls_fixes.sql | ⬜ PENDING |
-| 014 | storage_buckets.sql | ⬜ PENDING |
-| 015 | realtime.sql | ⬜ PENDING |
-| 016 | cron_jobs.sql | ⬜ PENDING |
+All migrations live in `reelmart/supabase/migrations/`. Current actual files (deployed against project `nysgwdpmpxqmfwelfaxo`):
+
+| Migration | File | Purpose | Status |
+|-----------|------|---------|--------|
+| 001 | users.sql | users + role + is_admin | ✅ DEPLOYED |
+| 002 | stores.sql | stores + slug + RLS | ✅ DEPLOYED |
+| 003 | products.sql | products + variants | ✅ DEPLOYED |
+| 004 | orders.sql | orders + status flow + RLS | ✅ DEPLOYED |
+| 005 | reviews.sql | reviews + photos | ✅ DEPLOYED |
+| 006 | seller_payouts.sql | bank accounts + payouts | ✅ DEPLOYED |
+| 007 | buyer_features.sql | addresses, wishlist, cart_items, coins, referrals | ✅ DEPLOYED |
+| 008 | marketing.sql | coupons + broadcasts | ✅ DEPLOYED |
+| 009 | returns.sql | returns + refunds | ✅ DEPLOYED |
+| 010 | followed_stores.sql | follow/unfollow | ✅ DEPLOYED |
+| 011 | admin_platform.sql | admin tables + audit | ✅ DEPLOYED |
+| 012 | rls_fixes.sql | RLS gaps + Realtime publication + storage buckets | ✅ DEPLOYED |
+| 013 | cart_selected_variant.sql | variant_id on cart_items | ✅ DEPLOYED |
+| 014 | stores_address_category.sql | additional store fields | ✅ DEPLOYED |
+| 015 | store_approval.sql | approval_status workflow | ✅ DEPLOYED |
 
 ---
 
@@ -257,16 +265,17 @@ Progress: ████████████████████ 100%
 
 | Service | Purpose | Status |
 |---------|---------|--------|
-| Supabase | DB + Auth + Storage + Realtime | ⬜ NOT SET UP |
-| Razorpay | Payments | ⬜ NOT SET UP |
-| Shiprocket | Delivery | ⬜ NOT SET UP |
-| Gupshup | WhatsApp | ⬜ NOT SET UP |
-| Firebase FCM | Push notifications | ⬜ NOT SET UP |
-| Google Maps | Address autocomplete | ⬜ NOT SET UP |
-| Sentry | Error logging | ⬜ NOT SET UP |
-| Twilio | SMS OTP (via Supabase) | ⬜ NOT SET UP |
-| Vercel | Web hosting | ⬜ NOT SET UP |
-| Railway | Backend hosting | ⬜ NOT SET UP |
+| Supabase | DB + Auth + Storage + Realtime + Edge Functions | ✅ LIVE (project `nysgwdpmpxqmfwelfaxo`) |
+| Twilio | SMS OTP via Supabase Phone provider | ⚠️ CONNECTED — DLT not registered, +91 SMS blocked. Dev uses test number `+919999999999 / 123456` |
+| Razorpay | Payments | ⚠️ MOBILE ONLY — web checkout still COD-only (frontend wiring pending) |
+| Shiprocket | Delivery | ✅ Backend wired |
+| Gupshup | WhatsApp | ✅ Backend wired (webhook + bot + broadcast) |
+| Firebase FCM | Push notifications | ✅ Backend wired (mobile-side hook not finalized) |
+| Google Maps Places | Address autocomplete in LocationPromptModal | ✅ Working in mobile |
+| Sentry | Error logging | ✅ Backend / ⬜ Mobile pending |
+| Vercel | Web hosting | ⬜ Local dev only |
+| Railway | Backend hosting | ⬜ Local dev only |
+| MSG91 | Alternative SMS provider for India | ⬜ Edge Function scaffolded; not deployed (IP whitelist constraint) |
 
 ---
 

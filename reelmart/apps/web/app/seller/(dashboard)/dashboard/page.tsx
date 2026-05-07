@@ -25,25 +25,25 @@ export default function DashboardPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
-      let storeQuery = user
-        ? supabase.from('stores').select('*').eq('seller_id', user.id).single()
+      const storeQuery = user
+        ? supabase.from('stores').select('*').eq('seller_id', user.id).maybeSingle()
         : process.env.NODE_ENV === 'development'
-          ? supabase.from('stores').select('*').limit(1).single()
+          ? supabase.from('stores').select('*').limit(1).maybeSingle()
           : null
 
       if (!storeQuery) { router.push('/seller/login'); return }
 
       const { data: store, error: storeError } = await storeQuery
-      
+
       if (storeError) {
         console.error('Store fetch error:', storeError)
-        toast.error('No store found. Please create one first.')
+        toast.error('Failed to load store. ' + storeError.message)
         return
       }
-      
+
       if (!store) {
-        console.error('No store data returned')
-        toast.error('No store found')
+        toast.error('No store found. Redirecting to registration...')
+        setTimeout(() => router.push('/seller/register'), 1500)
         return
       }
       

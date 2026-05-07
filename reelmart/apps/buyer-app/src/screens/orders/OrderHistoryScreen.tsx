@@ -1,15 +1,24 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, ActivityIndicator,
+  StyleSheet, ActivityIndicator, RefreshControl,
 } from 'react-native'
+import { useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, radius, spacing } from '../../constants/theme'
 import { useOrderStore } from '../../store/orderStore'
 import { useAuthStore } from '../../store/authStore'
 import { STATUS_LABELS, STATUS_ICONS, OrderWithStore } from '../../services/orderService'
+import { supabase } from '../../lib/supabase'
 
 type Props = { navigation: NativeStackNavigationProp<any> }
+
+function formatOrderDate(iso: string): string {
+  const d = new Date(iso)
+  const date = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+  return `${date} · ${time}`
+}
 
 function OrderCard({ order, onPress }: { order: OrderWithStore; onPress: () => void }) {
   const items = order.items as any[]
@@ -21,7 +30,7 @@ function OrderCard({ order, onPress }: { order: OrderWithStore; onPress: () => v
       <View style={styles.cardRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.storeName}>{order.stores?.store_name ?? 'Store'}</Text>
-          <Text style={styles.orderNum}>{order.order_number}</Text>
+          <Text style={styles.orderNum}>{order.order_number} · {formatOrderDate(order.created_at)}</Text>
           <Text style={styles.items} numberOfLines={1}>
             {items.map((i: any) => i.name).join(', ')}
           </Text>
@@ -44,11 +53,41 @@ function OrderCard({ order, onPress }: { order: OrderWithStore; onPress: () => v
 
 export default function OrderHistoryScreen({ navigation }: Props) {
   const session = useAuthStore(s => s.session)
-  const { orders, loading, fetchOrders } = useOrderStore()
+  const { orders, loading, fetchOrders, updateOrder } = useOrderStore()
+  const [refreshing, setRefreshing] = useState(false)
 
+  // Re-fetch every time the screen comes into focus (catches status changes when user returns to tab)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (session?.user) fetchOrders(session.user.id)
+    }, [session?.user?.id])
+  )
+
+  // Realtime subscription: any order update for this buyer pushes through immediately
   useEffect(() => {
-    if (session?.user) fetchOrders(session.user.id)
+    if (!session?.user) return
+    const channel = supabase
+      .channel(`buyer-orders-${session.user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `buyer_id=eq.${session.user.id}` },
+        payload => updateOrder((payload.new as any).id, payload.new as any)
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'orders', filter: `buyer_id=eq.${session.user.id}` },
+        () => session?.user && fetchOrders(session.user.id)
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
   }, [session?.user?.id])
+
+  async function handleRefresh() {
+    if (!session?.user) return
+    setRefreshing(true)
+    await fetchOrders(session.user.id)
+    setRefreshing(false)
+  }
 
   return (
     <View style={styles.container}>
@@ -76,6 +115,9 @@ export default function OrderHistoryScreen({ navigation }: Props) {
           )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+          }
         />
       )}
     </View>

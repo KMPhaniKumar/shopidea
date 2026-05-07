@@ -52,11 +52,16 @@ export default function OrderTrackingScreen({ navigation, route }: Props) {
         {/* Status Banner */}
         <View style={[styles.statusBanner, isTerminal && styles.statusBannerRed]}>
           <Text style={styles.statusIcon}>{STATUS_ICONS[localOrder.status] ?? '📦'}</Text>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.statusTitle}>{STATUS_LABELS[localOrder.status] ?? localOrder.status}</Text>
             {localOrder.stores && (
               <Text style={styles.statusSub}>by {localOrder.stores.store_name}</Text>
             )}
+            <Text style={styles.statusDate}>
+              Placed on {new Date(localOrder.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              {' · '}
+              {new Date(localOrder.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+            </Text>
           </View>
         </View>
 
@@ -97,16 +102,28 @@ export default function OrderTrackingScreen({ navigation, route }: Props) {
           </View>
         )}
 
-        {/* Tracking */}
-        {localOrder.tracking_url && (
-          <TouchableOpacity
-            style={styles.trackingCard}
-            onPress={() => Linking.openURL(localOrder.tracking_url!)}
-          >
-            <Text style={styles.trackingLabel}>🚚 Track Shipment</Text>
-            <Text style={styles.trackingAWB}>{localOrder.awb_code}</Text>
-            <Text style={styles.trackingLink}>Tap to open tracking →</Text>
-          </TouchableOpacity>
+        {/* Tracking — show whenever order is shipped or beyond */}
+        {(localOrder.status === 'shipped' || localOrder.status === 'delivered') && (
+          localOrder.tracking_url ? (
+            <TouchableOpacity
+              style={styles.trackingCard}
+              onPress={() => Linking.openURL(localOrder.tracking_url!)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.trackingLabel}>🚚 Track with Courier</Text>
+              {localOrder.awb_code && (
+                <Text style={styles.trackingAWB}>AWB: {localOrder.awb_code}</Text>
+              )}
+              <Text style={styles.trackingLink}>Tap to open courier tracking →</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.trackingPending}>
+              <Text style={styles.trackingPendingTitle}>📦 Shipped — tracking pending</Text>
+              <Text style={styles.trackingPendingSub}>
+                Your order has been handed to the courier. Tracking link will appear here shortly.
+              </Text>
+            </View>
+          )
         )}
 
         {/* Items */}
@@ -171,6 +188,7 @@ const styles = StyleSheet.create({
   statusIcon: { fontSize: 36 },
   statusTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
   statusSub: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  statusDate: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   section: {
     backgroundColor: colors.surface, borderRadius: radius.lg,
     padding: spacing.md, marginBottom: spacing.md,
@@ -204,6 +222,13 @@ const styles = StyleSheet.create({
   trackingLabel: { fontSize: 15, fontWeight: '700', color: '#1D4ED8', marginBottom: 2 },
   trackingAWB: { fontSize: 13, color: '#3B82F6', fontWeight: '600' },
   trackingLink: { fontSize: 12, color: '#6B7280', marginTop: 4 },
+  trackingPending: {
+    backgroundColor: '#FFF7ED', borderRadius: radius.md,
+    padding: spacing.md, marginBottom: spacing.md,
+    borderWidth: 1, borderColor: '#FED7AA',
+  },
+  trackingPendingTitle: { fontSize: 14, fontWeight: '700', color: '#9A3412', marginBottom: 4 },
+  trackingPendingSub: { fontSize: 12, color: '#7C2D12', lineHeight: 18 },
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   itemName: { flex: 1, fontSize: 14, color: colors.textPrimary, marginRight: spacing.sm },
   itemPrice: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },

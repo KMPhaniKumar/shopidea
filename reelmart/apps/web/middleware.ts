@@ -9,7 +9,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  if (!pathname.startsWith('/seller') || pathname.startsWith('/seller/login')) {
+  // Auth pages bypass the auth check entirely
+  if (
+    !pathname.startsWith('/seller') ||
+    pathname.startsWith('/seller/login') ||
+    pathname.startsWith('/seller/register')
+  ) {
     return NextResponse.next()
   }
 
@@ -40,7 +45,7 @@ export async function middleware(request: NextRequest) {
     .single()
 
   if (!user || !['seller', 'both'].includes(user.role)) {
-    return NextResponse.redirect(new URL('/seller/login', request.url))
+    return NextResponse.redirect(new URL('/seller/register', request.url))
   }
 
   return response

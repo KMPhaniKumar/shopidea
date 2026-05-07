@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Alert, Image, Dimensions,
+  ActivityIndicator, Alert, Image, Dimensions, ScrollView,
 } from 'react-native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RouteProp } from '@react-navigation/native'
@@ -56,7 +56,10 @@ export default function OTPScreen({ navigation, route }: Props) {
       Alert.alert('Wrong OTP', 'The code you entered is incorrect. Try again.')
       return
     }
-    navigation.replace(isNewUser ? 'ProfileSetup' : 'Done')
+    if (isNewUser) {
+      navigation.replace('ProfileSetup')
+    }
+    // existing user: don't navigate — root navigator will auto-swap to MainTabs once session is set
   }
 
   async function handleResend() {
@@ -72,8 +75,13 @@ export default function OTPScreen({ navigation, route }: Props) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
       {/* Top dark brand panel */}
       <View style={styles.topPanel}>
         <View style={styles.orangeGlow} />
@@ -107,9 +115,9 @@ export default function OTPScreen({ navigation, route }: Props) {
         </Text>
 
         {__DEV__ && (
-          <View style={styles.devBanner}>
-            <Text style={styles.devBannerText}>🛠 DEV — Test numbers use OTP: 123456</Text>
-          </View>
+          <TouchableOpacity onPress={() => setOtp('123456')} style={styles.devBanner} activeOpacity={0.7}>
+            <Text style={styles.devBannerText}>🛠 DEV — Tap to fill OTP 123456</Text>
+          </TouchableOpacity>
         )}
 
         <TextInput
@@ -148,6 +156,7 @@ export default function OTPScreen({ navigation, route }: Props) {
           </Text>
         </TouchableOpacity>
       </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   )
 }
@@ -175,8 +184,8 @@ const styles = StyleSheet.create({
   logoCard: {
     backgroundColor: colors.white,
     borderRadius: 24,
-    paddingHorizontal: 28,
-    paddingVertical: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -184,7 +193,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
-  logo: { width: width * 0.5, height: 64 },
+  logo: { width: width * 0.75, height: 110 },
   tagline: { fontSize: 13, color: '#AAAAAA', letterSpacing: 1.2 },
 
   formPanel: {
@@ -211,9 +220,10 @@ const styles = StyleSheet.create({
 
   devBanner: {
     backgroundColor: '#FEF3C7', borderRadius: 8, padding: 10,
-    borderLeftWidth: 3, borderLeftColor: '#F59E0B', marginBottom: 16,
+    borderLeftWidth: 3, borderLeftColor: '#F59E0B',
+    marginBottom: 16,
   },
-  devBannerText: { fontSize: 13, color: '#92400E', fontWeight: '600' },
+  devBannerText: { fontSize: 12, color: '#92400E', fontWeight: '600' },
 
   otpInput: {
     borderWidth: 2,

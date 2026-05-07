@@ -389,5 +389,93 @@ npm run dev                  # runs on localhost:3001
 
 **Dev shortcuts:**
 - Seller login: click "Dev Login (skip OTP)" at `/seller/login`
+- Buyer mobile login: tap the yellow DEV banner — autofills `9999999999` (OTP `123456`) — requires test number to be configured in [Supabase Dashboard → Auth → Phone → Test OTPs](https://supabase.com/dashboard/project/nysgwdpmpxqmfwelfaxo/auth/providers)
 - Admin: auth bypassed in dev, go directly to `/admin/dashboard`
 - Analytics page needs backend (Terminal 2) running to show data
+
+---
+
+## 4. PUBLIC WEB BUYER FLOW (`localhost:3000/store/[slug]`)
+
+This is the link a seller shares from Instagram/WhatsApp bio. Buyers can browse + order **without installing the app**. After placing an order, they're prompted to install the app for tracking — when they install + log in with the same phone, all their orders + addresses are already there (Supabase RLS keys by `user_id`).
+
+### 4.1 Storefront (`/store/[slug]`)
+```
+Server-side render (RSC, ISR `revalidate: 60`)
+  → supabase.from("stores").select(...).eq("store_slug", slug).eq("is_active", true)
+  → supabase.from("products").select(...).eq("store_id", store.id).eq("is_available", true)
+  → generateMetadata() emits OG tags (store name, description, logo) for link previews
+
+Client (`StoreClient.tsx`):
+  - Cart persists in `localStorage` keyed by store slug — survives reload + tab switches
+  - Sticky cart footer with item count + subtotal → "Proceed to Checkout" → /store/[slug]/checkout
+  - Search filters products client-side
+  - App-install banner at top → /download
+```
+
+### 4.2 Web Checkout (`/store/[slug]/checkout`)
+```
+Multi-step single-page flow with state machine: cart → phone → otp → address → review
+
+Step 1 — cart review
+  Shows items + subtotal + delivery fee (₹60, free above ₹500)
+  → "Continue" → if logged in skip to address, else go to phone
+
+Step 2 — phone (only if not authenticated)
+  Enter +91 number → "Send OTP" → supabase.auth.signInWithOtp({ phone })
+
+Step 3 — otp
+  Enter 6-digit code → supabase.auth.verifyOtp({ phone, token, type: "sms" })
+  On success: upsert into `users` table with role='buyer', loadAddresses(user.id)
+
+Step 4 — address
+  - List saved addresses from `addresses` table (radio select)
+  - "Add new address" inline form (label, name, line1, line2, area, city, pincode, state)
+    - Validates pincode is 6 digits
+    - First saved address is auto-default
+  → Continue
+
+Step 5 — review
+  Pick payment method (Cash on Delivery or Pay Online)
+  → "Place Order"
+    → INSERT into orders with delivery_address snapshot (JSONB)
+    → status='pending', payment_status='pending'
+    → clearCart(slug)  // localStorage cleared
+    → router.push(`/order/${data.id}`)
+
+NOTE: "Pay Online" radio works but Razorpay SDK modal is not yet wired — order is placed with payment_status='pending'. Backend endpoints (/api/payments/create-order, /verify) already exist; frontend wiring is the only piece missing.
+```
+
+### 4.3 Order Confirmation (`/order/[id]`)
+```
+Server-side render
+  → supabase.from("orders").select(...).eq("id", id) (RLS lets buyer read their own)
+  → renders order summary, delivery address, payment status
+
+Page contents:
+  - Hero — green checkmark + order number + placed-at timestamp
+  - Primary CTA — black card with "Track in ReelMart app" + Play Store / Android + iOS links
+    - Tagline: "Login with same number — your order and addresses are already there"
+  - Order summary — items, total, payment method
+  - Delivering to — name, phone, full address
+```
+
+### 4.4 Cross-device sync
+```
+DB tables holding the buyer's data are keyed by `user_id` (Supabase auth.uid):
+  - orders.buyer_id
+  - addresses.user_id
+  - wishlists.user_id
+  - cart_items.user_id
+  - coin_transactions.user_id
+
+When the buyer:
+  1. Places order on web → row inserted with `buyer_id = user.id`
+  2. Installs mobile app, logs in with same phone → same user.id resolves → all rows visible
+  3. AsyncStorage guest addresses (if any) are merged into Supabase on login via `mergeGuestAddressesIntoAccount()`
+```
+
+### 4.5 Legacy redirect
+```
+/s/[slug] → 308 redirect → /store/[slug]
+```

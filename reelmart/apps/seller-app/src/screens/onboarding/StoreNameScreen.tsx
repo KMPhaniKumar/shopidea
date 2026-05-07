@@ -45,7 +45,7 @@ export default function StoreNameScreen({ navigation }: Props) {
           <View style={styles.urlPreview}>
             <Text style={styles.urlLabel}>Your store link</Text>
             <View style={styles.urlBox}>
-              <Text style={styles.urlDomain}>reelmart.in/s/</Text>
+              <Text style={styles.urlDomain}>reelmart.in/store/
               <Text style={styles.urlSlug}>{slug}</Text>
             </View>
           </View>

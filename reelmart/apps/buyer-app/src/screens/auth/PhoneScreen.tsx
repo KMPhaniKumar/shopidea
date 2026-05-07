@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Alert, Image, Dimensions,
+  ActivityIndicator, Alert, Image, Dimensions, ScrollView,
 } from 'react-native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useAuthStore } from '../../store/authStore'
@@ -13,6 +13,7 @@ type Props = { navigation: NativeStackNavigationProp<AuthStackParamList, 'Phone'
 
 const { width } = Dimensions.get('window')
 const GREEN = '#00B98E'
+const DEV_PHONE = '9999999999'
 
 function isValidIndianPhone(phone: string): boolean {
   return /^[6-9]\d{9}$/.test(phone.replace(/\s/g, ''))
@@ -36,11 +37,20 @@ export default function PhoneScreen({ navigation }: Props) {
     navigation.navigate('OTP', { phone: cleaned })
   }
 
+  function fillDevNumber() {
+    setPhone(DEV_PHONE)
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
       {/* Top dark brand panel */}
       <View style={styles.topPanel}>
         <View style={styles.orangeGlow} />
@@ -82,6 +92,12 @@ export default function PhoneScreen({ navigation }: Props) {
           />
         </View>
 
+        {__DEV__ && (
+          <TouchableOpacity onPress={fillDevNumber} style={styles.devBanner} activeOpacity={0.7}>
+            <Text style={styles.devBannerText}>🛠 DEV — Tap to use {DEV_PHONE} (OTP: 123456)</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleContinue}
@@ -98,6 +114,7 @@ export default function PhoneScreen({ navigation }: Props) {
           By continuing you agree to our Terms of Service and Privacy Policy
         </Text>
       </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   )
 }
@@ -127,8 +144,8 @@ const styles = StyleSheet.create({
   logoCard: {
     backgroundColor: colors.white,
     borderRadius: 24,
-    paddingHorizontal: 28,
-    paddingVertical: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -136,7 +153,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
-  logo: { width: width * 0.68, height: 80 },
+  logo: { width: width * 0.85, height: 130 },
   tagline: {
     fontSize: 13,
     color: '#AAAAAA',
@@ -200,6 +217,12 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: colors.white, fontSize: 16, fontWeight: '700' },
+  devBanner: {
+    backgroundColor: '#FEF3C7', borderRadius: 8, padding: 10,
+    borderLeftWidth: 3, borderLeftColor: '#F59E0B',
+    marginTop: -8, marginBottom: 12,
+  },
+  devBannerText: { fontSize: 12, color: '#92400E', fontWeight: '600' },
   terms: {
     fontSize: 12,
     color: colors.textMuted,

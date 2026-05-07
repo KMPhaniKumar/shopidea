@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { registerFcmToken } from '../lib/api'
+import { mergeGuestAddressesIntoAccount } from '../lib/savedAddresses'
 import type { Database } from '../types/supabase'
 
 type UserProfile = Database['public']['Tables']['users']['Row']
@@ -37,7 +38,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ session })
       if (session?.user) {
         await fetchProfile(session.user.id, set)
-        if (event === 'SIGNED_IN') tryRegisterFcmToken(session.user.id)
+        if (event === 'SIGNED_IN') {
+          tryRegisterFcmToken(session.user.id)
+          mergeGuestAddressesIntoAccount().catch(() => {})
+        }
       } else {
         set({ profile: null })
       }

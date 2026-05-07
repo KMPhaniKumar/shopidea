@@ -77,5 +77,5 @@ export async function createStore(params: {
 }
 
 export function getStoreUrl(slug: string): string {
-  return `https://reelmart.in/s/${slug}`
+  return `https://reelmart.in/store/${slug}`
 }

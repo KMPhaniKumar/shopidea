@@ -51,9 +51,13 @@ export default async function SellersPage({
   if (status) query = query.eq('approval_status', status)
   if (search) query = query.ilike('store_name', `%${search}%`)
 
-  const { data: stores, count } = await query
+  const { data: stores, count, error: queryError } = await query
+  if (queryError) {
+    console.error('[admin/sellers] query failed:', queryError)
+  }
   const total = count ?? 0
   const safeStores = (stores ?? []) as unknown as Store[]
+  console.log('[admin/sellers] fetched', safeStores.length, 'of', total, 'stores')
 
   // Count pending for badge
   const { count: pendingCount } = await supabaseAdmin()
@@ -160,7 +164,17 @@ export default async function SellersPage({
           </tbody>
         </table>
         {safeStores.length === 0 && (
-          <p className="text-center py-12 text-gray-400">No sellers found</p>
+          <div className="text-center py-12">
+            <p className="text-gray-400 mb-2">No sellers found</p>
+            {queryError && (
+              <p className="text-red-500 text-xs font-mono">{queryError.message}</p>
+            )}
+            {!queryError && total === 0 && (
+              <p className="text-gray-400 text-xs">
+                No stores exist in the database yet. Sign up as a seller via <a href="/seller/register" className="text-orange-500 underline">/seller/register</a> first.
+              </p>
+            )}
+          </div>
         )}
       </div>
 

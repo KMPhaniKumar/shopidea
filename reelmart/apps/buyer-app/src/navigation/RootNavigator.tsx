@@ -38,7 +38,18 @@ export default function RootNavigator() {
   }
 
   const isAuthenticated = !!session
-  const needsProfile = isAuthenticated && !profile?.name
+  // Wait for profile to finish loading before deciding ProfileSetup vs MainTabs.
+  // `profile === null` while a session exists means "still fetching" — show loader.
+  const profileLoaded = isAuthenticated && profile !== null
+  const needsProfile = profileLoaded && !profile?.name
+
+  if (isAuthenticated && !profileLoaded) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    )
+  }
 
   return (
     <NavigationContainer>

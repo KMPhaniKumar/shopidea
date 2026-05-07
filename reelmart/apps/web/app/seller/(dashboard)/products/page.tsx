@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Search, Download, Edit2, Trash2, Eye, EyeOff, Package, RefreshCw } from 'lucide-react'
+import { Plus, Search, Download, Edit2, Trash2, Eye, EyeOff, Package, RefreshCw, Link2 } from 'lucide-react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import toast, { Toaster } from 'react-hot-toast'
@@ -16,6 +16,7 @@ export default function ProductsPage() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [storeId, setStoreId] = useState<string>('')
+  const [storeSlug, setStoreSlug] = useState<string>('')
   const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => { loadProducts() }, [])
@@ -24,11 +25,12 @@ export default function ProductsPage() {
     setRefreshing(true)
     const { data: { user } } = await supabase.auth.getUser()
     const storeQuery = user
-      ? supabase.from('stores').select('id').eq('seller_id', user.id).single()
-      : supabase.from('stores').select('id').limit(1).single()
+      ? supabase.from('stores').select('id, store_slug').eq('seller_id', user.id).single()
+      : supabase.from('stores').select('id, store_slug').limit(1).single()
     const { data: store } = await storeQuery
     if (!store) { setRefreshing(false); return }
     setStoreId(store.id)
+    setStoreSlug((store as any).store_slug ?? '')
     const { data } = await supabase.from('products').select('*').eq('store_id', store.id).order('created_at', { ascending: false })
     setProducts(data ?? [])
     if (showToast) toast.success('Products refreshed')
@@ -39,6 +41,19 @@ export default function ProductsPage() {
     await supabase.from('products').update({ is_available: !current }).eq('id', id)
     toast.success(!current ? 'Product visible' : 'Product hidden')
     loadProducts()
+  }
+
+  async function copyProductLink(id: string) {
+    if (!storeSlug) { toast.error('Store slug missing'); return }
+    const url = `https://reelmart.in/store/${storeSlug}/product/${id}`
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Check out this product', url })
+        return
+      }
+    } catch { /* user cancelled — fall through to clipboard */ }
+    await navigator.clipboard.writeText(url)
+    toast.success('Product link copied!')
   }
 
   async function deleteProduct(id: string) {
@@ -121,6 +136,9 @@ export default function ProductsPage() {
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
+          <button onClick={() => copyProductLink(row.original.id)} className="p-1.5 hover:bg-[#F9F9F9] rounded" title="Copy/share product link">
+            <Link2 size={15} className="text-[#FF6B2B]" />
+          </button>
           <button onClick={() => toggleAvailability(row.original.id, row.original.is_available)} className="p-1.5 hover:bg-[#F9F9F9] rounded">
             {row.original.is_available ? <EyeOff size={15} className="text-[#666666]" /> : <Eye size={15} className="text-[#666666]" />}
           </button>

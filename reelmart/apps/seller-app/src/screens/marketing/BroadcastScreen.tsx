@@ -86,7 +86,7 @@ export default function BroadcastScreen({ navigation }: Props) {
           style={styles.msgInput}
           value={message}
           onChangeText={setMessage}
-          placeholder="e.g. 🎉 50% OFF today only! Visit our store: reelmart.in/s/your-store"
+          placeholder="e.g. 🎉 50% OFF today only! Visit our store: reelmart.in/store/your-store"
           placeholderTextColor={colors.textMuted}
           multiline
           maxLength={500}

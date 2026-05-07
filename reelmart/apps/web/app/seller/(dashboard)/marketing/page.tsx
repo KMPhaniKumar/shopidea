@@ -116,13 +116,13 @@ export default function MarketingPage() {
 
   function copyLink() {
     if (!store) return
-    navigator.clipboard.writeText(`https://reelmart.in/s/${store.store_slug}`)
+    navigator.clipboard.writeText(`https://reelmart.in/store/${store.store_slug}`)
     toast.success('Link copied!')
   }
 
   async function downloadQR() {
     if (!store) return
-    const url = `https://reelmart.in/s/${store.store_slug}`
+    const url = `https://reelmart.in/store/${store.store_slug}`
     const dataUrl = await QRCode.toDataURL(url, { width: 512, margin: 2 })
     const a = document.createElement('a')
     a.download = `reelmart-${store.store_slug}-qr.png`
@@ -143,11 +143,11 @@ export default function MarketingPage() {
             <h2 className="font-semibold text-[#1A1A1A]">Share Your Store</h2>
           </div>
           <div className="flex items-center gap-2 bg-[#F9F9F9] rounded-lg p-3">
-            <code className="text-sm text-[#FF6B2B] flex-1 truncate">reelmart.in/s/{store.store_slug}</code>
+            <code className="text-sm text-[#FF6B2B] flex-1 truncate">reelmart.in/store/{store.store_slug}</code>
             <button onClick={copyLink} className="p-1.5 hover:bg-[#EEEEEE] rounded shrink-0" title="Copy link">
               <Copy size={14} className="text-[#666666]" />
             </button>
-            <a href={`https://reelmart.in/s/${store.store_slug}`} target="_blank" rel="noreferrer"
+            <a href={`https://reelmart.in/store/${store.store_slug}`} target="_blank" rel="noreferrer"
               className="p-1.5 hover:bg-[#EEEEEE] rounded shrink-0" title="Open store">
               <ExternalLink size={14} className="text-[#666666]" />
             </a>
@@ -157,14 +157,14 @@ export default function MarketingPage() {
               📷 Download QR Code
             </button>
             <a
-              href={`https://api.whatsapp.com/send?text=Shop%20at%20my%20store%20on%20ReelMart%20%F0%9F%9B%8D%EF%B8%8F%0Ahttps%3A%2F%2Freelmart.in%2Fs%2F${store.store_slug}`}
+              href={`https://api.whatsapp.com/send?text=Shop%20at%20my%20store%20on%20ReelMart%20%F0%9F%9B%8D%EF%B8%8F%0Ahttps%3A%2F%2Freelmart.in%2Fstore%2F${store.store_slug}`}
               target="_blank" rel="noreferrer"
               className="flex items-center gap-2 px-3 py-2 border border-[#25D366] text-[#25D366] rounded-lg text-sm hover:bg-[#25D366]/5"
             >
               💬 Share on WhatsApp
             </a>
             <a
-              href={`https://www.instagram.com/?url=https://reelmart.in/s/${store.store_slug}`}
+              href={`https://www.instagram.com/?url=https://reelmart.in/store/${store.store_slug}`}
               target="_blank" rel="noreferrer"
               className="flex items-center gap-2 px-3 py-2 border border-purple-400 text-purple-600 rounded-lg text-sm hover:bg-purple-50"
             >

@@ -9,6 +9,12 @@ You are building a unified social commerce platform for Indian micro-sellers
 who sell via WhatsApp and Instagram. The platform gives sellers a storefront,
 order management, and catalogue via a shareable link.
 
+**Code lives in `reelmart/`. Read these before starting work:**
+- [`README.md`](../README.md) — project orientation
+- [`TRACKER.md`](../TRACKER.md) — daily log + agent completion board
+- [`agents/AUDIT_gaps.md`](../agents/AUDIT_gaps.md) — what's done vs pending (canonical truth)
+- [`FLOWS.md`](../FLOWS.md) — every screen's data flow
+
 ## Tech Stack
 
 - **Database + Auth + Storage + Realtime**: Supabase

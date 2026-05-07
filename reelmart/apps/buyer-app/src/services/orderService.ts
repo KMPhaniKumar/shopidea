@@ -99,7 +99,7 @@ export const STATUS_LABELS: Record<string, string> = {
   pending:   'Order Placed',
   accepted:  'Confirmed',
   packed:    'Packed',
-  shipped:   'Out for Delivery',
+  shipped:   'Shipped',
   delivered: 'Delivered',
   rejected:  'Rejected',
   cancelled: 'Cancelled',
