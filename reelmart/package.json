@@ -3,20 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "apps/seller-app",
-    "apps/buyer-app",
     "apps/web",
-    "backend",
+    "apps/buyer-app",
     "shared"
   ],
   "scripts": {
-    "dev:backend": "cd backend && npm run dev",
     "dev:web": "cd apps/web && npm run dev",
-    "dev:seller": "cd apps/seller-app && npx expo start",
     "dev:buyer": "cd apps/buyer-app && npx expo start",
     "supabase:start": "supabase start",
     "supabase:migrate": "supabase db push",
-    "gen:types": "supabase gen types typescript --local > shared/types/supabase.ts && cp shared/types/supabase.ts apps/seller-app/src/types/supabase.ts && cp shared/types/supabase.ts apps/buyer-app/src/types/supabase.ts && cp shared/types/supabase.ts apps/web/src/types/supabase.ts && cp shared/types/supabase.ts backend/src/types/supabase.ts",
+    "gen:types": "supabase gen types typescript --local > shared/types/supabase.ts && cp shared/types/supabase.ts apps/buyer-app/src/types/supabase.ts && cp shared/types/supabase.ts apps/web/src/types/supabase.ts",
     "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit"
   },

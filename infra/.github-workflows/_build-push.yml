@@ -1,0 +1,62 @@
+name: _build-push (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      service: { type: string, required: true }
+      env:     { type: string, required: true }
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.env }}-${{ inputs.service }}
+  cancel-in-progress: false
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE }}
+          aws-region:     ${{ vars.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build & push image
+        env:
+          REPO: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/reelmart/${{ inputs.service }}-service
+          TAG: ${{ inputs.env }}-${{ github.sha }}
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --tag $REPO:$TAG \
+            --tag $REPO:${{ inputs.env }}-latest \
+            --push \
+            reelmart/services/${{ inputs.service }}-service
+
+      - name: Trigger ECS rolling deployment
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER_DEV }}
+          SERVICE: ${{ inputs.service }}-service
+        run: |
+          aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment >/dev/null
+          echo "Waiting for service to stabilize..."
+          aws ecs wait services-stable --cluster $CLUSTER --services $SERVICE
+
+      - name: Smoke test /health
+        env:
+          HOST: api-${{ inputs.env == 'dev' && 'dev.' || '' }}reelmart.in
+        run: |
+          declare -A PATHS=([catalog]=catalog [order]=orders [payment]=payments \
+                            [delivery]=delivery [notification]=notifications [whatsapp]=whatsapp \
+                            [payout]=payouts [analytics]=analytics [return]=returns [admin]=admin)
+          P=${PATHS[${{ inputs.service }}]}
+          curl -fsS --retry 5 --retry-delay 5 https://$HOST/api/$P/health

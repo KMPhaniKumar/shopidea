@@ -1,0 +1,49 @@
+name: Infra (Terraform)
+
+on:
+  pull_request:
+    paths: ['infra/terraform/**']
+  push:
+    branches: [main]
+    paths: ['infra/terraform/**']
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: [dev]   # add 'prod' here only after a manual approval gate is in place
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE }}
+          aws-region:     ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - run: terraform init -input=false
+      - run: terraform fmt -check -recursive
+      - run: terraform validate
+      - run: terraform plan -input=false -out=tfplan
+      - if: github.event_name == 'pull_request'
+        run: terraform show -no-color tfplan > plan.txt
+      - if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.env }}
+          path: infra/terraform/environments/${{ matrix.env }}/plan.txt
+
+      - if: github.event_name == 'push'
+        run: terraform apply -input=false -auto-approve tfplan

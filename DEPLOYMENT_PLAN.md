@@ -1,120 +1,118 @@
 # ReelMart — Deployment Plan
-> ECS on EC2 + Auto Scaling | Budget: $150/month max | Region: ap-south-1 (Mumbai)
+> ECS on EC2 + Auto Scaling | Region: ap-south-1 (Mumbai) | IaC: Terraform
+> Environments: **dev** (this round) → **prod** (later)
 
 ---
 
 ## Architecture Overview
 
 ```
-                        USERS
-          ┌──────────────┼──────────────┐
-          │              │              │
-     Sellers          Buyers         Admins
-    (browser)        (mobile)       (browser)
-          │              │              │
-          ▼              │              ▼
-   Vercel CDN            │       Vercel CDN
-   seller.reelmart.in    │       admin.reelmart.in
-   (Next.js SSR)         │       (Next.js SSR)
-          │              │              │
-          └──────────────┼──────────────┘
-                         │
-                         │ API calls (https)
-                         ▼
-              Route 53 (api.reelmart.in)
-                         │
-                         ▼
-               ALB (HTTPS:443)  ← path-based routing
-                         │
-          ┌──────────────┼──────────────────────┐
-          │              │                      │
-          ▼              ▼                      ▼
-  /api/stores     /api/orders          /api/payments
-  /api/products   /api/returns         /api/payouts
-  /api/reviews    /api/delivery        /api/analytics
-          │              │             /api/whatsapp   │
-          │              │             /api/notifications
-          │              │             /api/admin       │
-          └──────────────┴─────────────────────────────┘
-                         │
-                         ▼
-          ECS Cluster (EC2 launch type, ap-south-1)
-          ┌──────────────────────────────────────────┐
-          │  EC2 t3.medium #1 (AZ-a) always running  │
-          │  EC2 t3.medium #2 (AZ-b) always running  │
-          │  EC2 t3.medium #3 (AZ-a) auto on load    │
-          └──────────────────────────────────────────┘
-          Auto Scaling Group: min=2, max=5
-                         │
-                         ▼
-          Supabase Cloud (DB + Auth + Storage + Realtime)
+                                USERS
+                  ┌──────────────┼──────────────┐
+                  │              │              │
+             Sellers          Buyers         Admins
+            (browser)        (mobile)       (browser)
+                  │              │              │
+                  ▼              │              ▼
+                Vercel CDN       │       Vercel CDN
+       reelmart.in (one Next.js app: /seller, /admin, /s/<slug>, /)
+                  │              │              │
+                  └──────────────┼──────────────┘
+                                 │
+                                 │ HTTPS
+                                 ▼
+                  Route 53 (api-dev.reelmart.in / api.reelmart.in)
+                                 │
+                                 ▼
+                       ALB (HTTPS:443)  ← path-based routing
+                                 │
+                  ┌──────────────┼──────────────────────┐
+                  │              │                      │
+                  ▼              ▼                      ▼
+          /api/catalog    /api/orders          /api/payments
+          /api/admin      /api/returns         /api/payouts
+                          /api/delivery        /api/whatsapp
+                                               /api/notifications
+                                               /api/analytics
+                                 │
+                                 ▼
+                  ECS Cluster (EC2 launch type, ap-south-1)
+                  ┌───────────────────────────────────────┐
+                  │ dev:  1× t3.small  (ASG min=1, max=3) │
+                  │ prod: 2× t3.medium (ASG min=2, max=5) │
+                  └───────────────────────────────────────┘
+                                 │
+                                 ▼
+                  Supabase Cloud (DB + Auth + Storage + Realtime)
+                  dev project — separate from prod project
 ```
 
+### Decisions locked in
+- **Backend service:** the 10 microservices in `reelmart/services/` are the deployment target. `reelmart/backend/` (Express) is retired — it duplicates payments/delivery/whatsapp/notifications/payouts routes already implemented in the microservices.
+- **Web routing:** single domain `reelmart.in`, path-based — `/seller`, `/admin`, `/s/<slug>`, `/` (landing). One Vercel project (`reelmart/apps/web`).
+- **Mobile:** only `reelmart/apps/buyer-app/` (Expo). `apps/seller-app` is parked.
+- **Dev Supabase:** separate Supabase project from prod (separate URL + keys, free tier).
+- **CI auth:** GitHub OIDC + IAM role. No long-lived AWS keys in GitHub.
+- **IaC:** Terraform with S3 remote state + DynamoDB lock table. One root module, two workspaces (`dev`, `prod`).
+
 ### Why ECS on EC2 (not Fargate)?
-```
-Fargate: you pay per task (container) → expensive at scale
-EC2:     you pay per instance → containers are free on top
-         NO NAT Gateway needed (EC2 in public subnet with SG rules)
-         Saves $37/month vs Fargate setup
-```
+EC2 launch type is cheaper at our task density and skips the NAT Gateway. EC2 in **public subnets** with locked-down SGs (no NAT = $0 vs ~$32/mo). Trade-off: EC2 instances have public IPs — acceptable for dev, revisit for prod (move to private subnets + NAT or VPC endpoints when traffic justifies it).
 
 ---
 
 ## Cost Breakdown
 
-### Monthly (normal load)
+### Dev (this round)
 ```
-EC2 t3.medium × 2          $60/month  (2vCPU, 4GB each)
-ALB                         $21/month
-ECR (10 repos)              $2/month
-CloudWatch Logs             $3/month
-Secrets Manager             $4/month
-Route 53                    $1/month
+EC2 t3.small × 1            $15/month   (2 vCPU, 2 GB)
+ALB                         $17/month   (~$16 fixed + small LCU)
+ECR (10 repos)              $1/month
+CloudWatch Logs             $1/month
+Secrets Manager (~12)       $5/month
+Route 53 hosted zone        $1/month (already paying if domain hosted)
 ACM Certificate             $0
 ─────────────────────────────────────
-AWS Total:                  $91/month
+AWS Dev Total:             ~$40/month
 
-Supabase Free tier          $0/month   (up to 50k users)
-Vercel (web apps)           $0/month
-Twilio (SMS OTP)            $5/month
-Gupshup (WhatsApp)          $5/month
-Firebase FCM                $0/month
-Razorpay                    $0/month   (% per transaction)
+Supabase Free tier          $0
+Vercel Hobby                $0
+Twilio / Gupshup test       $0–5
 ─────────────────────────────────────
-Grand Total:               ~$101/month ✅ Under $150
+Dev Grand Total:           ~$40/month
 ```
+> ALB is the floor — most of dev cost is ALB. If we want sub-$20 dev, drop ALB and expose ECS service ports through one EC2 + nginx (the `infra/test/` path). Keeping ALB so dev mirrors prod.
 
-### Monthly (peak load — 3rd EC2 added by ASG)
+### Prod (later, normal load)
 ```
-EC2 t3.medium × 3          $90/month
+EC2 t3.medium × 2           $66/month
 ALB                         $21/month
-Others                      $15/month
+ECR / Logs / Secrets        $9/month
+Route 53                    $1/month
 ─────────────────────────────────────
-Grand Total:               ~$131/month ✅ Under $150
+AWS Prod Total:            ~$97/month
+
+Supabase Pro (when needed)  $25/month
+Twilio + Gupshup            $10/month
+─────────────────────────────────────
+Prod Grand Total:          ~$132/month
 ```
 
 ---
 
 ## Auto Scaling Rules
 
-### EC2 Auto Scaling Group (adds/removes EC2 instances)
+### EC2 ASG
 ```
-Min instances: 2  (always 2 running for HA)
-Max instances: 5
-Desired:       2
+dev:   min=1  max=3  desired=1
+prod:  min=2  max=5  desired=2
 
-Scale OUT (add EC2) when:
-  - Cluster CPU reservation > 70% for 2 min
-  - Cluster memory reservation > 75% for 2 min
-
-Scale IN (remove EC2) when:
-  - Cluster CPU reservation < 30% for 10 min
-  - Never go below min=2
+Scale OUT when CPU reservation > 70% for 2 min
+Scale IN  when CPU reservation < 30% for 10 min (never below min)
 ```
 
-### ECS Service Auto Scaling (adds/removes containers per service)
+### Per-service ECS auto scaling (prod values; dev = min=1, max=2 across the board)
 ```
-catalog-service:       min=1, max=5  (most traffic)
+catalog-service:       min=1, max=5
 order-service:         min=1, max=5
 payment-service:       min=1, max=3
 whatsapp-service:      min=1, max=3
@@ -122,334 +120,272 @@ notification-service:  min=1, max=3
 delivery-service:      min=1, max=3
 analytics-service:     min=1, max=2
 return-service:        min=1, max=2
-payout-service:        min=1, max=1  (batch job, no scaling)
-admin-service:         min=1, max=1  (low traffic)
+payout-service:        min=1, max=1   (batch)
+admin-service:         min=1, max=1   (low traffic)
 
-Scale trigger: CPU > 60% for 60 seconds → add 1 task
-Scale down:    CPU < 30% for 300 seconds → remove 1 task
+Scale up:   CPU > 60% for 60 s  → +1 task
+Scale down: CPU < 30% for 300 s → -1 task
 ```
 
 ---
 
 ## Phases
 
+### Phase 0 — AWS Bootstrap (one-time, ~1 hr)
+> Prep the AWS account so Terraform can run safely.
+
+```
+1. AWS account: enable MFA on root, create an admin IAM user for Terraform local apply.
+2. Region: lock to ap-south-1.
+3. Create Terraform state backend (manually, one-time):
+     - S3 bucket: reelmart-tf-state-<account-id>  (versioned, encrypted)
+     - DynamoDB table: reelmart-tf-locks (LockID partition key)
+4. Create GitHub OIDC identity provider in AWS IAM.
+5. Create IAM role `reelmart-gha-deploy` trusted by the OIDC provider, scoped to:
+     - ECR push to reelmart/* repos
+     - ECS UpdateService/DescribeServices
+     - Read Secrets Manager
+6. Install Terraform locally (≥ 1.7) and AWS CLI v2; aws configure SSO/credentials.
+```
+
+**Deliverable:** state bucket + lock table + OIDC provider + deploy role exist in AWS.
+
 ---
 
-### Phase 1 — AWS Foundation (Day 1)
-> Set up VPC, EC2, ECS cluster, ALB, ECR, IAM, Secrets
+### Phase 1 — Terraform: Network + ECS Foundation (Day 1, ~3 hr)
+> VPC, subnets, ALB, ECS cluster, ECR, IAM (task), Secrets Manager.
 
-**What you do:**
+**What gets created (per workspace — dev first):**
 ```
-1. Create AWS account (if not done)
-2. Set region to ap-south-1 (Mumbai)
-3. Run infrastructure setup (we'll build this)
-```
-
-**What gets created:**
-```
-VPC (10.0.0.0/16)
-├── Public Subnet AZ-a (10.0.1.0/24)  ← ALB + EC2 here
-├── Public Subnet AZ-b (10.0.2.0/24)  ← ALB + EC2 here
-Internet Gateway
+VPC (10.0.0.0/16 dev | 10.10.0.0/16 prod)
+├── Public Subnet AZ-a
+├── Public Subnet AZ-b
+Internet Gateway + public route table
 Security Groups:
-  ├── alb-sg    (inbound: 80, 443 from internet)
-  ├── ec2-sg    (inbound: 32768-65535 from alb-sg, 22 from your IP)
-  └── ecs-sg    (inbound: all from ec2-sg)
-ECR repos × 10 (one per service)
-ECS Cluster (EC2 launch type)
-ALB + HTTPS listener + 10 target groups
-IAM roles (ECS execution + task)
-Secrets Manager (Supabase keys, Razorpay, etc.)
-CloudWatch log groups × 10
+  ├── alb-sg   (in: 80, 443 from 0.0.0.0/0)
+  ├── ec2-sg   (in: 32768-65535 from alb-sg, 22 from operator IP allowlist)
+  └── ecs-sg   (within-cluster traffic)
+ECR repositories × 10 (reelmart/<service>)
+ECS Cluster (EC2 launch type) — name: reelmart-<env>
+ALB + HTTP→HTTPS redirect + HTTPS listener (cert from ACM)
+10 target groups (one per service) + listener rules per /api/<path>
+IAM:
+  - ecsTaskExecutionRole (pull from ECR, read secrets, write logs)
+  - ecsTaskRole (per-service permissions)
+Secrets Manager — 1 secret per concern (Supabase, Razorpay, Gupshup, Twilio, Shiprocket, Firebase, JWT)
+CloudWatch log groups × 10 (/ecs/reelmart/<service>)
 ```
 
-**Time: 2-3 hours**
+**Files:** `reelmart/infra/terraform/modules/{network,ecs-cluster,alb,ecr,iam,secrets}/` + `environments/dev/main.tf`.
 
 ---
 
-### Phase 2 — EC2 Auto Scaling Group (Day 1)
-> Launch EC2 instances that join ECS cluster automatically
-
-**What gets created:**
+### Phase 2 — Terraform: EC2 ASG (Day 1, ~1 hr)
 ```
 Launch Template:
-  AMI: Amazon ECS-optimized AMI (latest)
-  Instance type: t3.medium
-  IAM role: EC2InstanceProfileForECS
-  User data: registers to ECS cluster on boot
+  AMI: latest Amazon ECS-optimized AMI (data source: ssm parameter)
+  Instance type: dev=t3.small | prod=t3.medium
+  IAM role: ec2InstanceProfileForECS
+  User data: registers to ECS cluster, enables IMDSv2 only
   Security group: ec2-sg
 
 Auto Scaling Group:
-  Min: 2, Max: 5, Desired: 2
-  Subnets: both public subnets (multi-AZ)
+  Multi-AZ across both public subnets
   Health check: EC2 + ELB
-  
-Scaling Policies:
-  Scale out: CPU > 70% → add 1 instance (cooldown 300s)
-  Scale in:  CPU < 30% → remove 1 instance (cooldown 300s)
+  Capacity Provider linked to ECS cluster (managed scaling on)
 ```
 
-**Time: 1 hour**
+**Files:** `reelmart/infra/terraform/modules/ec2-asg/`.
 
 ---
 
-### Phase 3 — Docker Images + ECR Push (Day 2)
-> Build all 10 service Docker images and push to ECR
+### Phase 3 — Build & Push Service Images (Day 2, ~2 hr)
+> Build the 10 microservice images and push to ECR.
 
-**What you do:**
 ```bash
-# We'll create a script: scripts/build-and-push.sh
-# Run once manually, then GitHub Actions does it on every push
+# reelmart/infra/scripts/build-and-push.sh — first run manual, later GHA
 
-cd reelmart/services
-for service in catalog order payment delivery notification \
-               whatsapp payout analytics return admin; do
-  docker build -t reelmart/${service}-service ./${service}-service
-  docker tag reelmart/${service}-service \
-    ACCOUNT.dkr.ecr.ap-south-1.amazonaws.com/reelmart/${service}-service:latest
-  docker push \
-    ACCOUNT.dkr.ecr.ap-south-1.amazonaws.com/reelmart/${service}-service:latest
+ENV=dev
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+REGION=ap-south-1
+
+aws ecr get-login-password --region $REGION \
+  | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+
+for s in catalog order payment delivery notification whatsapp payout analytics return admin; do
+  docker build --platform linux/amd64 -t reelmart/${s}-service ./reelmart/services/${s}-service
+  docker tag  reelmart/${s}-service $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/reelmart/${s}-service:dev-latest
+  docker push $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/reelmart/${s}-service:dev-latest
 done
 ```
 
-**Time: 1-2 hours (build + push)**
+> Build platform pinned to `linux/amd64` so images run on EC2 even when built on Apple Silicon.
 
 ---
 
-### Phase 4 — ECS Task Definitions + Services (Day 2)
-> Deploy all 10 services to ECS with auto scaling
-
-**What gets created:**
+### Phase 4 — Terraform: ECS Task Definitions + Services (Day 2, ~3 hr)
 ```
-10 × ECS Task Definitions (JSON configs)
-  Each task: 0.5 vCPU, 512MB RAM
-  Env vars pulled from Secrets Manager
-  Logs → CloudWatch
-
-10 × ECS Services
-  Each service: min=1 task, connected to ALB target group
-  Deployment: rolling update (no downtime)
-  Health check: /health endpoint
-
-10 × Application Auto Scaling policies
-  Per-service CPU-based scaling
+For each of the 10 services:
+  - aws_ecs_task_definition: cpu=256, memory=512 (dev); env from Secrets Manager
+  - aws_ecs_service: desired_count=1, deployment_controller=ECS (rolling), 
+                    health check via target group /health
+  - aws_appautoscaling_target + policy: per-service min/max from table above
 ```
 
-**Time: 2-3 hours**
+**Files:** `reelmart/infra/terraform/modules/ecs-service/` + 10 instances in `environments/dev/services.tf`.
 
 ---
 
-### Phase 5 — DNS + SSL (Day 3)
-> Point api.reelmart.in to ALB with HTTPS
-
+### Phase 5 — DNS + SSL (Day 3, ~1 hr)
 ```
-1. ACM: request certificate for api.reelmart.in (free)
-2. Validate via DNS (add CNAME record) → takes ~5 min
-3. Add cert to ALB HTTPS listener
-4. Route 53: api.reelmart.in → ALB DNS name (A record alias)
-5. Update all apps:
-   NEXT_PUBLIC_API_URL=https://api.reelmart.in
-   API_BASE_URL=https://api.reelmart.in
-```
-
-**Time: 1-2 hours**
-
----
-
-### Phase 6 — CI/CD with GitHub Actions (Day 3-4)
-> Push to main → auto build + deploy only changed services
-
-**How it works:**
-```
-Push code to main
-    │
-    ├── changed reelmart/services/order-service?
-    │       → build order-service image
-    │       → push to ECR with git SHA tag
-    │       → update ECS task definition
-    │       → deploy to ECS (rolling update)
-    │       → wait for health checks to pass
-    │
-    ├── changed reelmart/services/payment-service?
-    │       → same flow for payment-service only
-    │
-    └── unchanged services → skipped (nothing happens)
-
-Result: only changed services redeploy
-        takes ~3-4 min per service
-        zero downtime (rolling update)
-```
-
-**GitHub Secrets needed:**
-```
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-AWS_REGION          = ap-south-1
-AWS_ACCOUNT_ID      = your 12-digit account ID
-ECS_CLUSTER         = reelmart-cluster
-```
-
-**Time: 2-3 hours**
-
----
-
-### Phase 7 — Web Apps on Vercel (Day 4)
-> Deploy seller web + admin web
-
-```
-1. Connect GitHub repo to Vercel
-2. Seller web:
-   - Root: reelmart/apps/web
-   - NEXT_PUBLIC_SUPABASE_URL=...
-   - NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-   - NEXT_PUBLIC_API_URL=https://api.reelmart.in
-
-3. Admin web: same settings
-
-4. Custom domains:
-   - seller.reelmart.in → seller web
-   - admin.reelmart.in  → admin web
-
-Auto-deploys on every push to main (Vercel handles it)
-```
-
-**Time: 1 hour**
-
----
-
-### Phase 8 — Mobile App Build (Day 5)
-> Build buyer app for App Store + Play Store
-
-```
-Using Expo EAS Build:
-
-1. eas build --platform ios
-2. eas build --platform android
-3. Update API URL → https://api.reelmart.in
-4. Submit to stores:
-   eas submit --platform ios
-   eas submit --platform android
-
-Review time: iOS ~24-48 hrs, Android ~2-3 hrs
-```
-
-**Time: 1 day setup + review wait**
-
----
-
-### Phase 9 — Monitoring + Alerts (Day 5)
-> Know when something breaks before users notice
-
-```
-CloudWatch Alarms:
-  ├── ECS service task count < desired → alert
-  ├── ALB 5xx rate > 1% → alert
-  ├── ALB response time > 2s → alert
-  ├── EC2 CPU > 85% → alert
-  └── Any service /health failing → alert
-
-Notification: email + (optional) Slack webhook
-
-Cost: ~$1/month for alarms
-```
-
-**Time: 1-2 hours**
-
----
-
-## Full Timeline
-
-```
-Day 1:  Phase 1 + 2  — AWS foundation + EC2 ASG
-Day 2:  Phase 3 + 4  — Docker images + ECS services
-Day 3:  Phase 5 + 6  — DNS/SSL + CI/CD setup
-Day 4:  Phase 7      — Web apps on Vercel
-Day 5:  Phase 8 + 9  — Mobile build + monitoring
-────────────────────────────────────────────────
-Total: 5 days to full production deployment
+1. Confirm reelmart.in zone exists in Route 53 (or import).
+2. ACM cert for api-dev.reelmart.in (and api.reelmart.in for prod) — DNS validation.
+3. Attach cert to ALB HTTPS listener (Terraform).
+4. Route 53 alias:  api-dev.reelmart.in → ALB DNS name.
+5. Update web env vars: NEXT_PUBLIC_API_URL=https://api-dev.reelmart.in
+6. Update buyer-app config: API_BASE_URL=https://api-dev.reelmart.in
 ```
 
 ---
 
-## What We Build (Files)
+### Phase 6 — CI/CD via GitHub Actions OIDC (Day 3, ~2 hr)
+> One reusable matrix workflow, path-filtered.
+
+```
+.github/workflows/
+  ├── infra.yml         — terraform fmt/validate/plan on PR; apply on main (dev workspace)
+  ├── deploy.yml        — matrix over the 10 services; only services with changed paths run
+  └── _build-push.yml   — reusable: docker build, ECR push, ECS update-service
+
+Auth: aws-actions/configure-aws-credentials@v4 with role-to-assume=arn:aws:iam::<acct>:role/reelmart-gha-deploy
+Tag strategy: <env>-<git-sha> (immutable) + <env>-latest (rolling) per push to main.
+```
+
+**GitHub repo settings:**
+```
+Variables (not secrets):
+  AWS_REGION         = ap-south-1
+  AWS_ACCOUNT_ID     = <12-digit>
+  AWS_DEPLOY_ROLE    = arn:aws:iam::<acct>:role/reelmart-gha-deploy
+  ECS_CLUSTER_DEV    = reelmart-dev
+```
+
+---
+
+### Phase 7 — Web App on Vercel (Day 4, ~1 hr)
+> Single Vercel project for `reelmart/apps/web` (seller + admin + storefront + landing).
+
+```
+Vercel project root: reelmart/apps/web
+Build env (dev):
+  NEXT_PUBLIC_SUPABASE_URL=<dev project url>
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=<dev anon key>
+  NEXT_PUBLIC_API_URL=https://api-dev.reelmart.in
+Custom domains:
+  - dev.reelmart.in   → dev branch / preview env
+  - reelmart.in       → main branch / prod (Phase 7 prod cutover later)
+```
+
+> Path-based: `/`, `/seller`, `/admin`, `/s/<slug>`. No subdomains needed.
+
+---
+
+### Phase 8 — Buyer Mobile App (Day 5, ~1 day)
+**Dev:** Expo internal testing — no store submission yet.
+```
+1. eas build --profile development --platform ios     → install via Expo dev client
+2. eas build --profile preview     --platform android → APK shared internally
+3. API_BASE_URL=https://api-dev.reelmart.in
+```
+**Prod (later):** `eas build --profile production` + `eas submit` to App Store / Play Store.
+
+---
+
+### Phase 9 — Monitoring (Day 5, ~1 hr)
+```
+CloudWatch alarms (Terraform-managed):
+  - ECS service running_count < desired_count → SNS topic
+  - ALB 5xx > 1% (5 min) → SNS
+  - ALB target response time p95 > 2s → SNS
+  - EC2 CPU > 85% (10 min) → SNS
+SNS topic → email subscription (and Slack webhook later)
+```
+
+---
+
+## Timeline (dev environment)
+
+```
+Day 0:  Phase 0       — AWS bootstrap
+Day 1:  Phase 1 + 2   — Terraform network/ECS/ASG
+Day 2:  Phase 3 + 4   — Build/push images + ECS services
+Day 3:  Phase 5 + 6   — DNS/SSL + CI/CD OIDC
+Day 4:  Phase 7       — Web on Vercel
+Day 5:  Phase 8 + 9   — Mobile dev build + monitoring
+────────────────────────────────────────────────────
+Total: ~5 working days for dev, fully wired.
+```
+
+---
+
+## Repo Layout (what gets added)
 
 ```
 reelmart/
 ├── infra/
-│   ├── setup.sh                    ← Phase 1+2: VPC, EC2, ECS, ALB (one script)
-│   ├── task-definitions/           ← Phase 4: 10 JSON task definition files
-│   │   ├── catalog-service.json
-│   │   ├── order-service.json
-│   │   └── ... (10 files)
+│   ├── terraform/
+│   │   ├── modules/
+│   │   │   ├── network/        (VPC, subnets, IGW, SGs)
+│   │   │   ├── ecs-cluster/    (cluster, capacity provider)
+│   │   │   ├── ec2-asg/        (launch template, ASG, scaling)
+│   │   │   ├── alb/            (ALB, listeners, target groups, rules)
+│   │   │   ├── ecr/            (10 repositories)
+│   │   │   ├── ecs-service/    (task def + service + autoscaling)
+│   │   │   ├── iam/            (task exec role, task role, OIDC role)
+│   │   │   └── secrets/        (Secrets Manager containers)
+│   │   ├── environments/
+│   │   │   ├── dev/            (main.tf, services.tf, terraform.tfvars)
+│   │   │   └── prod/           (later)
+│   │   └── bootstrap/          (S3 state bucket, DynamoDB lock — one-time)
 │   ├── scripts/
-│   │   ├── build-and-push.sh      ← Phase 3: build + push all images
-│   │   └── smoke-test.sh          ← verify all /health endpoints
-│   └── cloudwatch-alarms.sh       ← Phase 9: set up monitoring
+│   │   ├── build-and-push.sh
+│   │   └── smoke-test.sh
+│   └── test/                   (legacy CFN single-EC2 sandbox — kept, not used)
 │
-└── .github/
-    └── workflows/
-        ├── _deploy-service.yml    ← reusable workflow
-        ├── deploy-catalog.yml
-        ├── deploy-order.yml
-        └── ... (10 workflow files)
+└── .github/workflows/
+    ├── infra.yml
+    ├── deploy.yml
+    └── _build-push.yml
 ```
 
 ---
 
-## Secrets Needed (fill before Phase 1)
+## Secrets (populated manually in AWS Secrets Manager once; Terraform creates the containers)
 
-```bash
-# Supabase
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_KEY=
-
-# Razorpay
-RAZORPAY_KEY_ID=
-RAZORPAY_KEY_SECRET=
-RAZORPAY_WEBHOOK_SECRET=
-
-# Gupshup (WhatsApp)
-GUPSHUP_API_KEY=
-GUPSHUP_SENDER_NUMBER=
-GUPSHUP_APP_NAME=
-
-# Twilio (SMS OTP)
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-TWILIO_PHONE_NUMBER=
-
-# Shiprocket
-SHIPROCKET_EMAIL=
-SHIPROCKET_PASSWORD=
-
-# Firebase (FCM push)
-FIREBASE_SERVICE_ACCOUNT_JSON=
 ```
+reelmart/dev/supabase    {url, anon_key, service_key}
+reelmart/dev/razorpay    {key_id, key_secret, webhook_secret}
+reelmart/dev/gupshup     {api_key, sender_number, app_name}
+reelmart/dev/twilio      {sid, token, phone_number}
+reelmart/dev/shiprocket  {email, password}
+reelmart/dev/firebase    {service_account_json}
+reelmart/dev/jwt         {secret}
+```
+> Keep the same key names for prod under `reelmart/prod/*`.
 
 ---
 
 ## Upgrade Path (when traffic grows)
 
 ```
-Now → $101/month
-  2 × t3.medium EC2
-  10 services, 1 task each
-
-10k orders/month → ~$131/month
-  ASG auto-adds 3rd EC2
-  High-traffic services scale to 2-3 tasks
-
-50k orders/month → move to Fargate ~$200/month
-  Revenue at this point: ~₹2.5 crore/month
-  Infra is 0.1% of revenue — totally justified
-
-100k+ orders/month → full ECS Fargate + Redis cache
-  Multi-AZ, read replicas, CDN
+Now (dev) → ~$40/mo, 1 EC2, 10 services × 1 task each
+Prod cutover → ~$130/mo, 2 EC2 multi-AZ, scaling enabled
+50k orders/month → migrate EC2 → private subnets + VPC endpoints; consider Fargate for spiky services
+100k+ orders/month → split data plane (read replicas), CDN in front of ALB, Redis cache
 ```
 
 ---
 
 ## Ready to Start?
 
-Say **"start Phase 1"** and I'll build the `infra/setup.sh` script that creates everything on AWS in one run.
+Phase 0 first (AWS bootstrap), then Terraform modules. Say **"start Phase 0"** and I'll lay down the bootstrap module + walk through the manual one-time steps before any Terraform apply.

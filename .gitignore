@@ -1,0 +1,54 @@
+# Node
+node_modules/
+*.log
+npm-debug.log*
+
+# Env
+.env
+.env.local
+.env.*.local
+.env.production
+*.env
+
+# Build artifacts
+dist/
+build/
+out/
+.next/
+.turbo/
+
+# Expo / RN
+.expo/
+.expo-shared/
+web-build/
+
+# Supabase
+supabase/.temp/
+supabase/.branches/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!**/example.tfvars
+!**/*.tfvars.example
+.terraform.lock.hcl
+
+# AWS
+.aws-sam/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Misc
+*.pem
+*.key
