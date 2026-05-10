@@ -3,9 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "apps/web",
-    "apps/buyer-app",
-    "shared"
+    "apps/web"
   ],
   "scripts": {
     "dev:web": "cd apps/web && npm run dev",
