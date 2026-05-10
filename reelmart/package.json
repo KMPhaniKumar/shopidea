@@ -2,9 +2,6 @@
   "name": "reelmart-platform",
   "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "apps/web"
-  ],
   "scripts": {
     "dev:web": "cd apps/web && npm run dev",
     "dev:buyer": "cd apps/buyer-app && npx expo start",
