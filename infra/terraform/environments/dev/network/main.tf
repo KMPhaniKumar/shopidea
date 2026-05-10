@@ -75,6 +75,7 @@ module "alb" {
   subnet_ids        = module.network.public_subnet_ids
   security_group_id = module.network.alb_security_group_id
   services          = local.services
+  cert_arn          = aws_acm_certificate.api.arn
   tags              = local.common_tags
 }
 
@@ -84,4 +85,18 @@ resource "aws_cloudwatch_log_group" "service" {
   name              = "/ecs/reelmart/${var.environment}/${each.key}"
   retention_in_days = var.log_retention_days
   tags              = merge(local.common_tags, { Service = each.key })
+}
+
+# ACM cert for api-dev.reelmart.in. DNS validation: ACM gives us a CNAME
+# record to add at the domain registrar (GoDaddy). HTTPS listener attaches
+# this cert; see alb module.
+resource "aws_acm_certificate" "api" {
+  domain_name       = "api-${var.environment}.reelmart.in"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = local.common_tags
 }

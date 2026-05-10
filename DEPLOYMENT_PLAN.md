@@ -4,6 +4,60 @@
 
 ---
 
+## Live Status (last updated 2026-05-10)
+
+> Phase 5 complete — services reachable at `https://api-dev.reelmart.in`. Razorpay + Supabase secrets are real; remaining provider secrets (Gupshup, Twilio, Shiprocket, Firebase) still placeholders.
+
+| Phase | Status | Notes |
+|------:|:------:|---|
+| 0 — AWS bootstrap | ✅ done | S3 state `reelmart-tf-state-632127307144`, DynamoDB `reelmart-tf-locks`, OIDC + `reelmart-gha-deploy` role |
+| 1 — Network + ALB + ECR + cluster + secrets containers + log groups | ✅ done | 74 resources. ALB DNS: `reelmart-dev-alb-1685112985.ap-south-1.elb.amazonaws.com` |
+| 2 — EC2 ASG (3× t3.small) + capacity provider | ✅ done | Bumped from 1 → 3 instances; 10 tasks need ~3 instances at 384 MB each |
+| 3 — Build & push 10 images | ✅ done | All 10 ECR repos have `dev-latest` + `dev-4dc7faa` (rebuilt on `node:22-alpine` after Node 20 WebSocket crash) |
+| 4 — ECS task defs + services | ✅ done | 40 TF resources; all 10 services healthy in their ALB target groups |
+| 5 — DNS + SSL (GoDaddy + ACM) | ✅ done | DNS stays on GoDaddy; ACM cert for `api-dev.reelmart.in` validated via CNAME at GoDaddy; ALB has HTTPS listener (TLS 1.2/1.3) + HTTP→HTTPS 301 redirect |
+| 6 — GitHub Actions OIDC + workflows | ⏸ pending | Role already exists from Phase 0 |
+| 7 — Web on Vercel | ⏸ pending | |
+| 8 — Buyer mobile dev build | ⏸ pending | |
+| 9 — CloudWatch alarms + SNS | ⏸ pending | |
+
+### Secret population progress
+
+| Secret | Status |
+|---|---|
+| `reelmart/dev/supabase` | ✅ real (reusing existing project `nysgwdpmpxqmfwelfaxo` for now) |
+| `reelmart/dev/razorpay` | ✅ real test keys (`rzp_test_SnGliiDxDCbZDA`) |
+| `reelmart/dev/jwt` | ✅ real (random 32-byte hex) |
+| `reelmart/dev/gupshup` | ⏸ placeholder |
+| `reelmart/dev/twilio` | ⏸ placeholder |
+| `reelmart/dev/shiprocket` | ⏸ placeholder |
+| `reelmart/dev/firebase` | ⏸ placeholder |
+
+```bash
+# Refresh AWS SSO creds first if expired (ASIA tokens last 1–12h)
+# Then run the interactive populate script with --force to overwrite placeholders:
+AWS_PROFILE=reelmart-admin AWS_REGION=ap-south-1 \
+  ./infra/scripts/populate-secrets.sh dev --force
+# After populating, force-redeploy services so tasks pull the new env.
+# Only the services that actually consume the secret need a redeploy:
+#   gupshup    → whatsapp
+#   twilio     → notification, whatsapp
+#   shiprocket → delivery
+#   firebase   → notification
+```
+
+### Recurring AWS spend now on the meter
+~$65/mo: ALB ($17) + 3× t3.small ($45) + Secrets Manager containers ($2.80) + Container Insights (~$0.50) + S3/DynamoDB/CloudWatch (~$1).
+
+### Divergences from the original phase docs
+- **Phase 2 instance count = 3, not 1.** 10 tasks at 256 CPU / 384 MB each don't fit on one t3.small (1913 MB usable). Bumped ASG desired to 3 (max stays at 3); capacity provider managed scaling will adjust within [1, 3].
+- **Phase 3 base image: `node:22-alpine`** (was `node:20-alpine`). Required because `@supabase/supabase-js@2.39+` calls `realtime-js`, which throws on Node 20 without an explicit `ws` shim. Node 22 has stable native WebSocket so the SDK works without changes.
+- **Phase 4 task memory: 384 MB** (was 512 MB in `default_memory`). 384 MB still has ~3× headroom over actual Express RSS (~80 MB) and lets 4 tasks bin-pack onto a t3.small if needed during rolling deploys.
+- **Phase 5 DNS stays on GoDaddy** instead of migrating to Route 53. ACM cert is validated via a CNAME at GoDaddy; `api-dev.reelmart.in` CNAME also lives at GoDaddy and points to the ALB DNS. No nameserver migration, no Route 53 hosted zone cost.
+- **Bootstrap state backend** uses `dynamodb_table` (not the new `use_lockfile`); functional, deprecation warning only.
+
+---
+
 ## Architecture Overview
 
 ```

@@ -1,6 +1,6 @@
 # Shopidea — Development Tracker
 ### Social Commerce Platform for Indian Micro-Sellers
-### Last Updated: 2026-05-08
+### Last Updated: 2026-05-09
 
 ---
 
@@ -35,6 +35,7 @@ Progress: ████████████████████ 100%
 | 2026-05-01 | Seller Dashboard+Payouts — payoutService.ts (getPayoutSummary, getBankAccount, saveBankAccount, getSellerPreferences, saveSellerPreferences), DashboardScreen (greeting, today stats, open/close toggle, quick actions grid, pending orders alert, low stock alert, recent orders, realtime subscription), BankAccountScreen (IFSC validation, account number masking, verified badge), PayoutHistoryScreen (orange balance card, total earned/paid, payout list with status badges), SettingsScreen (profile card, auto-accept toggle, notification prefs with live save, nav rows, sign out); seller RootNavigator updated with Dashboard as entry + Payouts+Settings screens | Agent 11 | 6 files |
 | 2026-05-03 | Buyer Cart+Profile — cartService.ts (addToCart single-store enforce, calculateCartTotals, cartItemsToCheckout, validateCoupon), cartStore.ts (Zustand: items/itemCount/subtotal/storeId, addItem/removeItem/updateQty/fetchCart), profileService.ts (saveAddress, toggleWishlist, getCoinBalance, getCoinHistory, buildReferralLink), CartScreen.tsx (delivery fee logic, store banner, qty controls, coupon input+validation, summary, fixed checkout footer), ProfileScreen.tsx (avatar, coins card, referral card, stats row, nav sections), AddressesScreen.tsx (address cards, inline AddAddressForm, phone+pincode validation), WishlistScreen.tsx (2-col grid, remove with optimistic UI, unavailable badge), buyer RootNavigator updated (Cart/Profile/Addresses/Wishlist/Payment/WriteReview/ReturnRequest screens), HomeScreen updated (cart badge, fetchCart on mount) | Agent 12+14 | 9 files |
 | 2026-05-03 | WhatsApp Bot — backend/src/whatsapp/bot.ts (in-memory sessions with 30-min TTL, handleBotMessage: menu→product→variant→quantity→address→Razorpay payment link flow), whatsapp route updated (POST /webhook + GET /payment-callback + POST /broadcast with requireAuth); Coupons+Broadcast — seller couponService.ts (CRUD coupons, sendBroadcast via backend), CouponsScreen.tsx (create form with %, ₹ types; toggle active/inactive; delete), BroadcastScreen.tsx (compose WhatsApp blast to all past customers, history list); Returns — returnService.ts (requestReturn with 24h window validation, getReturnForOrder), ReturnRequestScreen.tsx (reason picker, photo upload, 24h warning), backend /api/payments/refund endpoint (Razorpay refund + DB update, admin-only); Admin Panel — Next.js /admin/* pages: login (email+password+is_admin guard), layout (SSR auth check), AdminNav, Dashboard (GMV, seller/buyer counts), Sellers (verify/suspend actions), Orders (paginated with status filter), Returns (approve/reject/refund actions), Payouts (pending by store, process button); CI/CD — .github/workflows/deploy.yml (lint+build+deploy backend/web/supabase on main push); Web Storefront — /s/[slug] with SSR metadata, StorefrontClient (product grid, in-page cart, WhatsApp order, app install banner, reviews) | Agents 13-17 + Storefront | 26 files |
+| 2026-05-09 | **AWS deployment kickoff (paused mid-flight)**. Wrote Terraform for all infra modules and dev environment compositions. **Phases 0–3 applied** to AWS account `632127307144` / ap-south-1: state backend (S3 + DynamoDB), GitHub OIDC + `reelmart-gha-deploy` role, VPC + 2 public subnets + ALB (HTTP-only, 10 path-based rules) + 10 ECR repos + 7 Secrets Manager containers + IAM task roles + 10 CloudWatch log groups, ECS cluster `reelmart-dev` with 1× t3.small registered via capacity provider, all 10 service images built (linux/amd64) and pushed as `dev-latest` + `dev-4dc7faa`. **Phase 4 blocked** on populating real secret values via `infra/scripts/populate-secrets.sh dev`. ALB DNS: `reelmart-dev-alb-1685112985.ap-south-1.elb.amazonaws.com`. Recurring spend ~$35/mo already on. See `DEPLOYMENT_PLAN.md` "Live Status" for resume steps. | Deployment Phase 0–3 | infra/terraform/modules/{network,ecs-cluster,alb,ecr,iam,secrets,ec2-asg,ecs-service}/, infra/terraform/environments/dev/{network,cluster,services}/ |
 | 2026-05-08 | **Buyer experience polish + Public Web Buyer Flow**. Mobile: header redesign (orange hero, circular logo, white categories, search + address bar), seller-group sections (Clothing/Jewellery/Beauty with colored backgrounds), wishlist heart overlay on product cards, order date/time everywhere, **realtime status updates on Orders tab** (useFocusEffect + Supabase channel UPDATE filter), pull-to-refresh, address-id-based default tracking, RootNavigator waits for profile load before routing (no banner flicker post-login). LocationPromptModal: custom Places API search (replaced component), 2-step search→form, manual entry fallback, Swiggy-style form. Address persistence migrated from AsyncStorage to Supabase `addresses` table — guest addresses auto-merge into account on login (cross-device sync). **Public Web Buyer Flow**: `/store/[slug]` storefront (RSC + ISR `revalidate:60`), `/store/[slug]/checkout` (multi-step: cart → phone OTP → address selection → payment), `/order/[id]` confirmation with prominent "Track in ReelMart app" CTA, `/s/[slug]` legacy redirect. Seller orders page realtime subscription rewritten (proper cleanup, refresh button, error states). Auth: dev OTP banner (9999999999 / 123456) on buyer + seller; middleware redirects to `/seller/register` if no seller role; dev-mode bypass. | Web Storefront v2 + Buyer Polish | ~20 files |
 
 ---
@@ -56,6 +57,29 @@ Progress: ████████████████████ 100%
 | 10 | agent_18 (storefront v2) | Public web buyer flow at `/store/[slug]` — full checkout (phone OTP + addresses + place order), order confirmation page with app download CTA, cross-device address sync, realtime order updates on buyer Orders tab | 2 | ✅ DONE | 2026-05-08 | 2026-05-08 |
 
 **Total Estimated: ~29 days**
+
+---
+
+## Deployment Phase Board (AWS dev environment)
+
+> Runs alongside the Agent board above. Phases mirror `infra/agents/` and `DEPLOYMENT_PLAN.md`. Authoritative status lives in `DEPLOYMENT_PLAN.md` "Live Status".
+
+| # | Phase                              | Status      | Notes |
+|---|------------------------------------|-------------|---|
+| 0 | AWS bootstrap                      | ✅ DONE     | Account 632127307144, profile `reelmart-admin` (SSO temp creds), state in `s3://reelmart-tf-state-632127307144` |
+| 1 | Network + ALB + ECR + cluster      | ✅ DONE     | 74 resources. ALB on HTTP-only until Phase 5 attaches the cert |
+| 2 | EC2 ASG (1× t3.small)              | ✅ DONE     | Capacity provider `reelmart-dev-cp`, 1 container instance ACTIVE |
+| 3 | Build & push 10 images             | ✅ DONE     | `dev-latest` + `dev-4dc7faa` in all 10 ECR repos |
+| 4 | ECS task defs + services           | 🔴 BLOCKED  | Composition ready in `environments/dev/services/`; needs secrets populated first |
+| 5 | DNS + SSL (Route 53 + ACM)         | ⏸ pending  | Hosted zone for `reelmart.in` may need creation/import |
+| 6 | GitHub Actions OIDC + workflows    | ⏸ pending  | OIDC provider + role already created in Phase 0 |
+| 7 | Web on Vercel                      | ⏸ pending  | Single project at `reelmart/apps/web` |
+| 8 | Buyer mobile dev build (EAS)       | ⏸ pending  | `reelmart/apps/buyer-app` |
+| 9 | CloudWatch alarms + SNS            | ⏸ pending  | |
+
+**Recurring AWS spend live now:** ~$35/mo (ALB $17, t3.small $15, Secrets containers $2.80, Container Insights $0.50).
+
+**Resume:** see "Resume here" block in `DEPLOYMENT_PLAN.md` — refresh SSO creds → `populate-secrets.sh dev` → `terraform apply` in `environments/dev/services/`.
 
 ---
 

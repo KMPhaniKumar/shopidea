@@ -81,3 +81,19 @@ output "log_group_names" {
 output "services" {
   value = local.services
 }
+
+output "acm_cert_arn" {
+  value = aws_acm_certificate.api.arn
+}
+
+output "acm_validation_records" {
+  description = "Add these CNAME records at the domain registrar to validate the ACM certificate."
+  value = {
+    for opt in aws_acm_certificate.api.domain_validation_options :
+    opt.domain_name => {
+      name  = opt.resource_record_name
+      type  = opt.resource_record_type
+      value = opt.resource_record_value
+    }
+  }
+}

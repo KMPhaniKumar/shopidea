@@ -52,3 +52,13 @@ Thumbs.db
 # Misc
 *.pem
 *.key
+
+# Claude Code per-machine local overrides
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# TypeScript incremental build cache (per-machine)
+*.tsbuildinfo
+
+# Terraform plan files (per-machine, may contain sensitive ARNs)
+infra/terraform/**/tfplan*
