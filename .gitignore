@@ -62,3 +62,5 @@ Thumbs.db
 
 # Terraform plan files (per-machine, may contain sensitive ARNs)
 infra/terraform/**/tfplan*
+.vercel
+.env*.local
