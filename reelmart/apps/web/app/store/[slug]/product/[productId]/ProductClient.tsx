@@ -52,7 +52,7 @@ export default function ProductClient({ product, storeSlug }: { product: Product
   const qty = cart.find(i => i.productId === product.id)?.qty ?? 0
   const subtotal = cartTotal(cart)
   const totalCount = cartCount(cart)
-  const outOfStock = product.stock_type === 'limited' && (product.stock_count ?? 0) <= 0
+  const outOfStock = product.stock_type === 'counted' && (product.stock_count ?? 0) <= 0
   const discountPct = product.compare_price && product.compare_price > product.price
     ? Math.round((1 - product.price / product.compare_price) * 100)
     : 0
@@ -158,7 +158,7 @@ export default function ProductClient({ product, storeSlug }: { product: Product
               </>
             )}
           </div>
-          {product.stock_type === 'limited' && (product.stock_count ?? 0) > 0 && (product.stock_count ?? 99) <= 5 && (
+          {product.stock_type === 'counted' && (product.stock_count ?? 0) > 0 && (product.stock_count ?? 99) <= 5 && (
             <p className="text-sm text-orange-600 font-semibold">⚡ Only {product.stock_count} left</p>
           )}
         </div>

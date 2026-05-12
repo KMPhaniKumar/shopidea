@@ -169,7 +169,7 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
           <div className="grid grid-cols-2 gap-3">
             {filtered.map(p => {
               const qty = qtyOf(p.id)
-              const outOfStock = p.stock_type === 'limited' && (p.stock_count ?? 0) <= 0
+              const outOfStock = p.stock_type === 'counted' && (p.stock_count ?? 0) <= 0
               return (
                 <div key={p.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                   <Link href={`/store/${storeSlug}/product/${p.id}`} className="block aspect-square bg-gray-50 relative hover:opacity-95 transition">

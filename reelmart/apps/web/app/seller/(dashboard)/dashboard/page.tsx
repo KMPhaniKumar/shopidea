@@ -59,7 +59,7 @@ export default function DashboardPage() {
       supabase.from('orders').select('total_amount').eq('store_id', store.id).eq('payment_status', 'paid').gte('created_at', weekStart),
       supabase.from('orders').select('total_amount, created_at, items').eq('store_id', store.id).eq('payment_status', 'paid').gte('created_at', monthStart),
       supabase.from('orders').select('id, order_number, total_amount, delivery_address, created_at').eq('store_id', store.id).eq('status', 'pending').order('created_at', { ascending: false }).limit(5),
-      supabase.from('products').select('id, name, stock_quantity, is_available').eq('store_id', store.id).lte('stock_quantity', 3).gt('stock_quantity', -1),
+      supabase.from('products').select('id, name, stock_count, is_available').eq('store_id', store.id).eq('stock_type', 'counted').lte('stock_count', 3),
     ])
 
     const todayRevenue = (todayRes.data ?? []).reduce((s: number, o: any) => s + o.total_amount, 0)
@@ -217,7 +217,7 @@ export default function DashboardPage() {
               <div key={p.id} className="flex items-center justify-between">
                 <span className="text-sm text-[#1A1A1A]">{p.name}</span>
                 <span className="text-xs font-medium bg-[#FFD700]/20 text-[#B8860B] px-2 py-0.5 rounded-full">
-                  {p.stock_quantity} left
+                  {p.stock_count} left
                 </span>
               </div>
             ))}

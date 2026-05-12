@@ -77,7 +77,7 @@ export default function ProductsPage() {
       'Name': p.name,
       'Price (₹)': p.price,
       'Compare Price (₹)': p.compare_price ?? '',
-      'Stock': p.stock_quantity === -1 ? 'Unlimited' : p.stock_quantity,
+      'Stock': p.stock_type === 'unlimited' ? 'Unlimited' : p.stock_count,
       'Category': p.category ?? '',
       'Available': p.is_available ? 'Yes' : 'No',
     }))
@@ -115,11 +115,13 @@ export default function ProductsPage() {
     { accessorKey: 'category', header: 'Category', cell: ({ getValue }) => (getValue() as string) ?? '—' },
     { accessorKey: 'price', header: 'Price', cell: ({ getValue }) => `₹${getValue()}` },
     {
-      accessorKey: 'stock_quantity',
+      id: 'stock',
       header: 'Stock',
-      cell: ({ getValue }) => {
-        const v = getValue() as number
-        if (v === -1) return <span className="text-[#25D366] text-xs font-medium">Unlimited</span>
+      accessorFn: (row: any) => row.stock_type === 'unlimited' ? null : row.stock_count,
+      cell: ({ row }) => {
+        const p = row.original as any
+        if (p.stock_type === 'unlimited') return <span className="text-[#25D366] text-xs font-medium">Unlimited</span>
+        const v = p.stock_count as number
         if (v <= 3) return <span className="text-[#E23744] text-xs font-medium">{v} left</span>
         return <span className="text-sm">{v}</span>
       },
