@@ -6,6 +6,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import QRCode from 'qrcode'
 import { Copy, Download, ExternalLink, Upload } from 'lucide-react'
 import debounce from 'lodash/debounce'
+import { SITE_URL, SITE_HOST } from '@/lib/site-url'
 
 const BUSINESS_TYPES = [
   'Food & Beverages',
@@ -91,13 +92,13 @@ export default function SettingsPage() {
   }
 
   function copyLink() {
-    const url = `https://reelmart.in/store/${store?.store_slug}`
+    const url = `${SITE_URL}/store/${store?.store_slug}`
     navigator.clipboard.writeText(url)
     toast.success('Link copied!')
   }
 
   async function downloadQR() {
-    const url = `https://reelmart.in/store/${store?.store_slug}`
+    const url = `${SITE_URL}/store/${store?.store_slug}`
     const dataUrl = await QRCode.toDataURL(url, { width: 512, margin: 2 })
     const a = document.createElement('a')
     a.download = `reelmart-${store?.store_slug}-qr.png`
@@ -115,11 +116,11 @@ export default function SettingsPage() {
         <div className="bg-white rounded-xl p-5 shadow-sm space-y-3">
           <h2 className="font-semibold text-[#1A1A1A]">Your Store Link</h2>
           <div className="flex items-center gap-2 bg-[#F9F9F9] rounded-lg p-3">
-            <code className="text-sm text-[#FF6B2B] flex-1">reelmart.in/store/{store.store_slug}</code>
+            <code className="text-sm text-[#FF6B2B] flex-1">{SITE_HOST}/store/{store.store_slug}</code>
             <button onClick={copyLink} className="p-1.5 hover:bg-[#EEEEEE] rounded" title="Copy link">
               <Copy size={14} className="text-[#666666]" />
             </button>
-            <a href={`https://reelmart.in/store/${store.store_slug}`} target="_blank" rel="noreferrer" className="p-1.5 hover:bg-[#EEEEEE] rounded" title="Open store">
+            <a href={`${SITE_URL}/store/${store.store_slug}`} target="_blank" rel="noreferrer" className="p-1.5 hover:bg-[#EEEEEE] rounded" title="Open store">
               <ExternalLink size={14} className="text-[#666666]" />
             </a>
           </div>
@@ -128,7 +129,7 @@ export default function SettingsPage() {
               <Download size={14} /> Download QR Code
             </button>
             <a
-              href={`https://api.whatsapp.com/send?text=Shop%20at%20my%20store%20on%20ReelMart%20%F0%9F%9B%8D%EF%B8%8F%0Ahttps%3A%2F%2Freelmart.in%2Fstore%2F${store.store_slug}`}
+              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Shop at my store on ReelMart 🛍️\n${SITE_URL}/store/${store.store_slug}`)}`}
               target="_blank" rel="noreferrer"
               className="flex items-center gap-2 px-3 py-2 border border-[#25D366] text-[#25D366] rounded-lg text-sm hover:bg-[#25D366]/5"
             >
@@ -174,7 +175,7 @@ export default function SettingsPage() {
           <div>
             <label className="block text-sm font-medium mb-1">Store URL</label>
             <div className="flex items-center border border-[#EEEEEE] rounded-lg overflow-hidden focus-within:border-[#FF6B2B]">
-              <span className="px-3 text-sm text-[#AAAAAA] bg-[#F9F9F9] border-r border-[#EEEEEE] py-2">reelmart.in/store/</span>
+              <span className="px-3 text-sm text-[#AAAAAA] bg-[#F9F9F9] border-r border-[#EEEEEE] py-2">{SITE_HOST}/store/</span>
               <input {...register('store_slug')} className="flex-1 px-3 py-2 text-sm outline-none" />
             </div>
             {slugAvailable === true && <p className="text-xs text-[#25D366] mt-1">✓ Available</p>}

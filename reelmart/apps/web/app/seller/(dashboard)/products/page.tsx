@@ -1,10 +1,11 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Search, Download, Edit2, Trash2, Eye, EyeOff, Package, RefreshCw, Link2 } from 'lucide-react'
+import { Plus, Search, Download, Edit2, Trash2, Eye, EyeOff, Package, RefreshCw, Share2 } from 'lucide-react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import toast, { Toaster } from 'react-hot-toast'
+import { SITE_URL } from '@/lib/site-url'
 import {
   useReactTable, getCoreRowModel, getSortedRowModel,
   getFilteredRowModel, flexRender, type ColumnDef,
@@ -45,7 +46,7 @@ export default function ProductsPage() {
 
   async function copyProductLink(id: string) {
     if (!storeSlug) { toast.error('Store slug missing'); return }
-    const url = `https://reelmart.in/store/${storeSlug}/product/${id}`
+    const url = `${SITE_URL}/store/${storeSlug}/product/${id}`
     try {
       if (navigator.share) {
         await navigator.share({ title: 'Check out this product', url })
@@ -138,8 +139,8 @@ export default function ProductsPage() {
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <button onClick={() => copyProductLink(row.original.id)} className="p-1.5 hover:bg-[#F9F9F9] rounded" title="Copy/share product link">
-            <Link2 size={15} className="text-[#FF6B2B]" />
+          <button onClick={() => copyProductLink(row.original.id)} className="p-1.5 hover:bg-[#F9F9F9] rounded" title="Share product">
+            <Share2 size={15} className="text-[#FF6B2B]" />
           </button>
           <button onClick={() => toggleAvailability(row.original.id, row.original.is_available)} className="p-1.5 hover:bg-[#F9F9F9] rounded">
             {row.original.is_available ? <EyeOff size={15} className="text-[#666666]" /> : <Eye size={15} className="text-[#666666]" />}
