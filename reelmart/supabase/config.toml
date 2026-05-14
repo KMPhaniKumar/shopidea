@@ -36,7 +36,8 @@ enable_anonymous_sign_ins = false
 
 [auth.sms]
 enable_signup = true
-enable_phone_autoconfirm = true
+# enable_phone_autoconfirm removed from current Supabase CLI schema;
+# autoconfirm is now controlled by [auth].enable_confirmations.
 
 [auth.sms.test_otp]
 # Test phone numbers with fixed OTPs for local development
