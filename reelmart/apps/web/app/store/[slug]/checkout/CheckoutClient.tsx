@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
-import { ArrowLeft, MapPin, ChevronRight, Plus, Loader2 } from 'lucide-react'
+import { ArrowLeft, MapPin, ChevronRight, Plus, Loader2, Search } from 'lucide-react'
 import { CartItem, loadCart, clearCart, cartTotal } from '@/lib/cart'
+import { saveAddress, searchPlaces, fetchPlaceDetails, type PlacePrediction } from '@/lib/saved-addresses'
 
 interface Store {
   id: string
@@ -19,6 +20,7 @@ interface Address {
   label: string
   name: string
   phone: string
+  alt_phone: string | null
   line1: string
   line2: string | null
   area: string | null
@@ -50,9 +52,14 @@ export default function CheckoutClient({ store }: { store: Store }) {
   const [addresses, setAddresses] = useState<Address[]>([])
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
   const [showNewForm, setShowNewForm] = useState(false)
-  const [newAddr, setNewAddr] = useState({
+  const [newAddr, setNewAddr] = useState<{
+    label: 'Home' | 'Work' | 'Other'
+    name: string; phone: string; alt_phone: string
+    line1: string; line2: string; area: string; city: string; state: string; pincode: string
+  }>({
     label: 'Home',
-    name: '', phone: '', line1: '', line2: '', area: '', city: '', state: '', pincode: '',
+    name: '', phone: '', alt_phone: '',
+    line1: '', line2: '', area: '', city: '', state: '', pincode: '',
   })
   const [savingAddr, setSavingAddr] = useState(false)
 
@@ -135,32 +142,40 @@ export default function CheckoutClient({ store }: { store: Store }) {
     if (!newAddr.name.trim()) return toast.error('Enter the recipient name')
     const cleanedPhone = newAddr.phone.replace(/\D/g, '')
     if (!/^[6-9]\d{9}$/.test(cleanedPhone)) return toast.error('Enter a valid 10-digit contact number')
+    if (newAddr.alt_phone && !/^[6-9]\d{9}$/.test(newAddr.alt_phone.replace(/\D/g, ''))) {
+      return toast.error('Alternate number must be a valid 10-digit Indian mobile')
+    }
     if (!newAddr.line1.trim()) return toast.error('Enter address line')
     if (!/^\d{6}$/.test(newAddr.pincode)) return toast.error('Invalid pincode')
     if (!newAddr.city.trim() || !newAddr.state.trim()) return toast.error('Enter city and state')
     setSavingAddr(true)
-    const isFirst = addresses.length === 0
-    const { data, error } = await supabase.from('addresses').insert({
-      user_id: userId,
-      label: newAddr.label || 'Home',
-      name: newAddr.name.trim(),
-      phone: `+91${cleanedPhone}`,
-      line1: newAddr.line1.trim(),
-      line2: newAddr.line2.trim() || null,
-      area: newAddr.area.trim() || null,
-      city: newAddr.city.trim(),
-      state: newAddr.state.trim(),
-      pincode: newAddr.pincode.trim(),
-      is_default: isFirst,
-    }).select('*').single()
-    setSavingAddr(false)
-    if (error) { toast.error(error.message); return }
-    const list = [data as Address, ...addresses]
-    setAddresses(list)
-    setSelectedAddressId((data as Address).id)
-    setShowNewForm(false)
-    setNewAddr({ label: 'Home', name: '', phone, line1: '', line2: '', area: '', city: '', state: '', pincode: '' })
-    setStep('review')
+    try {
+      const saved = await saveAddress(supabase, userId, {
+        label: newAddr.label,
+        name: newAddr.name,
+        phone: newAddr.phone,
+        alt_phone: newAddr.alt_phone || undefined,
+        line1: newAddr.line1,
+        line2: newAddr.line2 || undefined,
+        area: newAddr.area || undefined,
+        city: newAddr.city,
+        state: newAddr.state,
+        pincode: newAddr.pincode,
+      })
+      // Refresh list so the new/updated row appears in its proper sort order
+      await loadAddresses(userId)
+      setSelectedAddressId(saved.id)
+      setShowNewForm(false)
+      setNewAddr({
+        label: 'Home', name: '', phone, alt_phone: '',
+        line1: '', line2: '', area: '', city: '', state: '', pincode: '',
+      })
+      setStep('review')
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Could not save address')
+    } finally {
+      setSavingAddr(false)
+    }
   }
 
   async function placeOrder() {
@@ -177,6 +192,7 @@ export default function CheckoutClient({ store }: { store: Store }) {
       delivery_address: {
         name: selectedAddress.name,
         phone: selectedAddress.phone,
+        alt_phone: selectedAddress.alt_phone,
         line1: selectedAddress.line1,
         line2: selectedAddress.line2,
         area: selectedAddress.area,
@@ -409,10 +425,40 @@ function NewAddressForm({
   value: any; onChange: (v: any) => void; onCancel: (() => void) | null; onSave: () => void; saving: boolean
 }) {
   const set = (k: string) => (v: string) => onChange({ ...value, [k]: v })
+  const [query, setQuery] = useState('')
+  const [predictions, setPredictions] = useState<PlacePrediction[]>([])
+  const [searching, setSearching] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!query.trim()) { setPredictions([]); setSearching(false); return }
+    setSearching(true)
+    debounceRef.current = setTimeout(async () => {
+      const list = await searchPlaces(query)
+      setPredictions(list)
+      setSearching(false)
+    }, 350)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [query])
+
+  async function pickPrediction(p: PlacePrediction) {
+    const details = await fetchPlaceDetails(p.place_id)
+    onChange({
+      ...value,
+      area: details.area || value.area,
+      city: details.city || value.city,
+      state: details.state || value.state,
+      pincode: details.pincode || value.pincode,
+    })
+    setQuery('')
+    setPredictions([])
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex gap-2">
-        {['Home', 'Work', 'Other'].map(l => (
+        {(['Home', 'Work', 'Other'] as const).map(l => (
           <button key={l} type="button" onClick={() => set('label')(l)}
             className={`px-4 py-1.5 rounded-full text-xs font-bold border transition ${
               value.label === l ? 'bg-[#FF6B2B] text-white border-[#FF6B2B]' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
@@ -421,10 +467,40 @@ function NewAddressForm({
           </button>
         ))}
       </div>
+
+      <div className="relative">
+        <label className="block text-xs font-semibold text-gray-600 mb-1">Search your location</label>
+        <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden focus-within:border-[#FF6B2B] transition">
+          <Search size={14} className="text-gray-400 ml-3" />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Apartment, street or landmark"
+            className="flex-1 px-2.5 py-2.5 text-sm outline-none"
+          />
+          {searching && <Loader2 className="animate-spin text-gray-400 mr-3" size={14} />}
+        </div>
+        {predictions.length > 0 && (
+          <ul className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+            {predictions.map(p => (
+              <li key={p.place_id}>
+                <button type="button" onClick={() => pickPrediction(p)}
+                  className="w-full text-left px-3 py-2 hover:bg-orange-50 border-b border-gray-100 last:border-0">
+                  <p className="text-sm font-medium text-[#1A1A1A] truncate">{p.main_text}</p>
+                  <p className="text-xs text-gray-500 truncate">{p.secondary_text}</p>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-[10px] text-gray-400 mt-1">Pick a result to auto-fill city, state and pincode.</p>
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         <Input label="Full Name" value={value.name} onChange={set('name')} />
         <PhoneInput label="Contact Number" value={value.phone} onChange={v => set('phone')(v.replace(/\D/g, '').slice(0, 10))} />
       </div>
+      <PhoneInput label="Alternate Number (optional)" value={value.alt_phone} onChange={v => set('alt_phone')(v.replace(/\D/g, '').slice(0, 10))} />
       <Input label="Address Line 1" value={value.line1} onChange={set('line1')} placeholder="Flat / House / Building" />
       <Input label="Address Line 2 (optional)" value={value.line2} onChange={set('line2')} placeholder="Street, Landmark" />
       <Input label="Area / Locality" value={value.area} onChange={set('area')} />
