@@ -38,7 +38,6 @@ locals {
   target_group_arns        = data.terraform_remote_state.network.outputs.target_group_arns
   task_execution_role_arn  = data.terraform_remote_state.network.outputs.task_execution_role_arn
   task_role_arn            = data.terraform_remote_state.network.outputs.task_role_arn
-  log_group_names          = data.terraform_remote_state.network.outputs.log_group_names
   secret_arns              = data.terraform_remote_state.network.outputs.secret_arns
   alb_dns_name             = data.terraform_remote_state.network.outputs.alb_dns_name
 
@@ -161,8 +160,6 @@ module "ecs_service" {
   target_group_arn        = local.target_group_arns[each.key]
   task_execution_role_arn = local.task_execution_role_arn
   task_role_arn           = local.task_role_arn
-  log_group_name          = local.log_group_names[each.key]
-  log_region              = var.log_region
 
   env_vars = merge(local.base_env, each.value.extra_env)
 

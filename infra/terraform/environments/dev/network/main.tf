@@ -79,13 +79,10 @@ module "alb" {
   tags              = local.common_tags
 }
 
-resource "aws_cloudwatch_log_group" "service" {
-  for_each = toset(local.service_names)
-
-  name              = "/ecs/reelmart/${var.environment}/${each.key}"
-  retention_in_days = var.log_retention_days
-  tags              = merge(local.common_tags, { Service = each.key })
-}
+# CloudWatch log groups removed — cost cut. Task definitions no longer use
+# the awslogs driver; container output goes to the EC2 host docker daemon.
+# To re-enable: add the resource block back and restore logConfiguration in
+# modules/ecs-service/main.tf.
 
 # ACM cert for api-dev.reelmart.in. DNS validation: ACM gives us a CNAME
 # record to add at the domain registrar (GoDaddy). HTTPS listener attaches

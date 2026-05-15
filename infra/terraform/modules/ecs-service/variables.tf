@@ -59,12 +59,15 @@ variable "task_role_arn" {
 }
 
 variable "log_group_name" {
-  type = string
+  type    = string
+  default = ""
+  description = "Unused since CloudWatch was disabled; kept for backward compat. Remove once all callers stop passing it."
 }
 
 variable "log_region" {
   type    = string
   default = "ap-south-1"
+  description = "Unused since CloudWatch was disabled; kept for backward compat."
 }
 
 variable "env_vars" {

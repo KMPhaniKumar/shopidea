@@ -74,10 +74,6 @@ output "secret_arns" {
   value = module.secrets.secret_arns
 }
 
-output "log_group_names" {
-  value = { for k, lg in aws_cloudwatch_log_group.service : k => lg.name }
-}
-
 output "services" {
   value = local.services
 }

@@ -35,14 +35,10 @@ resource "aws_ecs_task_definition" "this" {
 
       secrets = var.secret_env_refs
 
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = var.log_group_name
-          awslogs-region        = var.log_region
-          awslogs-stream-prefix = var.service_name
-        }
-      }
+      # No logConfiguration — CloudWatch disabled to cut cost. Container
+      # stdout/stderr go to the EC2 host's docker daemon (default json-file
+      # driver). Use `docker logs <container>` on the EC2 host to inspect.
+      # Re-enable awslogs here when reintroducing CloudWatch Logs.
     }
   ])
 
