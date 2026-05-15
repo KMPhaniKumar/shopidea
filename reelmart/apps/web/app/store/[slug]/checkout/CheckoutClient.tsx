@@ -13,6 +13,7 @@ interface Store {
   store_name: string
   logo_url: string | null
   store_slug: string
+  pincode: string | null
 }
 
 interface Address {
@@ -63,6 +64,14 @@ export default function CheckoutClient({ store }: { store: Store }) {
   })
   const [savingAddr, setSavingAddr] = useState(false)
 
+  // Delivery estimate (fetched from delivery-service when both pincodes known)
+  const [deliveryEstimate, setDeliveryEstimate] = useState<{
+    days: number
+    deliverable: boolean
+    fetchedFor: string // "pickup-delivery" key so we don't re-fetch unnecessarily
+  } | null>(null)
+  const [estimateLoading, setEstimateLoading] = useState(false)
+
   // Order placement
   const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('cod')
   const [placing, setPlacing] = useState(false)
@@ -99,6 +108,43 @@ export default function CheckoutClient({ store }: { store: Store }) {
     () => addresses.find(a => a.id === selectedAddressId) ?? null,
     [addresses, selectedAddressId],
   )
+
+  // Fetch ETA when both pincodes are known. Cached by pickup-delivery key
+  // so toggling between saved addresses doesn't re-hit the courier API.
+  useEffect(() => {
+    const pickup = store.pincode
+    const delivery = selectedAddress?.pincode
+    if (!pickup || !delivery || !/^\d{6}$/.test(delivery)) return
+    const key = `${pickup}-${delivery}`
+    if (deliveryEstimate?.fetchedFor === key) return
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
+    if (!apiUrl) return
+
+    setEstimateLoading(true)
+    fetch(`${apiUrl}/api/delivery/rates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pickupPincode: pickup,
+        deliveryPincode: delivery,
+        weight: 0.5,
+        paymentType: paymentMethod,
+        orderAmount: subtotal,
+      }),
+    })
+      .then(r => r.json())
+      .then(json => {
+        if (!json?.success) return
+        setDeliveryEstimate({
+          days: json.data.estimatedDays ?? 3,
+          deliverable: !!json.data.deliverable,
+          fetchedFor: key,
+        })
+      })
+      .catch(() => {})
+      .finally(() => setEstimateLoading(false))
+  }, [store.pincode, selectedAddress?.pincode, paymentMethod, subtotal])
 
   // STEP HANDLERS
 
@@ -263,6 +309,27 @@ export default function CheckoutClient({ store }: { store: Store }) {
             )}
             <Row label={<span className="font-bold text-base">Total</span>} value={<span className="font-black text-base">₹{total}</span>} />
           </div>
+          {(estimateLoading || deliveryEstimate) && (
+            <div className="mt-3 -mb-1 px-3 py-2 bg-orange-50 border border-orange-100 rounded-xl flex items-center gap-2">
+              <span className="text-base">📦</span>
+              <div className="text-xs text-[#1A1A1A]">
+                {estimateLoading && !deliveryEstimate && (
+                  <span className="text-gray-500">Checking delivery time…</span>
+                )}
+                {deliveryEstimate && deliveryEstimate.deliverable && (
+                  <>
+                    <span className="font-semibold">Arriving by {formatDeliveryDate(deliveryEstimate.days)}</span>
+                    <span className="text-gray-500"> · {deliveryEstimate.days}-day delivery</span>
+                  </>
+                )}
+                {deliveryEstimate && !deliveryEstimate.deliverable && (
+                  <span className="text-red-600 font-semibold">
+                    Sorry, we don't deliver to this pincode yet.
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </Section>
 
         {/* Phone OTP step */}
@@ -565,6 +632,12 @@ function Input({ label, value, onChange, placeholder, inputMode }: { label: stri
       />
     </label>
   )
+}
+
+function formatDeliveryDate(daysFromNow: number) {
+  const d = new Date()
+  d.setDate(d.getDate() + Math.max(1, Math.round(daysFromNow)))
+  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 function EmptyCart({ store, onBack }: { store: Store; onBack: () => void }) {

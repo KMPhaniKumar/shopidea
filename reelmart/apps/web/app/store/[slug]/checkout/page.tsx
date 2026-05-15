@@ -10,7 +10,7 @@ export default async function CheckoutPage({ params }: Props) {
   const supabase = createClient()
   const { data: store } = await supabase
     .from('stores')
-    .select('id, store_name, logo_url, store_slug')
+    .select('id, store_name, logo_url, store_slug, pincode')
     .eq('store_slug', params.slug)
     .eq('is_active', true)
     .maybeSingle()

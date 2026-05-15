@@ -41,8 +41,9 @@ function mapNimbusStatus(npStatus: string | undefined): TimelineStep {
   return 'confirmed'
 }
 
-// POST /api/delivery/rates — kept compatible with existing checkout
-deliveryRouter.post('/rates', requireAuth, async (req, res) => {
+// POST /api/delivery/rates — public; buyer checkout calls this to show
+// estimated delivery date based on store pincode → buyer pincode.
+deliveryRouter.post('/rates', async (req, res) => {
   const { pickupPincode, deliveryPincode, weight = 0.5, paymentType = 'prepaid', orderAmount = 100 } = req.body
   if (!NP_TOKEN) {
     return res.json({ success: true, data: { deliverable: true, fee: 60, estimatedDays: 3 } })
