@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Link from 'next/link'
 import { CheckCircle2, Smartphone, Apple, Package, Loader2, AlertCircle } from 'lucide-react'
 
 interface Order {
@@ -151,7 +152,11 @@ export default function OrderConfirmedClient({ orderId }: { orderId: string }) {
           </p>
         </section>
 
-        <p className="text-center text-xs text-gray-400 pt-4">
+        <Link href="/orders" className="block text-center text-sm font-semibold text-[#FF6B2B] pt-2">
+          View all my orders →
+        </Link>
+
+        <p className="text-center text-xs text-gray-400 pt-2">
           Save this page to refer back. Need help? WhatsApp us at +91 88888 88888
         </p>
       </div>
