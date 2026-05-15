@@ -207,6 +207,17 @@ export default function CheckoutClient({ store }: { store: Store }) {
 
     if (error || !data) { setPlacing(false); toast.error(error?.message ?? 'Order failed'); return }
 
+    // Fire-and-forget: ask backend to send WhatsApp + SMS to the buyer.
+    // Idempotent on the server, so a slow/aborted call doesn't hurt.
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
+    if (apiUrl) {
+      fetch(`${apiUrl}/api/notifications/order-placed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: data.id }),
+      }).catch(() => {})
+    }
+
     // For online payment, redirect to payment page (TODO: Razorpay integration)
     // For COD, go straight to confirmation
     clearCart(store.store_slug)
