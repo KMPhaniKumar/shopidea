@@ -205,7 +205,7 @@ export default function ProductsPage() {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[720px]">
             <thead>
               {table.getHeaderGroups().map(hg => (
                 <tr key={hg.id} className="border-b border-[#EEEEEE]">

@@ -208,9 +208,9 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="flex gap-4 h-full">
+    <div className="flex flex-col lg:flex-row gap-4 h-full">
       <Toaster />
-      <div className="flex-1 space-y-4 min-w-0">
+      <div className={`flex-1 space-y-4 min-w-0 ${selected ? 'hidden lg:block' : ''}`}>
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-[#1A1A1A]">Orders</h1>
           <div className="flex items-center gap-2">
@@ -242,7 +242,7 @@ export default function OrdersPage() {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[640px]">
               <thead>
                 <tr className="border-b border-[#EEEEEE]">
                   {['Order #', 'Customer', 'Amount', 'Status', 'Date', ''].map(h => (
@@ -286,7 +286,7 @@ export default function OrdersPage() {
       </div>
 
       {selected && (
-        <div className="w-96 bg-white rounded-xl shadow-sm p-5 shrink-0 overflow-y-auto">
+        <div className="w-full lg:w-96 bg-white rounded-xl shadow-sm p-5 shrink-0 overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-[#1A1A1A]">{selected.order_number}</h2>
             <button onClick={() => setSelected(null)} className="text-[#AAAAAA] hover:text-[#1A1A1A]">✕</button>

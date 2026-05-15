@@ -112,29 +112,31 @@ export default function PayoutsPage() {
       {payouts.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm">
           <h2 className="font-semibold text-[#1A1A1A] p-5 border-b border-[#EEEEEE]">Payout History</h2>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[#EEEEEE]">
-                {['Date', 'Amount', 'Orders', 'Status'].map(h => (
-                  <th key={h} className="text-left text-xs font-medium text-[#666666] px-4 py-3">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {payouts.map((p: any) => (
-                <tr key={p.id} className="border-b border-[#EEEEEE]">
-                  <td className="px-4 py-3 text-sm">{format(new Date(p.created_at), 'dd/MM/yyyy')}</td>
-                  <td className="px-4 py-3 text-sm font-medium">₹{Math.round(p.amount).toLocaleString('en-IN')}</td>
-                  <td className="px-4 py-3 text-sm">{p.order_count}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${p.status === 'done' ? 'bg-[#25D366]/10 text-[#25D366]' : 'bg-[#FFD700]/20 text-[#B8860B]'}`}>
-                      {p.status === 'done' ? '✅ Paid' : '⏳ Pending'}
-                    </span>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px]">
+              <thead>
+                <tr className="border-b border-[#EEEEEE]">
+                  {['Date', 'Amount', 'Orders', 'Status'].map(h => (
+                    <th key={h} className="text-left text-xs font-medium text-[#666666] px-4 py-3 whitespace-nowrap">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {payouts.map((p: any) => (
+                  <tr key={p.id} className="border-b border-[#EEEEEE]">
+                    <td className="px-4 py-3 text-sm whitespace-nowrap">{format(new Date(p.created_at), 'dd/MM/yyyy')}</td>
+                    <td className="px-4 py-3 text-sm font-medium whitespace-nowrap">₹{Math.round(p.amount).toLocaleString('en-IN')}</td>
+                    <td className="px-4 py-3 text-sm">{p.order_count}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${p.status === 'done' ? 'bg-[#25D366]/10 text-[#25D366]' : 'bg-[#FFD700]/20 text-[#B8860B]'}`}>
+                        {p.status === 'done' ? '✅ Paid' : '⏳ Pending'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

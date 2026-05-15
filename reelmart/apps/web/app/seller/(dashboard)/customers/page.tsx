@@ -84,11 +84,12 @@ export default function CustomersPage() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search customers..." className="w-full pl-9 pr-4 py-2 text-sm border border-[#EEEEEE] rounded-lg outline-none focus:border-[#FF6B2B]" />
           </div>
         </div>
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px]">
           <thead>
             <tr className="border-b border-[#EEEEEE]">
               {['Name', 'Phone', 'Orders', 'Total Spent', 'Last Order', ''].map(h => (
-                <th key={h} className="text-left text-xs font-medium text-[#666666] px-4 py-3">{h}</th>
+                <th key={h} className="text-left text-xs font-medium text-[#666666] px-4 py-3 whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -115,6 +116,7 @@ export default function CustomersPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )
