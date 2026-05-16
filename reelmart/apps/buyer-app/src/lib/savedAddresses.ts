@@ -17,6 +17,7 @@ export interface SavedAddress {
   pincode: string
   name: string
   phone: string
+  alt_phone?: string | null
   is_default?: boolean
   usedAt?: number
 }
@@ -27,6 +28,7 @@ interface DbAddress {
   label: string
   name: string
   phone: string
+  alt_phone: string | null
   line1: string
   line2: string | null
   area: string | null
@@ -43,6 +45,7 @@ function dbToLocal(a: DbAddress): SavedAddress {
     label: a.label,
     name: a.name,
     phone: a.phone,
+    alt_phone: a.alt_phone,
     line1: a.line1,
     line2: a.line2,
     area: a.area ?? '',
@@ -100,6 +103,7 @@ export async function saveAddress(addr: Omit<SavedAddress, 'id' | 'usedAt'>): Pr
       .from('addresses')
       .update({
         label: addr.label || 'Home', name: addr.name, phone: addr.phone,
+        alt_phone: addr.alt_phone ?? null,
         line1: addr.line1, line2: addr.line2 ?? null, area: addr.area || null,
         city: addr.city, state: addr.state, pincode: addr.pincode,
       })
@@ -118,6 +122,7 @@ export async function saveAddress(addr: Omit<SavedAddress, 'id' | 'usedAt'>): Pr
       label: addr.label || 'Home',
       name: addr.name,
       phone: addr.phone,
+      alt_phone: addr.alt_phone ?? null,
       line1: addr.line1,
       line2: addr.line2 ?? null,
       area: addr.area || null,

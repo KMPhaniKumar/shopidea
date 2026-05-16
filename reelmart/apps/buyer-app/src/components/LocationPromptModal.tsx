@@ -174,6 +174,7 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
       pincode: draft.pincode,
       name: draft.name,
       phone: draft.phone,
+      alt_phone: draft.altPhone || null,
     })
     await Promise.all([
       AsyncStorage.setItem(CITY_KEY, city),

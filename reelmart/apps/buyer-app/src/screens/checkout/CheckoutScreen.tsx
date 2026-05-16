@@ -13,8 +13,10 @@ import { createOrder, CartItem, DeliveryAddress } from '../../services/orderServ
 import { useOrderStore } from '../../store/orderStore'
 import { getSavedAddresses, SavedAddress } from '../../lib/savedAddresses'
 import LocationPromptModal from '../../components/LocationPromptModal'
+import { supabase } from '../../lib/supabase'
 
 const ADDR_KEY = '@reelmart_default_address_id'
+const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/$/, '')
 
 type Props = {
   navigation: NativeStackNavigationProp<any>
@@ -54,6 +56,10 @@ export default function CheckoutScreen({ navigation, route }: Props) {
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [addrModalVisible, setAddrModalVisible] = useState(false)
+  const [storePincode, setStorePincode] = useState<string | null>(null)
+  const [deliveryEstimate, setDeliveryEstimate] = useState<{
+    days: number; deliverable: boolean; fetchedFor: string
+  } | null>(null)
 
   async function loadDefaultAddress() {
     const [addrs, savedId] = await Promise.all([
@@ -77,6 +83,40 @@ export default function CheckoutScreen({ navigation, route }: Props) {
   }
 
   useEffect(() => { loadDefaultAddress() }, [])
+
+  // Pull seller's pickup pincode for the delivery-date estimate.
+  useEffect(() => {
+    supabase.from('stores').select('pincode').eq('id', storeId).maybeSingle()
+      .then(({ data }) => { if (data?.pincode) setStorePincode(data.pincode) })
+  }, [storeId])
+
+  // Fetch ETA when both pincodes are known. Cached by pickup-delivery key.
+  useEffect(() => {
+    if (!storePincode || !/^\d{6}$/.test(address.pincode)) return
+    const key = `${storePincode}-${address.pincode}`
+    if (deliveryEstimate?.fetchedFor === key) return
+    fetch(`${API_URL}/api/delivery/rates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pickupPincode: storePincode,
+        deliveryPincode: address.pincode,
+        weight: 0.5,
+        paymentType: paymentMethod,
+        orderAmount: subtotal,
+      }),
+    })
+      .then(r => r.json())
+      .then(json => {
+        if (!json?.success) return
+        setDeliveryEstimate({
+          days: json.data.estimatedDays ?? 3,
+          deliverable: !!json.data.deliverable,
+          fetchedFor: key,
+        })
+      })
+      .catch(() => {})
+  }, [storePincode, address.pincode, paymentMethod, subtotal])
 
   const deliveryFee = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE
   const total = subtotal + deliveryFee
@@ -111,6 +151,14 @@ function validateAddress(): string | null {
         notes: notes.trim() || undefined,
       })
 
+      // Fire-and-forget: backend sends WhatsApp + SMS to buyer.
+      // Idempotent server-side, so a slow/aborted call doesn't hurt.
+      fetch(`${API_URL}/api/notifications/order-placed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      }).catch(() => {})
+
       prependOrder({
         id: orderId,
         order_number: orderNumber,
@@ -129,6 +177,9 @@ function validateAddress(): string | null {
         delivery_address: address as any,
         razorpay_order_id: null,
         razorpay_payment_id: null,
+        // shiprocket_order_id column still in schema but unused since
+        // courier was switched to NimbusPost. Keeping the field as null
+        // here for type parity with the generated DB row.
         shiprocket_order_id: null,
         tracking_url: null,
         awb_code: null,
@@ -211,6 +262,21 @@ function validateAddress(): string | null {
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalVal}>₹{total}</Text>
           </View>
+          {deliveryEstimate && deliveryEstimate.deliverable && (
+            <View style={styles.etaBox}>
+              <Text style={styles.etaText}>
+                📦 Arriving by {formatDeliveryDate(deliveryEstimate.days)}
+                <Text style={styles.etaSub}>  ·  {deliveryEstimate.days}-day delivery</Text>
+              </Text>
+            </View>
+          )}
+          {deliveryEstimate && !deliveryEstimate.deliverable && (
+            <View style={styles.etaBox}>
+              <Text style={[styles.etaText, { color: '#E23744' }]}>
+                Sorry, we don't deliver to this pincode yet.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* ── Delivery Address ── */}
@@ -325,6 +391,12 @@ function validateAddress(): string | null {
   )
 }
 
+function formatDeliveryDate(daysFromNow: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + Math.max(1, Math.round(daysFromNow)))
+  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
 function Field({ label, value, onChange, placeholder, keyboardType, maxLength, prefix }: any) {
   return (
     <View style={{ marginBottom: spacing.sm }}>
@@ -421,6 +493,18 @@ const styles = StyleSheet.create({
   feeVal: { fontSize: 14, fontWeight: '500', color: colors.textPrimary },
   feeValFree: { fontSize: 14, fontWeight: '700', color: colors.success },
   freeDeliveryNote: { fontSize: 12, color: colors.success, marginTop: 2, marginBottom: 4 },
+
+  etaBox: {
+    marginTop: 10,
+    backgroundColor: '#FFF4ED',
+    borderColor: '#FFE3D2',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  etaText: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
+  etaSub: { fontWeight: '500', color: colors.textSecondary },
   totalRow: { marginTop: spacing.xs },
   totalLabel: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
   totalVal: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
