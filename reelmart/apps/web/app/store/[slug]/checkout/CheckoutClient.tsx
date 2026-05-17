@@ -7,6 +7,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { ArrowLeft, MapPin, ChevronRight, Plus, Loader2, Search } from 'lucide-react'
 import { CartItem, loadCart, clearCart, cartTotal } from '@/lib/cart'
 import { saveAddress, searchPlaces, fetchPlaceDetails, type PlacePrediction } from '@/lib/saved-addresses'
+import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession } from '@/lib/msg91-otp'
 
 interface Store {
   id: string
@@ -157,30 +158,33 @@ export default function CheckoutClient({ store }: { store: Store }) {
   async function sendOtp() {
     if (!/^[6-9]\d{9}$/.test(phone)) { toast.error('Enter a valid 10-digit number'); return }
     setOtpLoading(true)
-    const { error } = await supabase.auth.signInWithOtp({ phone: `+91${phone}` })
-    setOtpLoading(false)
-    if (error) { toast.error(error.message); return }
-    toast.success('OTP sent!')
-    setStep('otp')
+    try {
+      await msg91Send(`+91${phone}`)
+      toast.success('OTP sent!')
+      setStep('otp')
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Could not send OTP')
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
   async function verifyOtp() {
     if (otp.length !== 6) { toast.error('Enter the 6-digit code'); return }
     setOtpLoading(true)
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone: `+91${phone}`, token: otp, type: 'sms',
-    })
-    setOtpLoading(false)
-    if (error || !data?.user) { toast.error(error?.message ?? 'Invalid OTP'); return }
-    setUserId(data.user.id)
-    setNewAddr(a => ({ ...a, phone: a.phone || phone }))
-    // Ensure user row exists
-    await supabase.from('users').upsert({
-      id: data.user.id, phone: `+91${phone}`, role: 'buyer',
-    }, { onConflict: 'id', ignoreDuplicates: true })
-    await loadAddresses(data.user.id)
-    setStep('address')
-    toast.success('Logged in!')
+    try {
+      const { accessToken } = await msg91Verify(otp)
+      const { userId: uid } = await exchangeForSupabaseSession(accessToken, 'buyer')
+      setUserId(uid)
+      setNewAddr(a => ({ ...a, phone: a.phone || phone }))
+      await loadAddresses(uid)
+      setStep('address')
+      toast.success('Logged in!')
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Invalid OTP')
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
   async function saveNewAddress() {
