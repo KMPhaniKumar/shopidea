@@ -13,7 +13,7 @@
 // password is HMAC(phone, AUTH_BRIDGE_SECRET) so it's never stored
 // outside the auth.users table and is reproducible if a user re-logins.
 
-import { Router } from 'express'
+import { Router, type Request, type Response, type NextFunction } from 'express'
 import { z } from 'zod'
 import crypto from 'crypto'
 import { supabaseAdmin } from '../lib/supabase'
@@ -23,6 +23,30 @@ export const authRouter = Router()
 const MSG91_VERIFY_URL = 'https://control.msg91.com/api/v5/widget/verifyAccessToken'
 const MSG91_AUTHKEY = process.env.MSG91_WIDGET_AUTHKEY ?? ''
 const AUTH_BRIDGE_SECRET = process.env.AUTH_BRIDGE_SECRET ?? ''
+
+// Server-side origin allow-list — defence in depth on top of the Express
+// cors() middleware (which the browser enforces, but curl/Postman bypass).
+// MSG91 themselves don't whitelist by domain on this account, so this is
+// our gate against random servers calling the bridge with stolen tokens.
+//
+// Mobile note: RN fetches don't send an Origin header. Once we wire the
+// buyer-app to this endpoint we'll add a parallel X-Client-App + signed
+// app-secret check; for now, missing Origin is rejected.
+const ALLOWED_ORIGINS = (process.env.AUTH_BRIDGE_ALLOWED_ORIGINS ?? process.env.ALLOWED_ORIGINS ?? '')
+  .split(',').map(s => s.trim()).filter(Boolean)
+
+function requireAllowedOrigin(req: Request, res: Response, next: NextFunction) {
+  if (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes('*')) {
+    // Fail-closed rather than fail-open: refuse if the env wasn't configured
+    // with an explicit list. Forces an intentional decision.
+    return res.status(403).json({ success: false, error: 'no-allowed-origins-configured' })
+  }
+  const origin = req.headers.origin
+  if (!origin || !ALLOWED_ORIGINS.includes(origin)) {
+    return res.status(403).json({ success: false, error: 'origin-not-allowed' })
+  }
+  next()
+}
 
 function derivePassword(phone: string): string {
   if (!AUTH_BRIDGE_SECRET) throw new Error('AUTH_BRIDGE_SECRET not configured')
@@ -57,10 +81,10 @@ async function verifyWithMsg91(accessToken: string): Promise<string> {
   return raw.startsWith('+') ? raw : `+${raw}`
 }
 
-// POST /api/admin/auth/msg91-exchange — public.
+// POST /api/admin/auth/msg91-exchange — public-but-origin-gated.
 // Body: { accessToken, role? }   role defaults to "buyer"
 // Response: { success: true, data: { session: { access_token, refresh_token, expires_in }, userId } }
-authRouter.post('/msg91-exchange', async (req, res) => {
+authRouter.post('/msg91-exchange', requireAllowedOrigin, async (req, res) => {
   const schema = z.object({
     accessToken: z.string().min(20),
     role: z.enum(['buyer', 'seller', 'admin']).default('buyer'),
