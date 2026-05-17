@@ -17,6 +17,11 @@ const WIDGET_ID = process.env.NEXT_PUBLIC_MSG91_WIDGET_ID ?? ''
 const TOKEN_AUTH = process.env.NEXT_PUBLIC_MSG91_TOKEN_AUTH ?? ''
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
+// Each OTP screen must render <div id={CAPTCHA_CONTAINER_ID} /> in its
+// phone-input UI for MSG91's checkbox captcha to render into. Empty div
+// is fine when captcha is disabled at the widget level.
+export const CAPTCHA_CONTAINER_ID = 'msg91-captcha-container'
+
 declare global {
   interface Window {
     initSendOTP?: (config: any) => void
@@ -61,10 +66,17 @@ function initWidget(): Promise<void> {
     }
     // exposeMethods: true gives us window.sendOtp/verifyOtp/retryOtp
     // instead of (or alongside) MSG91's built-in modal. We rely on these.
+    //
+    // captchaRenderId points at a div on the OTP screens. When captcha is
+    // disabled on the widget in MSG91 dashboard, the div stays empty. When
+    // enabled in "checkbox" mode, MSG91 renders the "I'm not a robot" check
+    // there. Lets us flip captcha on/off per environment (dev off, prod on)
+    // without any code change.
     window.initSendOTP({
       widgetId: WIDGET_ID,
       tokenAuth: TOKEN_AUTH,
       exposeMethods: true,
+      captchaRenderId: CAPTCHA_CONTAINER_ID,
       success: () => {}, // unused — we drive the flow manually
       failure: () => {},
     })

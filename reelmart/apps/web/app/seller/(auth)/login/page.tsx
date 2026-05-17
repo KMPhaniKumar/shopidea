@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
-import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession } from '@/lib/msg91-otp'
+import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
 
 const DEV_PHONE = '9999999999'
 const IS_DEV = process.env.NODE_ENV === 'development'
@@ -107,6 +107,8 @@ return (
                   />
                 </div>
               </div>
+
+              <div id={CAPTCHA_CONTAINER_ID} className="empty:hidden" />
 
               <button
                 onClick={sendOTP}

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
 import { Loader2, Package, ShoppingBag, Smartphone, Apple } from 'lucide-react'
-import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession } from '@/lib/msg91-otp'
+import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
 
 interface Order {
   id: string
@@ -129,6 +129,7 @@ export default function OrdersClient() {
                     autoFocus
                   />
                 </div>
+                <div id={CAPTCHA_CONTAINER_ID} className="mt-3 empty:hidden" />
                 <button
                   onClick={sendOtp}
                   disabled={phone.length !== 10 || otpLoading}

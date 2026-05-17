@@ -7,7 +7,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { ArrowLeft, MapPin, ChevronRight, Plus, Loader2, Search } from 'lucide-react'
 import { CartItem, loadCart, clearCart, cartTotal } from '@/lib/cart'
 import { saveAddress, searchPlaces, fetchPlaceDetails, type PlacePrediction } from '@/lib/saved-addresses'
-import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession } from '@/lib/msg91-otp'
+import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
 
 interface Store {
   id: string
@@ -351,6 +351,7 @@ export default function CheckoutClient({ store }: { store: Store }) {
                 autoFocus
               />
             </div>
+            <div id={CAPTCHA_CONTAINER_ID} className="mt-3 empty:hidden" />
             <button
               onClick={sendOtp}
               disabled={phone.length !== 10 || otpLoading}

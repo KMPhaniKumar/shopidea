@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
 import { Upload, CheckCircle, Clock } from 'lucide-react'
-import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession } from '@/lib/msg91-otp'
+import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
 
 const CATEGORIES = [
   { id: 'food', label: 'Food & Beverages', icon: '🍱' },
@@ -268,6 +268,7 @@ export default function SellerRegister() {
                       🛠 DEV — Click to use 9999999999 (OTP: 123456)
                     </button>
                   )}
+                  <div id={CAPTCHA_CONTAINER_ID} className="empty:hidden" />
                   <button onClick={sendOTP} disabled={phone.length !== 10 || loading}
                     className="w-full bg-[#FF6B2B] text-white py-3.5 rounded-xl font-semibold text-sm disabled:opacity-40 hover:bg-[#e55a1f] transition-colors shadow-sm">
                     {loading ? 'Sending...' : 'Send OTP →'}
