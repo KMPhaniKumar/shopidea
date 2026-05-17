@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
 import { Upload, CheckCircle, Clock } from 'lucide-react'
+import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession } from '@/lib/msg91-otp'
 
 const CATEGORIES = [
   { id: 'food', label: 'Food & Beverages', icon: '🍱' },
@@ -59,39 +60,47 @@ export default function SellerRegister() {
   async function sendOTP() {
     if (phone.length !== 10) return
     setLoading(true)
-    const { error } = await supabase.auth.signInWithOtp({ phone: `+91${phone}` })
-    if (error) { toast.error(error.message); setLoading(false); return }
-    setStep('otp')
-    startCountdown()
-    toast.success('OTP sent to +91 ' + phone)
-    setLoading(false)
+    try {
+      await msg91Send(`+91${phone}`)
+      setStep('otp')
+      startCountdown()
+      toast.success('OTP sent to +91 ' + phone)
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Could not send OTP')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function verifyOTP() {
     if (otp.length !== 6) return
     setLoading(true)
-    const { data, error } = await supabase.auth.verifyOtp({ phone: `+91${phone}`, token: otp, type: 'sms' })
-    if (error) { toast.error(error.message || 'Invalid OTP'); setLoading(false); return }
-    if (!data?.session) { toast.error('Session error. Try again.'); setLoading(false); return }
+    try {
+      const { accessToken } = await msg91Verify(otp)
+      const { userId } = await exchangeForSupabaseSession(accessToken, 'seller')
 
-    const { data: existingStore } = await supabase
-      .from('stores')
-      .select('id, approval_status')
-      .eq('seller_id', data.session.user.id)
-      .maybeSingle()
+      const { data: existingStore } = await supabase
+        .from('stores')
+        .select('id, approval_status')
+        .eq('seller_id', userId)
+        .maybeSingle()
 
-    if (existingStore) {
-      if (existingStore.approval_status === 'approved') {
-        toast.success('Welcome back!')
-        router.push('/seller/dashboard')
-      } else {
-        setStep('pending')
+      if (existingStore) {
+        if (existingStore.approval_status === 'approved') {
+          toast.success('Welcome back!')
+          router.push('/seller/dashboard')
+        } else {
+          setStep('pending')
+        }
+        return
       }
-      return
-    }
 
-    setStep('profile')
-    setLoading(false)
+      setStep('profile')
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Invalid OTP')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function saveProfile() {

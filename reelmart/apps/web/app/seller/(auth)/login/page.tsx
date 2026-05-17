@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
+import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession } from '@/lib/msg91-otp'
 
 const DEV_PHONE = '9999999999'
 const IS_DEV = process.env.NODE_ENV === 'development'
@@ -26,28 +27,30 @@ export default function SellerLogin() {
 
   async function sendOTP() {
     setLoading(true)
-    const formatted = phone.startsWith('+91') ? phone : `+91${phone.replace(/\D/g, '')}`
-    const { error } = await supabase.auth.signInWithOtp({ phone: formatted })
-    if (error) { toast.error(error.message); setLoading(false); return }
-    setStep('otp')
-    startCountdown()
-    toast.success('OTP sent!')
-    setLoading(false)
+    try {
+      const formatted = phone.startsWith('+91') ? phone : `+91${phone.replace(/\D/g, '')}`
+      await msg91Send(formatted)
+      setStep('otp')
+      startCountdown()
+      toast.success('OTP sent!')
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Could not send OTP')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function verifyOTP() {
     setLoading(true)
     try {
-      const formatted = phone.startsWith('+91') ? phone : `+91${phone.replace(/\D/g, '')}`
-      const { data, error } = await supabase.auth.verifyOtp({ phone: formatted, token: otp, type: 'sms' })
-      if (error) { toast.error(error.message || 'Invalid OTP'); setLoading(false); return }
-      if (!data?.session) { toast.error('Session not created. Try again.'); setLoading(false); return }
+      const { accessToken } = await msg91Verify(otp)
+      await exchangeForSupabaseSession(accessToken, 'seller')
       toast.success('Login successful!')
-      setLoading(false)
       router.refresh()
       router.push('/seller/dashboard')
-    } catch (err) {
-      toast.error('Verification failed: ' + (err instanceof Error ? err.message : 'Unknown error'))
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Verification failed')
+    } finally {
       setLoading(false)
     }
   }

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
 import { Loader2, Package, ShoppingBag, Smartphone, Apple } from 'lucide-react'
+import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession } from '@/lib/msg91-otp'
 
 interface Order {
   id: string
@@ -69,27 +70,31 @@ export default function OrdersClient() {
   async function sendOtp() {
     if (!/^[6-9]\d{9}$/.test(phone)) { toast.error('Enter a valid 10-digit number'); return }
     setOtpLoading(true)
-    const { error } = await supabase.auth.signInWithOtp({ phone: `+91${phone}` })
-    setOtpLoading(false)
-    if (error) { toast.error(error.message); return }
-    toast.success('OTP sent!')
-    setAuthStep('otp')
+    try {
+      await msg91Send(`+91${phone}`)
+      toast.success('OTP sent!')
+      setAuthStep('otp')
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Could not send OTP')
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
   async function verifyOtp() {
     if (otp.length !== 6) { toast.error('Enter the 6-digit code'); return }
     setOtpLoading(true)
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone: `+91${phone}`, token: otp, type: 'sms',
-    })
-    setOtpLoading(false)
-    if (error || !data?.user) { toast.error(error?.message ?? 'Invalid OTP'); return }
-    await supabase.from('users').upsert({
-      id: data.user.id, phone: `+91${phone}`, role: 'buyer',
-    }, { onConflict: 'id', ignoreDuplicates: true })
-    setAuthStep('ready')
-    toast.success('Logged in!')
-    loadOrders()
+    try {
+      const { accessToken } = await msg91Verify(otp)
+      await exchangeForSupabaseSession(accessToken, 'buyer')
+      setAuthStep('ready')
+      toast.success('Logged in!')
+      loadOrders()
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Invalid OTP')
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
   if (authStep === 'loading') {
