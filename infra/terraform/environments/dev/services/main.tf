@@ -89,6 +89,11 @@ locals {
     { name = "FIREBASE_SERVICE_ACCOUNT_JSON", valueFrom = "${local.secret_arns["firebase"]}:service_account_json::" },
   ]
 
+  msg91_secrets = [
+    { name = "MSG91_WIDGET_AUTHKEY", valueFrom = "${local.secret_arns["msg91"]}:widget_authkey::" },
+    { name = "AUTH_BRIDGE_SECRET",   valueFrom = "${local.secret_arns["msg91"]}:auth_bridge_secret::" },
+  ]
+
   services = {
     catalog = {
       max_capacity   = 2
@@ -137,8 +142,11 @@ locals {
     }
     admin = {
       max_capacity   = 1
-      extra_secrets  = []
-      extra_env      = {}
+      extra_secrets  = local.msg91_secrets
+      extra_env      = {
+        AUTH_BRIDGE_ALLOWED_ORIGINS = "http://localhost:3000,https://dev.reelmart.in,https://reelmart.in,https://shopidea.vercel.app"
+        SITE_URL                    = "https://dev.reelmart.in"
+      }
     }
   }
 }

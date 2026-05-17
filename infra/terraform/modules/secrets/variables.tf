@@ -5,7 +5,7 @@ variable "environment" {
 variable "secret_names" {
   type        = list(string)
   description = "Bare names; container path will be reelmart/<env>/<name>"
-  default     = ["supabase", "razorpay", "gupshup", "twilio", "shiprocket", "firebase", "jwt"]
+  default     = ["supabase", "razorpay", "gupshup", "twilio", "shiprocket", "firebase", "jwt", "msg91"]
 }
 
 variable "tags" {
