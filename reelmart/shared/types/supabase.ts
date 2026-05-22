@@ -1023,6 +1023,8 @@ export type Database = {
       stores: {
         Row: {
           aadhaar_url: string | null
+          address: string | null
+          approval_status: string
           area: string | null
           category: string
           city: string
@@ -1030,17 +1032,28 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
+          gst_number: string | null
           instagram_handle: string | null
           is_active: boolean | null
           is_open: boolean | null
           is_verified: boolean | null
+          kyc_submitted_at: string | null
           logo_url: string | null
           open_days: string[] | null
           open_time: string | null
+          pan_doc_path: string | null
+          pan_number: string | null
+          pickup_error: string | null
+          pickup_id: string | null
+          pickup_registered_at: string | null
+          pickup_status: string
+          pickup_warehouse_name: string | null
           pincode: string | null
           rating_avg: number | null
           referral_installs: number | null
+          selfie_path: string | null
           seller_id: string
+          state: string | null
           store_name: string
           store_slug: string
           total_orders: number | null
@@ -1050,6 +1063,8 @@ export type Database = {
         }
         Insert: {
           aadhaar_url?: string | null
+          address?: string | null
+          approval_status?: string
           area?: string | null
           category: string
           city: string
@@ -1057,17 +1072,28 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          gst_number?: string | null
           instagram_handle?: string | null
           is_active?: boolean | null
           is_open?: boolean | null
           is_verified?: boolean | null
+          kyc_submitted_at?: string | null
           logo_url?: string | null
           open_days?: string[] | null
           open_time?: string | null
+          pan_doc_path?: string | null
+          pan_number?: string | null
+          pickup_error?: string | null
+          pickup_id?: string | null
+          pickup_registered_at?: string | null
+          pickup_status?: string
+          pickup_warehouse_name?: string | null
           pincode?: string | null
           rating_avg?: number | null
           referral_installs?: number | null
+          selfie_path?: string | null
           seller_id: string
+          state?: string | null
           store_name: string
           store_slug: string
           total_orders?: number | null
@@ -1077,6 +1103,8 @@ export type Database = {
         }
         Update: {
           aadhaar_url?: string | null
+          address?: string | null
+          approval_status?: string
           area?: string | null
           category?: string
           city?: string
@@ -1084,17 +1112,28 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          gst_number?: string | null
           instagram_handle?: string | null
           is_active?: boolean | null
           is_open?: boolean | null
           is_verified?: boolean | null
+          kyc_submitted_at?: string | null
           logo_url?: string | null
           open_days?: string[] | null
           open_time?: string | null
+          pan_doc_path?: string | null
+          pan_number?: string | null
+          pickup_error?: string | null
+          pickup_id?: string | null
+          pickup_registered_at?: string | null
+          pickup_status?: string
+          pickup_warehouse_name?: string | null
           pincode?: string | null
           rating_avg?: number | null
           referral_installs?: number | null
+          selfie_path?: string | null
           seller_id?: string
+          state?: string | null
           store_name?: string
           store_slug?: string
           total_orders?: number | null

@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Search, Download, Edit2, Trash2, Eye, EyeOff, Package, RefreshCw, Share2 } from 'lucide-react'
+import { Plus, Search, Download, Edit2, Trash2, Eye, EyeOff, Package, RefreshCw, Share2, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import toast, { Toaster } from 'react-hot-toast'
@@ -55,6 +55,25 @@ export default function ProductsPage() {
     } catch { /* user cancelled — fall through to clipboard */ }
     await navigator.clipboard.writeText(url)
     toast.success('Product link copied!')
+  }
+
+  function productUrl(id: string) {
+    return `${SITE_URL}/store/${storeSlug}/product/${id}`
+  }
+
+  function shareToWhatsApp(id: string) {
+    if (!storeSlug) { toast.error('Store slug missing'); return }
+    const text = `Check out this product on my ReelMart store 🛍️\n${productUrl(id)}`
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  async function shareToInstagram(id: string) {
+    if (!storeSlug) { toast.error('Store slug missing'); return }
+    // Instagram has no web link-share intent, so copy the link for the seller
+    // to paste into a story/bio, then open Instagram.
+    try { await navigator.clipboard.writeText(productUrl(id)) } catch { /* ignore */ }
+    toast.success('Link copied — paste it in your Instagram story or bio')
+    window.open('https://www.instagram.com/', '_blank', 'noopener,noreferrer')
   }
 
   async function deleteProduct(id: string) {
@@ -139,8 +158,14 @@ export default function ProductsPage() {
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <button onClick={() => copyProductLink(row.original.id)} className="p-1.5 hover:bg-[#F9F9F9] rounded" title="Share product">
+          <button onClick={() => copyProductLink(row.original.id)} className="p-1.5 hover:bg-[#F9F9F9] rounded" title="Copy / share link">
             <Share2 size={15} className="text-[#FF6B2B]" />
+          </button>
+          <button onClick={() => shareToWhatsApp(row.original.id)} className="p-1.5 hover:bg-[#F9F9F9] rounded" title="Share on WhatsApp">
+            <MessageCircle size={15} className="text-[#25D366]" />
+          </button>
+          <button onClick={() => shareToInstagram(row.original.id)} className="p-1.5 hover:bg-[#F9F9F9] rounded text-[13px] leading-none" title="Share on Instagram">
+            📸
           </button>
           <button onClick={() => toggleAvailability(row.original.id, row.original.is_available)} className="p-1.5 hover:bg-[#F9F9F9] rounded">
             {row.original.is_available ? <EyeOff size={15} className="text-[#666666]" /> : <Eye size={15} className="text-[#666666]" />}

@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
 import { Upload, CheckCircle, Clock } from 'lucide-react'
 import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
+import { uploadKycFile, isValidPan, isValidGst } from '@/lib/kyc'
+import { AddressSearch } from '@/components/AddressSearch'
 
 const CATEGORIES = [
   { id: 'food', label: 'Food & Beverages', icon: '🍱' },
@@ -43,8 +45,18 @@ export default function SellerRegister() {
   const [category, setCategory] = useState('')
   const [city, setCity] = useState('')
   const [area, setArea] = useState('')
+  const [address, setAddress] = useState('')
+  const [stateName, setStateName] = useState('')
+  const [pincode, setPincode] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [description, setDescription] = useState('')
+
+  // KYC
+  const [panNumber, setPanNumber] = useState('')
+  const [gstNumber, setGstNumber] = useState('')
+  const [panFile, setPanFile] = useState<File | null>(null)
+  const [selfieFile, setSelfieFile] = useState<File | null>(null)
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(null)
 
   // Logo
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -127,6 +139,21 @@ export default function SellerRegister() {
     setLogoPreview(URL.createObjectURL(file))
   }
 
+  function handlePanChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { toast.error('PAN card must be under 5MB'); return }
+    setPanFile(file)
+  }
+
+  function handleSelfieChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { toast.error('Selfie must be under 5MB'); return }
+    setSelfieFile(file)
+    setSelfiePreview(URL.createObjectURL(file))
+  }
+
   async function uploadLogo(storeId: string): Promise<string | null> {
     if (!logoFile) return null
     const ext = logoFile.name.split('.').pop()?.toLowerCase() ?? 'jpg'
@@ -145,6 +172,13 @@ export default function SellerRegister() {
     if (!storeSlug.trim()) { toast.error('Enter store URL'); return }
     if (!category) { toast.error('Select a category'); return }
     if (!city) { toast.error('Select your city'); return }
+    if (!address.trim()) { toast.error('Enter your pickup address'); return }
+    if (!stateName.trim()) { toast.error('Enter your state'); return }
+    if (!/^\d{6}$/.test(pincode)) { toast.error('Enter a valid 6-digit pincode'); return }
+    if (!isValidPan(panNumber)) { toast.error('Enter a valid PAN (e.g. ABCDE1234F)'); return }
+    if (!panFile) { toast.error('Upload a photo of your PAN card'); return }
+    if (!selfieFile) { toast.error('Upload a selfie in front of your shop'); return }
+    if (gstNumber.trim() && !isValidGst(gstNumber)) { toast.error('Enter a valid 15-character GSTIN, or leave it blank'); return }
 
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
@@ -170,6 +204,11 @@ export default function SellerRegister() {
       category,
       city,
       area: area.trim() || null,
+      address: address.trim(),
+      state: stateName.trim(),
+      pincode,
+      pan_number: panNumber.trim().toUpperCase(),
+      gst_number: gstNumber.trim() ? gstNumber.trim().toUpperCase() : null,
       whatsapp_number: whatsapp ? `+91${whatsapp.replace(/\D/g, '')}` : null,
       is_active: false,
       is_open: false,
@@ -178,12 +217,24 @@ export default function SellerRegister() {
 
     if (error) { toast.error(error.message); setLoading(false); return }
 
-    // Upload logo if provided
+    // Upload logo (public bucket) + KYC documents (private bucket, keyed by
+    // user id), then persist their paths onto the store.
+    const updates: Record<string, unknown> = {}
     if (logoFile && newStore?.id) {
       const logoUrl = await uploadLogo(newStore.id)
-      if (logoUrl) {
-        await supabase.from('stores').update({ logo_url: logoUrl }).eq('id', newStore.id)
-      }
+      if (logoUrl) updates.logo_url = logoUrl
+    }
+    try {
+      updates.pan_doc_path = await uploadKycFile(user.id, 'pan', panFile)
+      updates.selfie_path = await uploadKycFile(user.id, 'selfie', selfieFile)
+      updates.kyc_submitted_at = new Date().toISOString()
+    } catch (err: any) {
+      toast.error(`Document upload failed: ${err.message}`)
+      setLoading(false)
+      return
+    }
+    if (newStore?.id) {
+      await supabase.from('stores').update(updates).eq('id', newStore.id)
     }
 
     setStep('pending')
@@ -433,6 +484,45 @@ export default function SellerRegister() {
                   </div>
 
                   <div>
+                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Find your shop on the map</label>
+                    <AddressSearch onPick={d => {
+                      if (d.area) setArea(d.area)
+                      if (d.state) setStateName(d.state)
+                      if (d.pincode) setPincode(d.pincode)
+                      const match = CITIES.find(c => c.toLowerCase() === d.city.toLowerCase())
+                      if (match) setCity(match)
+                    }} />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Pickup Address *</label>
+                    <textarea value={address} onChange={e => setAddress(e.target.value)}
+                      placeholder="Shop #12, Main Market, Near..."
+                      rows={2}
+                      className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A] resize-none"
+                    />
+                    <p className="text-xs text-[#AAAAAA] mt-1">Where couriers will collect your orders</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">State *</label>
+                      <input type="text" value={stateName} onChange={e => setStateName(e.target.value)}
+                        placeholder="Karnataka"
+                        className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Pincode *</label>
+                      <input type="tel" value={pincode}
+                        onChange={e => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="560034"
+                        className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
                     <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">WhatsApp Number</label>
                     <div className="flex rounded-xl overflow-hidden border border-[#E5E5E5] focus-within:border-[#FF6B2B] transition-colors">
                       <span className="inline-flex items-center px-4 bg-[#F9F9F9] text-[#666666] text-sm border-r border-[#E5E5E5]">+91</span>
@@ -453,7 +543,60 @@ export default function SellerRegister() {
                     />
                   </div>
 
-                  <button onClick={createStore} disabled={!storeName || !storeSlug || !category || !city || loading}
+                  {/* KYC / verification */}
+                  <div className="pt-2 border-t border-[#F0F0F0]">
+                    <p className="text-sm font-bold text-[#1A1A1A] mb-1">Verify your business</p>
+                    <p className="text-xs text-[#AAAAAA] mb-3">Required for admin approval. Your documents are stored privately and only seen by our review team.</p>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">PAN Number *</label>
+                        <input type="text" value={panNumber}
+                          onChange={e => setPanNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+                          placeholder="ABCDE1234F"
+                          className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A] tracking-wider"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">PAN Card Photo *</label>
+                        <label className="flex items-center gap-3 cursor-pointer border border-dashed border-[#E5E5E5] rounded-xl px-4 py-3 hover:border-[#FF6B2B] transition-colors">
+                          <Upload size={18} className="text-[#AAAAAA] shrink-0" />
+                          <span className="text-sm text-[#555555] truncate">{panFile ? panFile.name : 'Upload PAN card (JPG, PNG or PDF · max 5MB)'}</span>
+                          <input type="file" accept="image/jpeg,image/png,application/pdf" className="hidden" onChange={handlePanChange} />
+                        </label>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Shop Selfie *</label>
+                        <label className="flex items-center gap-4 cursor-pointer">
+                          <div className="w-16 h-16 rounded-xl border-2 border-dashed border-[#E5E5E5] flex items-center justify-center overflow-hidden hover:border-[#FF6B2B] transition-colors shrink-0">
+                            {selfiePreview ? (
+                              <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover" />
+                            ) : (
+                              <Upload size={20} className="text-[#AAAAAA]" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-sm text-[#555555] font-medium">{selfiePreview ? 'Change selfie' : 'Take/upload a selfie'}</p>
+                            <p className="text-xs text-[#AAAAAA]">A photo of you in front of your shop</p>
+                          </div>
+                          <input type="file" accept="image/jpeg,image/png" capture="environment" className="hidden" onChange={handleSelfieChange} />
+                        </label>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">GST Number <span className="text-[#AAAAAA] font-normal">(optional)</span></label>
+                        <input type="text" value={gstNumber}
+                          onChange={e => setGstNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15))}
+                          placeholder="22ABCDE1234F1Z5"
+                          className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A] tracking-wider"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button onClick={createStore} disabled={!storeName || !storeSlug || !category || !city || !address.trim() || !stateName.trim() || pincode.length !== 6 || panNumber.length !== 10 || !panFile || !selfieFile || loading}
                     className="w-full bg-[#FF6B2B] text-white py-3.5 rounded-xl font-bold text-sm disabled:opacity-40 hover:bg-[#e55a1f] transition-colors shadow-sm">
                     {loading ? 'Submitting...' : '🚀 Submit for Approval'}
                   </button>

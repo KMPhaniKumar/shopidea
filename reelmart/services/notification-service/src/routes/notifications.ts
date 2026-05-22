@@ -6,6 +6,8 @@ import { sendWhatsApp } from '../lib/gupshup'
 import { sendSMS } from '../lib/sms'
 
 const SITE_URL = process.env.SITE_URL ?? 'https://dev.reelmart.in'
+// Smart link to the ReelMart buyer app (routes to Play Store / App Store).
+const APP_DOWNLOAD_URL = process.env.APP_DOWNLOAD_URL ?? `${SITE_URL}/app`
 
 export const notificationsRouter = Router()
 
@@ -90,11 +92,12 @@ notificationsRouter.post('/order-placed', async (req, res) => {
     `Order: ${order.order_number}\n` +
     `Total: ₹${order.total_amount}\n\n` +
     `Track your order: ${trackUrl}\n\n` +
-    `_Live updates available in the ReelMart app._`
+    `📲 Get live order updates — download the ReelMart app: ${APP_DOWNLOAD_URL}`
 
   const smsBody =
     `ReelMart: Order ${order.order_number} placed at ${storeName}. ` +
-    `Total Rs.${order.total_amount}. Track: ${trackUrl}`
+    `Total Rs.${order.total_amount}. Track: ${trackUrl}. ` +
+    `Get the app for live updates: ${APP_DOWNLOAD_URL}`
 
   const results = await Promise.allSettled([
     phone ? sendWhatsApp(phone, waBody) : Promise.resolve(),

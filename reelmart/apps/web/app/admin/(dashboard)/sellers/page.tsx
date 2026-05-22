@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import SellerActions from './SellerActions'
 
@@ -129,7 +130,7 @@ export default async function SellersPage({
                       </div>
                     )}
                     <div>
-                      <div className="font-semibold text-gray-900">{s.store_name}</div>
+                      <Link href={`/admin/sellers/${s.id}`} className="font-semibold text-gray-900 hover:text-orange-600 hover:underline">{s.store_name}</Link>
                       <div className="text-gray-400 text-xs">/{s.store_slug}</div>
                     </div>
                   </div>

@@ -124,13 +124,16 @@ export async function resendOtp(): Promise<void> {
 // On success the supabase-js client is signed in and RLS-protected
 // queries work immediately.
 export async function exchangeForSupabaseSession(
-  accessToken: string, role: 'buyer' | 'seller' = 'buyer',
+  accessToken: string,
+  role: 'buyer' | 'seller' = 'buyer',
+  opts: { createIfMissing?: boolean } = {},
 ): Promise<{ userId: string }> {
   if (!API_URL) throw new Error('NEXT_PUBLIC_API_URL not configured')
+  const createIfMissing = opts.createIfMissing ?? true
   const res = await fetch(`${API_URL}/api/admin/auth/msg91-exchange`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accessToken, role }),
+    body: JSON.stringify({ accessToken, role, createIfMissing }),
   })
   const json = await res.json()
   if (!json?.success) throw new Error(json?.error ?? 'Auth exchange failed')
@@ -142,6 +145,20 @@ export async function exchangeForSupabaseSession(
   })
   if (error) throw new Error(`Could not set Supabase session: ${error.message}`)
   return { userId: json.data.userId }
+}
+
+// Asks the backend whether a phone is already registered, before we send an
+// OTP. Used by seller login to show "please sign up" for unknown numbers.
+export async function checkPhoneRegistered(phoneE164: string): Promise<boolean> {
+  if (!API_URL) throw new Error('NEXT_PUBLIC_API_URL not configured')
+  const res = await fetch(`${API_URL}/api/admin/auth/check-phone`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: phoneE164 }),
+  })
+  const json = await res.json()
+  if (!json?.success) throw new Error(json?.error ?? 'Could not verify number')
+  return Boolean(json.data?.registered)
 }
 
 function extractMsg(err: any): string {

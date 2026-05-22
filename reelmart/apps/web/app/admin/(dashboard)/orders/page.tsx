@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -81,7 +82,9 @@ export default async function OrdersPage({
           <tbody className="divide-y divide-gray-100">
             {(orders ?? []).map((o: any) => (
               <tr key={o.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-semibold text-gray-900">{o.order_number}</td>
+                <td className="px-4 py-3 font-semibold">
+                  <Link href={`/admin/orders/${o.id}`} className="text-gray-900 hover:text-orange-600 hover:underline">{o.order_number}</Link>
+                </td>
                 <td className="px-4 py-3 text-gray-700">{o.stores?.store_name ?? '—'}</td>
                 <td className="px-4 py-3">
                   <div className="text-gray-700">{o.users?.name ?? '—'}</div>

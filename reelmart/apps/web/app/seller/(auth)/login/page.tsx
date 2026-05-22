@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
-import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
+import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, checkPhoneRegistered, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
 
 const DEV_PHONE = '9999999999'
 const IS_DEV = process.env.NODE_ENV === 'development'
@@ -15,6 +15,7 @@ export default function SellerLogin() {
   const [step, setStep] = useState<'phone' | 'otp'>('phone')
   const [loading, setLoading] = useState(false)
   const [countdown, setCountdown] = useState(0)
+  const [notRegistered, setNotRegistered] = useState(false)
   const supabase = createClient()
   const router = useRouter()
 
@@ -27,8 +28,16 @@ export default function SellerLogin() {
 
   async function sendOTP() {
     setLoading(true)
+    setNotRegistered(false)
     try {
       const formatted = phone.startsWith('+91') ? phone : `+91${phone.replace(/\D/g, '')}`
+      // Reject unknown numbers before spending an OTP — they need to sign up.
+      const registered = await checkPhoneRegistered(formatted)
+      if (!registered) {
+        setNotRegistered(true)
+        toast.error('This number is not registered. Please sign up.')
+        return
+      }
       await msg91Send(formatted)
       setStep('otp')
       startCountdown()
@@ -44,7 +53,8 @@ export default function SellerLogin() {
     setLoading(true)
     try {
       const { accessToken } = await msg91Verify(otp)
-      await exchangeForSupabaseSession(accessToken, 'seller')
+      // createIfMissing:false — backstop so login never silently creates an account.
+      await exchangeForSupabaseSession(accessToken, 'seller', { createIfMissing: false })
       toast.success('Login successful!')
       router.refresh()
       router.push('/seller/dashboard')
@@ -101,7 +111,7 @@ return (
                   <input
                     type="tel"
                     value={phone}
-                    onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); setNotRegistered(false) }}
                     placeholder="9876543210"
                     className="flex-1 px-4 py-3.5 text-sm outline-none bg-white text-[#1A1A1A] placeholder:text-[#BBBBBB]"
                   />
@@ -110,9 +120,18 @@ return (
 
               <div id={CAPTCHA_CONTAINER_ID} className="empty:hidden" />
 
+              {notRegistered && (
+                <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3">
+                  <p className="text-sm text-red-600 font-medium mb-2">This number isn't registered yet.</p>
+                  <a href="/seller/register" className="inline-flex items-center justify-center w-full bg-[#FF6B2B] text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-[#e55a1f] transition-colors">
+                    Sign up to start selling →
+                  </a>
+                </div>
+              )}
+
               <button
                 onClick={sendOTP}
-                disabled={phone.length !== 10 || loading}
+                disabled={phone.length !== 10 || loading || notRegistered}
                 className="w-full bg-[#FF6B2B] text-white py-3.5 rounded-xl font-semibold text-sm disabled:opacity-40 hover:bg-[#e55a1f] transition-colors shadow-sm"
               >
                 {loading ? 'Sending OTP...' : 'Send OTP →'}

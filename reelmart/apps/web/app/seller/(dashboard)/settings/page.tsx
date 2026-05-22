@@ -7,6 +7,8 @@ import QRCode from 'qrcode'
 import { Copy, Download, ExternalLink, Upload } from 'lucide-react'
 import debounce from 'lodash/debounce'
 import { SITE_URL, SITE_HOST } from '@/lib/site-url'
+import { uploadKycFile, signedKycUrl, isValidPan, isValidGst } from '@/lib/kyc'
+import { AddressSearch } from '@/components/AddressSearch'
 
 const BUSINESS_TYPES = [
   'Food & Beverages',
@@ -28,7 +30,11 @@ export default function SettingsPage() {
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null)
   const [saving, setSaving] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
-  const { register, handleSubmit, watch, reset } = useForm()
+  const [panFile, setPanFile] = useState<File | null>(null)
+  const [selfieFile, setSelfieFile] = useState<File | null>(null)
+  const [panUrl, setPanUrl] = useState<string | null>(null)
+  const [selfieUrl, setSelfieUrl] = useState<string | null>(null)
+  const { register, handleSubmit, watch, reset, setValue } = useForm()
   const slugValue = watch('store_slug')
 
   useEffect(() => { load() }, [])
@@ -42,6 +48,8 @@ export default function SettingsPage() {
     if (!data) return
     setStore(data)
     reset(data)
+    setPanUrl(data.pan_doc_path ? await signedKycUrl(data.pan_doc_path) : null)
+    setSelfieUrl(data.selfie_path ? await signedKycUrl(data.selfie_path) : null)
   }
 
   const checkSlug = debounce(async (slug: string) => {
@@ -72,7 +80,26 @@ export default function SettingsPage() {
   }
 
   async function onSubmit(data: any) {
+    const pan = (data.pan_number ?? '').trim().toUpperCase()
+    const gst = (data.gst_number ?? '').trim().toUpperCase()
+    if (pan && !isValidPan(pan)) { toast.error('Enter a valid PAN (e.g. ABCDE1234F)'); return }
+    if (gst && !isValidGst(gst)) { toast.error('Enter a valid 15-character GSTIN, or leave it blank'); return }
+
     setSaving(true)
+
+    // Upload any newly-picked KYC documents to the private bucket first.
+    let panPath = store.pan_doc_path ?? null
+    let selfiePath = store.selfie_path ?? null
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        if (panFile) panPath = await uploadKycFile(user.id, 'pan', panFile)
+        if (selfieFile) selfiePath = await uploadKycFile(user.id, 'selfie', selfieFile)
+      }
+    } catch (err: any) {
+      toast.error(`Document upload failed: ${err.message}`); setSaving(false); return
+    }
+
     const { error } = await supabase.from('stores').update({
       store_name: data.store_name,
       store_slug: data.store_slug,
@@ -85,9 +112,26 @@ export default function SettingsPage() {
       area: data.area,
       pincode: data.pincode,
       state: data.state,
+      pan_number: pan || null,
+      gst_number: gst || null,
+      pan_doc_path: panPath,
+      selfie_path: selfiePath,
     }).eq('id', store.id)
-    if (error) toast.error(error.message)
-    else { toast.success('Settings saved!'); load() }
+    if (error) { toast.error(error.message); setSaving(false); return }
+    setPanFile(null); setSelfieFile(null)
+    toast.success('Settings saved!')
+
+    // Re-register the pickup with the courier when the address changes (no-op
+    // for stores that aren't approved yet — they register at approval time).
+    try {
+      await fetch('/api/seller/pickup/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId: store.id }),
+      })
+    } catch { /* best-effort; pickup can be retried later */ }
+
+    load()
     setSaving(false)
   }
 
@@ -211,7 +255,25 @@ export default function SettingsPage() {
         <div className="bg-white rounded-xl p-5 shadow-sm space-y-4">
           <div>
             <h2 className="font-semibold text-[#1A1A1A]">Store Address</h2>
-            <p className="text-xs text-[#AAAAAA] mt-0.5">Used to calculate delivery time and distance for buyers</p>
+            <p className="text-xs text-[#AAAAAA] mt-0.5">Used as your courier pickup location and to calculate delivery time for buyers</p>
+          </div>
+          {store?.pickup_status === 'verified' && (
+            <div className="rounded-lg bg-[#25D366]/10 px-3 py-2 text-xs text-[#1A7F4B]">✓ Pickup address verified with our courier partner</div>
+          )}
+          {store?.pickup_status === 'pending' && (
+            <div className="rounded-lg bg-orange-50 px-3 py-2 text-xs text-[#92400E]">⏳ Your pickup address is being verified by our courier partner. Until then, orders ship from our central warehouse.</div>
+          )}
+          {store?.pickup_status === 'failed' && (
+            <div className="rounded-lg bg-[#E23744]/10 px-3 py-2 text-xs text-[#E23744]">⚠ We couldn't register your pickup address{store?.pickup_error ? `: ${store.pickup_error}` : ''}. Please check the details below and save again.</div>
+          )}
+          <div>
+            <label className="block text-sm font-medium mb-1">Find your shop on the map</label>
+            <AddressSearch onPick={d => {
+              if (d.area) setValue('area', d.area)
+              if (d.city) setValue('city', d.city)
+              if (d.state) setValue('state', d.state)
+              if (d.pincode) setValue('pincode', d.pincode)
+            }} />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Full Address</label>
@@ -233,6 +295,58 @@ export default function SettingsPage() {
             <div>
               <label className="block text-sm font-medium mb-1">Pincode</label>
               <input {...register('pincode')} maxLength={6} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="560034" />
+            </div>
+          </div>
+        </div>
+
+        {/* KYC / Verification */}
+        <div className="bg-white rounded-xl p-5 shadow-sm space-y-4">
+          <div>
+            <h2 className="font-semibold text-[#1A1A1A]">Business Verification (KYC)</h2>
+            <p className="text-xs text-[#AAAAAA] mt-0.5">Stored privately — only visible to our review team</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">PAN Number</label>
+              <input {...register('pan_number')} maxLength={10} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] uppercase tracking-wider" placeholder="ABCDE1234F" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">GST Number <span className="text-[#AAAAAA] font-normal">(optional)</span></label>
+              <input {...register('gst_number')} maxLength={15} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] uppercase tracking-wider" placeholder="22ABCDE1234F1Z5" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">PAN Card Photo</label>
+              {panUrl && !panFile && (
+                <a href={panUrl} target="_blank" rel="noreferrer" className="text-xs text-[#FF6B2B] hover:underline block mb-1.5">View current PAN document ↗</a>
+              )}
+              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-[#EEEEEE] rounded-lg text-sm cursor-pointer hover:bg-[#F9F9F9]">
+                <Upload size={14} />
+                <span className="truncate text-[#555555]">{panFile ? panFile.name : (panUrl ? 'Replace PAN card' : 'Upload PAN card')}</span>
+                <input type="file" accept="image/jpeg,image/png,application/pdf" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) { if (f.size > 5*1024*1024) { toast.error('Max 5MB'); return } setPanFile(f) } }} />
+              </label>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Shop Selfie</label>
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 rounded-lg border border-[#EEEEEE] overflow-hidden bg-[#F9F9F9] flex items-center justify-center shrink-0">
+                  {selfieFile ? (
+                    <img src={URL.createObjectURL(selfieFile)} alt="Selfie" className="w-full h-full object-cover" />
+                  ) : selfieUrl ? (
+                    <img src={selfieUrl} alt="Selfie" className="w-full h-full object-cover" />
+                  ) : (
+                    <Upload size={16} className="text-[#AAAAAA]" />
+                  )}
+                </div>
+                <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-[#EEEEEE] rounded-lg text-sm cursor-pointer hover:bg-[#F9F9F9]">
+                  <Upload size={14} />
+                  <span className="text-[#555555]">{selfieFile || selfieUrl ? 'Replace' : 'Upload'}</span>
+                  <input type="file" accept="image/jpeg,image/png" capture="environment" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) { if (f.size > 5*1024*1024) { toast.error('Max 5MB'); return } setSelfieFile(f) } }} />
+                </label>
+              </div>
             </div>
           </div>
         </div>

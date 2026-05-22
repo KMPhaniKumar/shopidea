@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
+import { registerStorePickup } from '@/lib/pickup'
 
 const supabaseAdmin = () => createSupabaseAdmin(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,5 +37,15 @@ export async function PUT(
     .single()
 
   if (error) return NextResponse.json({ success: false, error: error.message }, { status: 400 })
-  return NextResponse.json({ success: true, data })
+
+  // On approval, register the seller's address as a NimbusPost pickup warehouse.
+  // Best-effort: a courier hiccup must not block the store going live — the
+  // pickup can be retried later, and shipments fall back to the platform
+  // warehouse until this store's pickup is verified.
+  let pickup = null
+  if (action === 'approve') {
+    pickup = await registerStorePickup(params.id)
+  }
+
+  return NextResponse.json({ success: true, data: { ...data, pickup } })
 }

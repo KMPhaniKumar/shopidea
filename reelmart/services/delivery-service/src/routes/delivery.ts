@@ -1,32 +1,17 @@
 import { Router } from 'express'
 import { supabaseAdmin } from '../lib/supabase'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, requireInternalKey } from '../middleware/auth'
+import {
+  NP_TOKEN,
+  npPost,
+  registerPickupWarehouse,
+  fetchPickupStatus,
+  type StorePickupInput,
+} from '../lib/nimbus'
 
 export const deliveryRouter = Router()
 
-const NP_BASE = 'https://api.nimbuspost.com/v1'
-const NP_TOKEN = process.env.NIMBUS_AUTH_TOKEN ?? ''
-
-function npHeaders(): Record<string, string> {
-  return {
-    'Content-Type': 'application/json',
-    'NP-AUTH-TOKEN': NP_TOKEN,
-  }
-}
-
-async function npPost(path: string, body: any): Promise<any> {
-  const res = await fetch(`${NP_BASE}${path}`, {
-    method: 'POST',
-    headers: npHeaders(),
-    body: JSON.stringify(body),
-  })
-  return res.json() as Promise<any>
-}
-
-async function npGet(path: string): Promise<any> {
-  const res = await fetch(`${NP_BASE}${path}`, { headers: npHeaders() })
-  return res.json() as Promise<any>
-}
+const PICKUP_FIELDS = 'id, store_name, address, area, city, state, pincode, whatsapp_number, approval_status'
 
 // Map NimbusPost's free-text status strings onto our 5-step canonical timeline.
 const TIMELINE_STEPS = ['confirmed', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered'] as const
@@ -84,6 +69,15 @@ deliveryRouter.post('/create-shipment', requireAuth, async (req, res) => {
   const addr = order.delivery_address as any
   const items = (order.items as any[]) ?? []
 
+  // Use the seller's own NimbusPost pickup when it's been verified; otherwise
+  // fall back to the platform's default warehouse so the order still ships.
+  const { data: store } = await supabaseAdmin
+    .from('stores').select('pickup_status, pickup_warehouse_name').eq('id', order.store_id).single()
+  const sellerPickup = store?.pickup_status === 'verified' && store?.pickup_warehouse_name
+  const warehouseName = sellerPickup
+    ? store!.pickup_warehouse_name
+    : (process.env.NIMBUS_WAREHOUSE_NAME ?? 'Primary')
+
   try {
     const shipment = await npPost('/shipments', {
       order_number: order.order_number,
@@ -99,7 +93,7 @@ deliveryRouter.post('/create-shipment', requireAuth, async (req, res) => {
         pincode: addr?.pincode ?? '',
         phone: (addr?.phone ?? '').replace(/^\+91/, ''),
       },
-      pickup: { warehouse_name: process.env.NIMBUS_WAREHOUSE_NAME ?? 'Primary' },
+      pickup: { warehouse_name: warehouseName },
       order_items: items.map((it: any) => ({
         name: it.name, qty: String(it.qty), price: String(it.price), sku: it.productId,
       })),
@@ -121,6 +115,62 @@ deliveryRouter.post('/create-shipment', requireAuth, async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message })
   }
+})
+
+// Persist a pickup-registration result onto the store row.
+async function savePickup(storeId: string, reg: Awaited<ReturnType<typeof registerPickupWarehouse>>) {
+  await supabaseAdmin.from('stores').update({
+    pickup_id: reg.pickupId,
+    pickup_warehouse_name: reg.warehouseName,
+    pickup_status: reg.status,
+    pickup_error: reg.status === 'failed' ? (reg.error ?? null) : null,
+    pickup_registered_at: new Date().toISOString(),
+  }).eq('id', storeId)
+}
+
+// POST /api/delivery/pickup/register — internal (server-to-server). Called when
+// an admin approves a store, or after the seller edits their address. Registers
+// the store's address as a NimbusPost pickup warehouse and records the result.
+deliveryRouter.post('/pickup/register', requireInternalKey, async (req, res) => {
+  const { storeId } = req.body
+  if (!storeId) return res.status(400).json({ success: false, error: 'storeId required' })
+
+  const { data: store } = await supabaseAdmin
+    .from('stores').select(PICKUP_FIELDS).eq('id', storeId).single()
+  if (!store) return res.status(404).json({ success: false, error: 'Store not found' })
+
+  try {
+    const reg = await registerPickupWarehouse(store as StorePickupInput)
+    await savePickup(storeId, reg)
+    res.json({ success: true, data: { pickupId: reg.pickupId, status: reg.status, error: reg.error } })
+  } catch (err: any) {
+    await savePickup(storeId, {
+      pickupId: null,
+      warehouseName: (store as any).pickup_warehouse_name ?? '',
+      status: 'failed',
+      error: err.message,
+    })
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+// POST /api/delivery/pickup/refresh — internal. Re-polls NimbusPost for a store
+// whose pickup was left 'pending', flipping it to 'verified' once it clears.
+deliveryRouter.post('/pickup/refresh', requireInternalKey, async (req, res) => {
+  const { storeId } = req.body
+  if (!storeId) return res.status(400).json({ success: false, error: 'storeId required' })
+
+  const { data: store } = await supabaseAdmin
+    .from('stores').select('pickup_warehouse_name, pickup_status').eq('id', storeId).single()
+  if (!store?.pickup_warehouse_name) {
+    return res.status(404).json({ success: false, error: 'No pickup registered for this store' })
+  }
+
+  const status = await fetchPickupStatus(store.pickup_warehouse_name)
+  if (status && status !== store.pickup_status) {
+    await supabaseAdmin.from('stores').update({ pickup_status: status }).eq('id', storeId)
+  }
+  res.json({ success: true, data: { status: status ?? store.pickup_status } })
 })
 
 // GET /api/delivery/track/:awbCode — public; used by /track/[awb] page

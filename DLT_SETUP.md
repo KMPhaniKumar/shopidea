@@ -19,8 +19,13 @@
 | Item | Used in |
 |---|---|
 | **Principal Entity ID (PE ID)** — 19 digits | One-time, identifies ReelMart as the SMS sender to all telcos |
-| **Header / Sender ID** — 6 chars (e.g. `RLMART`) | Appears as the SMS sender on the recipient's phone |
+| **Header / Sender ID** — 6 chars (approved: `REELMT`) | Appears as the SMS sender on the recipient's phone |
 | **Transactional template** with a Template ID (TE ID) | Each unique SMS body needs its own approved template — one for OTP, one for order status, etc. |
+
+**Current approved values (dev):**
+- Sender / Header: `REELMT`
+- MSG91 Flow Template ID (used by notification-service for non-OTP transactional SMS): `6a09e291763ac6394f0bf9a2`
+- DLT PE ID + DLT TE IDs: _pending — fill in here once Vi DLT issues them_
 
 All three get plugged into the **MSG91 dashboard** under DLT settings + per-widget config. Once MSG91 has them, your OTPs reach handsets reliably.
 
@@ -62,10 +67,10 @@ All Indian telcos accept DLT registrations from any of the 4 portals — they sy
 
 ### 3. Register a Header (Sender ID)
 
-The header is the 6-character sender that recipients see (e.g. `RLMART`).
+The header is the 6-character sender that recipients see (e.g. `REELMT`).
 
 1. DLT portal → **Headers** → **Add New Header**
-2. Header: `RLMART` (must be alphabetic, 6 chars exactly; cannot start with a number)
+2. Header: `REELMT` (must be alphabetic, 6 chars exactly; cannot start with a number)
 3. Type: **Transactional** (OTP must be transactional, never promotional)
 4. Submit — approval is **same-day to 24h**
 
@@ -86,7 +91,7 @@ Pick the header carefully — once approved, it's stuck to your PE. Changing it 
    - Avoid emojis, special characters, or "click here" links — these get rejected.
    - Keep under 160 chars total or you pay for multi-part SMS.
 
-5. **Associate with header** `RLMART`
+5. **Associate with header** `REELMT`
 6. Submit — approval is typically **1–3 business days**
 7. On approval, you get a **Template ID** (TE ID, e.g., `1707170123456789012`). Save it.
 
@@ -100,7 +105,7 @@ Repeat for any *other* SMS the platform sends:
 1. MSG91 dashboard → **Settings** → **DLT** (or **Compliance** depending on UI version)
 2. Enter:
    - **PE ID**: from step 2
-   - **Header**: `RLMART`
+   - **Header**: `REELMT`
 3. Save
 
 For the **OTP widget** specifically:
@@ -112,7 +117,7 @@ For the **OTP widget** specifically:
 
 ### 6. Test with a real number
 
-After all approvals are in MSG91, send an OTP to your own non-test phone via the prod widget. SMS should land within seconds, from sender `RLMART`. If it doesn't, see Troubleshooting below.
+After all approvals are in MSG91, send an OTP to your own non-test phone via the prod widget. SMS should land within seconds, from sender `REELMT`. If it doesn't, see Troubleshooting below.
 
 ---
 
@@ -149,7 +154,7 @@ DLT itself is small in the ongoing bill; SMS delivery cost dominates.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | MSG91 says "Sent" but no SMS | Template not associated with the header you're sending from, or template approval still pending | Verify Template ID is set in widget config AND status shows "Approved" on DLT portal |
-| SMS arrives but header shows `MD-MSGIND` or similar generic | DLT header field not configured in MSG91 → MSG91 used a fallback shared header | Set the registered header (`RLMART`) under MSG91 DLT settings |
+| SMS arrives but header shows `MD-MSGIND` or similar generic | DLT header field not configured in MSG91 → MSG91 used a fallback shared header | Set the registered header (`REELMT`) under MSG91 DLT settings |
 | Body is truncated or has `{#var#}` literal | Template variable substitution broke — usually MSG91 expects `##OTP##` placeholder, DLT uses `{#var#}` — MSG91 maps between them | Check MSG91's template registration screen — the placeholder format may differ from what you registered on DLT |
 | Some networks (Airtel) deliver, others (Jio) don't | A specific operator may not have synced the template yet from the central DLT registry | Wait 24–48h, or re-submit the template registration on the lagging operator's portal directly |
 | DLT portal rejects template body | Forbidden words (emojis, URL shorteners, "FREE", "WINNER"), or too short / too long | Rewrite without forbidden patterns; keep body under 160 chars |

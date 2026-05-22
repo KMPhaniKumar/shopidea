@@ -88,6 +88,10 @@ authRouter.post('/msg91-exchange', requireAllowedOrigin, async (req, res) => {
   const schema = z.object({
     accessToken: z.string().min(20),
     role: z.enum(['buyer', 'seller', 'admin']).default('buyer'),
+    // When false, a verified-but-unknown phone is rejected instead of being
+    // auto-registered. Seller LOGIN passes false; signup + buyer checkout
+    // leave it true so first-time users are created on the spot.
+    createIfMissing: z.boolean().default(true),
   })
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) {
@@ -103,6 +107,14 @@ authRouter.post('/msg91-exchange', requireAllowedOrigin, async (req, res) => {
     // If absent, create the auth user via admin API, then mirror into users.
     let { data: existing } = await supabaseAdmin
       .from('users').select('id').eq('phone', phone).maybeSingle()
+
+    if (!existing && !parsed.data.createIfMissing) {
+      return res.status(404).json({
+        success: false,
+        code: 'NOT_REGISTERED',
+        error: 'This number is not registered. Please sign up.',
+      })
+    }
 
     if (!existing) {
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -149,4 +161,25 @@ authRouter.post('/msg91-exchange', requireAllowedOrigin, async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message ?? 'exchange-failed' })
   }
+})
+
+// POST /api/admin/auth/check-phone — origin-gated. Tells the seller login UI
+// whether a number is already registered, so it can show "please sign up"
+// before sending an OTP (rather than after). Returns only a boolean — no
+// account details — to limit enumeration value.
+authRouter.post('/check-phone', requireAllowedOrigin, async (req, res) => {
+  const schema = z.object({ phone: z.string().min(8).max(20) })
+  const parsed = schema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, error: parsed.error.message })
+  }
+  // Normalise to the +91XXXXXXXXXX form we store in users.phone.
+  const digits = parsed.data.phone.replace(/\D/g, '').slice(-10)
+  if (digits.length !== 10) {
+    return res.status(400).json({ success: false, error: 'Invalid phone number' })
+  }
+  const phone = `+91${digits}`
+  const { data } = await supabaseAdmin
+    .from('users').select('id').eq('phone', phone).maybeSingle()
+  res.json({ success: true, data: { registered: Boolean(data) } })
 })

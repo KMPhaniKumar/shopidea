@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, BarChart2, Store, Users, ShoppingBag,
-  RotateCcw, Wallet, Settings,
+  RotateCcw, Wallet, CreditCard, Settings,
 } from 'lucide-react'
 
 const items = [
@@ -14,6 +14,7 @@ const items = [
   { icon: Store,           label: 'Sellers',    href: '/admin/sellers'   },
   { icon: Users,           label: 'Buyers',     href: '/admin/buyers'    },
   { icon: ShoppingBag,     label: 'Orders',     href: '/admin/orders'    },
+  { icon: CreditCard,      label: 'Payments',   href: '/admin/payments'  },
   { icon: RotateCcw,       label: 'Returns',    href: '/admin/returns'   },
   { icon: Wallet,          label: 'Payouts',    href: '/admin/payouts'   },
   { icon: Settings,        label: 'Settings',   href: '/admin/settings'  },
