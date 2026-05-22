@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, TextInput, Image, ActivityIndicator, RefreshControl, Dimensions,
@@ -14,7 +14,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useCartStore } from '../../store/cartStore'
 import {
   getAllTopRated, getAllNewStores, getAllStoresByCategory, getFollowedStores,
-  search, CATEGORIES, StoreCard,
+  getProductsByCategory, search, CATEGORIES, StoreCard, ProductCard,
 } from '../../services/discoveryService'
 
 const { width } = Dimensions.get('window')
@@ -38,6 +38,46 @@ function StoreChip({ store, onPress }: { store: StoreCard; onPress: () => void }
   )
 }
 
+function ProductChip({ product, onPress }: { product: ProductCard; onPress: () => void }) {
+  const img = product.images?.[0]
+  return (
+    <TouchableOpacity style={styles.prodCard} onPress={onPress} activeOpacity={0.85}>
+      {img ? (
+        <Image source={{ uri: img }} style={styles.prodImg} />
+      ) : (
+        <View style={[styles.prodImg, styles.prodImgPlaceholder]}><Text style={{ fontSize: 30 }}>🛍️</Text></View>
+      )}
+      <View style={styles.prodBody}>
+        <Text style={styles.prodName} numberOfLines={1}>{product.name}</Text>
+        {!!product.description && <Text style={styles.prodDesc} numberOfLines={2}>{product.description}</Text>}
+        <Text style={styles.prodPrice}>₹{Number(product.price).toLocaleString('en-IN')}</Text>
+      </View>
+    </TouchableOpacity>
+  )
+}
+
+// Horizontal product strip that auto-advances one card at a time and loops.
+function AutoScrollProductRow({ products, onPressProduct }: { products: ProductCard[]; onPressProduct: (p: ProductCard) => void }) {
+  const ref = useRef<ScrollView>(null)
+  const idx = useRef(0)
+  const CARD = 158 // card width (150) + row gap (8)
+  useEffect(() => {
+    if (products.length < 2) return
+    const t = setInterval(() => {
+      idx.current = (idx.current + 1) % products.length
+      ref.current?.scrollTo({ x: idx.current * CARD, animated: true })
+    }, 2800)
+    return () => clearInterval(t)
+  }, [products.length])
+  return (
+    <ScrollView ref={ref} horizontal showsHorizontalScrollIndicator={false}>
+      <View style={styles.chipRow}>
+        {products.map(p => <ProductChip key={p.id} product={p} onPress={() => onPressProduct(p)} />)}
+      </View>
+    </ScrollView>
+  )
+}
+
 function StoreRow({ store, onPress }: { store: StoreCard; onPress: () => void }) {
   const cat = CATEGORIES.find(c => c.id === store.category)
   return (
@@ -57,6 +97,9 @@ function StoreRow({ store, onPress }: { store: StoreCard; onPress: () => void })
         <Text style={styles.storeRowMeta}>
           {cat?.label}{store.city ? ` · ${store.city}` : ''}
         </Text>
+        {!!store.description && (
+          <Text style={styles.storeRowDesc} numberOfLines={1}>{store.description}</Text>
+        )}
         {store.rating_avg > 0 && (
           <Text style={styles.storeRowRating}>⭐ {store.rating_avg.toFixed(1)} ({store.total_reviews} reviews)</Text>
         )}
@@ -83,17 +126,23 @@ export default function HomeScreen({ navigation }: Props) {
   const [clothingStores, setClothingStores] = useState<StoreCard[]>([])
   const [jewelleryStores, setJewelleryStores] = useState<StoreCard[]>([])
   const [beautyStores, setBeautyStores] = useState<StoreCard[]>([])
+  const [clothingProducts, setClothingProducts] = useState<ProductCard[]>([])
+  const [jewelleryProducts, setJewelleryProducts] = useState<ProductCard[]>([])
+  const [beautyProducts, setBeautyProducts] = useState<ProductCard[]>([])
   const [searching, setSearching] = useState(false)
 
   const loadHome = useCallback(async () => {
     try {
-      const [tr, ns, fw, cl, jw, bt] = await Promise.all([
+      const [tr, ns, fw, cl, jw, bt, clp, jwp, btp] = await Promise.all([
         getAllTopRated().catch(() => []),
         getAllNewStores().catch(() => []),
         session?.user ? getFollowedStores(session.user.id).catch(() => []) : Promise.resolve([]),
         getAllStoresByCategory('clothing').catch(() => []),
         getAllStoresByCategory('jewellery').catch(() => []),
         getAllStoresByCategory('beauty').catch(() => []),
+        getProductsByCategory('clothing').catch(() => []),
+        getProductsByCategory('jewellery').catch(() => []),
+        getProductsByCategory('beauty').catch(() => []),
       ])
       setTopRated(tr)
       setNewStores(ns)
@@ -101,6 +150,9 @@ export default function HomeScreen({ navigation }: Props) {
       setClothingStores(cl)
       setJewelleryStores(jw)
       setBeautyStores(bt)
+      setClothingProducts(clp)
+      setJewelleryProducts(jwp)
+      setBeautyProducts(btp)
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -140,6 +192,7 @@ export default function HomeScreen({ navigation }: Props) {
   useEffect(() => { refreshDefaultAddress() }, [])
 
   const goToStore = (slug: string) => navigation.navigate('Storefront', { slug })
+  const goToProduct = (p: ProductCard) => { if (p.stores?.store_slug) navigation.navigate('Storefront', { slug: p.stores.store_slug }) }
   const showSearch = !!searchQuery.trim()
   const showCategoryFeed = !!selectedCategory && !showSearch
 
@@ -307,6 +360,12 @@ export default function HomeScreen({ navigation }: Props) {
                   {clothingStores.map(s => <StoreChip key={s.id} store={s} onPress={() => goToStore(s.store_slug)} />)}
                 </View>
               </ScrollView>
+              {clothingProducts.length > 0 && (
+                <>
+                  <Text style={styles.groupProductsLabel}>Featured products</Text>
+                  <AutoScrollProductRow products={clothingProducts} onPressProduct={goToProduct} />
+                </>
+              )}
             </View>
           )}
 
@@ -326,6 +385,12 @@ export default function HomeScreen({ navigation }: Props) {
                   {jewelleryStores.map(s => <StoreChip key={s.id} store={s} onPress={() => goToStore(s.store_slug)} />)}
                 </View>
               </ScrollView>
+              {jewelleryProducts.length > 0 && (
+                <>
+                  <Text style={styles.groupProductsLabel}>Featured products</Text>
+                  <AutoScrollProductRow products={jewelleryProducts} onPressProduct={goToProduct} />
+                </>
+              )}
             </View>
           )}
 
@@ -345,6 +410,12 @@ export default function HomeScreen({ navigation }: Props) {
                   {beautyStores.map(s => <StoreChip key={s.id} store={s} onPress={() => goToStore(s.store_slug)} />)}
                 </View>
               </ScrollView>
+              {beautyProducts.length > 0 && (
+                <>
+                  <Text style={styles.groupProductsLabel}>Featured products</Text>
+                  <AutoScrollProductRow products={beautyProducts} onPressProduct={goToProduct} />
+                </>
+              )}
             </View>
           )}
 
@@ -483,7 +554,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6, paddingVertical: 2,
   },
   storeRowMeta: { fontSize: 12, color: colors.textMuted, marginTop: 3 },
+  storeRowDesc: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   storeRowRating: { fontSize: 12, color: '#F59E0B', fontWeight: '600', marginTop: 2 },
+
+  groupProductsLabel: { fontSize: 13, fontWeight: '700', color: '#FFFFFF', marginTop: 12, marginBottom: 8 },
+  prodCard: {
+    width: 150, borderRadius: 14, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.white, overflow: 'hidden',
+  },
+  prodImg: { width: 150, height: 110 },
+  prodImgPlaceholder: { backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
+  prodBody: { padding: 8 },
+  prodName: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
+  prodDesc: { fontSize: 11, color: colors.textMuted, marginTop: 2, lineHeight: 15 },
+  prodPrice: { fontSize: 13, fontWeight: '800', color: colors.primary, marginTop: 4 },
 
   empty: { alignItems: 'center', paddingVertical: 70 },
   emptyIcon: { fontSize: 52, marginBottom: spacing.md },

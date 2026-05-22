@@ -1,6 +1,10 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { Marketplace } from '@/components/home/Marketplace'
+
+// Always render fresh marketplace data (new stores/products show up without a redeploy).
+export const revalidate = 60
 
 export const metadata: Metadata = {
   title: 'ReelMart — Sell on WhatsApp & Instagram with your own storefront',
@@ -13,6 +17,7 @@ export default function HomePage() {
     <main className="min-h-screen bg-white text-text">
       <Header />
       <Hero />
+      <Marketplace />
       <Features />
       <HowItWorks />
       <Testimonials />
@@ -77,6 +82,12 @@ function Hero() {
           >
             I already have an account
           </Link>
+          <a
+            href="#marketplace"
+            className="inline-flex h-12 px-7 items-center justify-center rounded-btn bg-text text-white font-medium hover:opacity-90 transition"
+          >
+            Browse stores ↓
+          </a>
         </div>
         <p className="mt-4 text-sm text-muted">Set up in minutes. Start selling today.</p>
       </div>

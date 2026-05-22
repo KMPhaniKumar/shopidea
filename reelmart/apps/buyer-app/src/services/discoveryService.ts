@@ -8,6 +8,7 @@ export interface StoreCard {
   logo_url: string | null
   city: string
   area: string | null
+  description: string | null
   rating_avg: number
   total_reviews: number
   total_orders: number
@@ -19,8 +20,9 @@ export interface ProductCard {
   name: string
   price: number
   images: string[]
+  description: string | null
   store_id: string
-  stores: { store_name: string; store_slug: string; city: string } | null
+  stores: { store_name: string; store_slug: string; city: string; category?: string } | null
 }
 
 export const CATEGORIES = [
@@ -33,7 +35,7 @@ export const CATEGORIES = [
   { id: 'other',       label: 'Other',       icon: '🎁' },
 ]
 
-const STORE_SELECT = 'id, store_name, store_slug, category, logo_url, city, area, rating_avg, total_reviews, total_orders, is_verified'
+const STORE_SELECT = 'id, store_name, store_slug, category, logo_url, city, area, description, rating_avg, total_reviews, total_orders, is_verified'
 
 export async function getStoresByCity(city: string, category?: string): Promise<StoreCard[]> {
   let query = supabase
@@ -106,6 +108,20 @@ export async function getAllNewStores(): Promise<StoreCard[]> {
   return (data as StoreCard[]) ?? []
 }
 
+// Available products whose store is in the given category — with descriptions,
+// for the home feed's per-category product carousels.
+export async function getProductsByCategory(category: string): Promise<ProductCard[]> {
+  const { data } = await supabase
+    .from('products')
+    .select('id, name, price, images, description, store_id, stores!inner(store_name, store_slug, city, category, is_active)')
+    .eq('is_available', true)
+    .eq('stores.category', category)
+    .eq('stores.is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(20)
+  return (data as unknown as ProductCard[]) ?? []
+}
+
 export async function getFollowedStores(buyerId: string): Promise<StoreCard[]> {
   const { data } = await supabase
     .from('followed_stores')
@@ -125,7 +141,7 @@ export async function search(query: string, city: string): Promise<{ stores: Sto
       .limit(6),
     supabase
       .from('products')
-      .select('id, name, price, images, store_id, stores(store_name, store_slug, city)')
+      .select('id, name, price, images, description, store_id, stores(store_name, store_slug, city)')
       .ilike('name', `%${term}%`)
       .eq('is_available', true)
       .limit(12),
