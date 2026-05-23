@@ -11,6 +11,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "ios": { "simulator": true },
       "android": { "buildType": "apk" },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://nysgwdpmpxqmfwelfaxo.supabase.co",
