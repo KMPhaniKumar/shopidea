@@ -1,21 +1,20 @@
-// Public marketplace: every active store as its own block — seller name +
-// Instagram handle on top, then an auto-scrolling strip of that seller's products.
+// Public marketplace: products grouped into category widgets (Jewellery,
+// Clothing, …). Each product card credits its seller — store name + Instagram.
 // Server component — reads via the anon SSR client (RLS allows public reads of
 // active stores + available products).
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { ProductCarousel, type CarouselProduct } from './ProductCarousel'
 
-// Category id (as stored on stores.category) → display + accent colour.
-const CATEGORY_META: Record<string, { label: string; icon: string; accent: string }> = {
-  food:        { label: 'Food & Beverages',   icon: '🍱', accent: '#FF6B2B' },
-  clothing:    { label: 'Clothing & Fashion', icon: '👗', accent: '#D6336C' },
-  jewellery:   { label: 'Jewellery',          icon: '💍', accent: '#C99A00' },
-  electronics: { label: 'Electronics',        icon: '📱', accent: '#1E88E5' },
-  home:        { label: 'Home & Decor',       icon: '🏡', accent: '#1A8F5A' },
-  beauty:      { label: 'Beauty & Wellness',  icon: '💄', accent: '#7C3AED' },
-  other:       { label: 'Store',              icon: '🛍️', accent: '#555555' },
-}
+// Category id (as stored on stores.category) → display + section colour.
+const CATEGORIES: { id: string; label: string; icon: string; bg: string; accent: string }[] = [
+  { id: 'jewellery',   label: 'Jewellery',          icon: '💍', bg: '#FFF9E6', accent: '#C99A00' },
+  { id: 'clothing',    label: 'Clothing & Fashion', icon: '👗', bg: '#FDEAF3', accent: '#D6336C' },
+  { id: 'food',        label: 'Food & Beverages',   icon: '🍱', bg: '#FFF4EC', accent: '#FF6B2B' },
+  { id: 'electronics', label: 'Electronics',        icon: '📱', bg: '#E9F1FF', accent: '#1E88E5' },
+  { id: 'home',        label: 'Home & Decor',       icon: '🏡', bg: '#E9F8F0', accent: '#1A8F5A' },
+  { id: 'beauty',      label: 'Beauty & Wellness',  icon: '💄', bg: '#F4EAFE', accent: '#7C3AED' },
+  { id: 'other',       label: 'More products',      icon: '🛍️', bg: '#F4F4F5', accent: '#555555' },
+]
 
 function firstImage(images: unknown): string | null {
   return Array.isArray(images) && images.length > 0 ? String(images[0]) : null
@@ -37,22 +36,20 @@ export async function Marketplace() {
   const [{ data: stores }, { data: products }] = await Promise.all([
     supabase
       .from('stores')
-      .select('id, store_name, store_slug, category, logo_url, city, description, instagram_handle, rating_avg, is_verified')
-      .eq('is_active', true)
-      .order('rating_avg', { ascending: false }),
+      .select('store_slug, store_name, instagram_handle')
+      .eq('is_active', true),
     supabase
       .from('products')
-      .select('id, name, price, images, description, stores!inner(store_slug, is_active)')
+      .select('id, name, price, images, description, stores!inner(store_slug, store_name, category, instagram_handle, is_active)')
       .eq('is_available', true)
       .eq('stores.is_active', true)
       .order('created_at', { ascending: false })
       .limit(400),
   ])
 
-  const allStores = stores ?? []
   const allProducts = products ?? []
 
-  if (allStores.length === 0) {
+  if ((stores ?? []).length === 0) {
     return (
       <section className="px-6 py-16 text-center">
         <h2 className="text-2xl font-bold">Stores are on their way</h2>
@@ -61,100 +58,55 @@ export async function Marketplace() {
     )
   }
 
-  // Group products by their store's slug.
-  const productsByStore = new Map<string, CarouselProduct[]>()
+  // Map products to the carousel shape (with seller credit), grouped by category.
+  const productsByCat = new Map<string, CarouselProduct[]>()
   for (const p of allProducts as any[]) {
-    const slug = p.stores?.store_slug
-    if (!slug) continue
+    const store = p.stores
+    if (!store?.store_slug) continue
+    const cat = CATEGORIES.some(c => c.id === store.category) ? store.category : 'other'
     const item: CarouselProduct = {
       id: p.id, name: p.name, price: p.price, description: p.description,
-      image: firstImage(p.images), store_slug: slug,
+      image: firstImage(p.images),
+      store_slug: store.store_slug,
+      store_name: store.store_name,
+      store_instagram: instaUsername(store.instagram_handle),
     }
-    if (!productsByStore.has(slug)) productsByStore.set(slug, [])
-    productsByStore.get(slug)!.push(item)
+    if (!productsByCat.has(cat)) productsByCat.set(cat, [])
+    productsByCat.get(cat)!.push(item)
   }
 
-  // Show sellers that have at least one product first (most browse-worthy),
-  // then the rest. Both keep the rating order from the query.
-  const withProducts = allStores.filter(s => (productsByStore.get(s.store_slug)?.length ?? 0) > 0)
-  const withoutProducts = allStores.filter(s => (productsByStore.get(s.store_slug)?.length ?? 0) === 0)
-  const orderedStores = [...withProducts, ...withoutProducts]
+  const sections = CATEGORIES.filter(c => (productsByCat.get(c.id)?.length ?? 0) > 0)
+
+  if (sections.length === 0) {
+    return (
+      <section className="px-6 py-16 text-center">
+        <h2 className="text-2xl font-bold">Products are on their way</h2>
+        <p className="mt-2 text-secondary">Sellers are stocking their shelves. Check back soon!</p>
+      </section>
+    )
+  }
 
   return (
     <section id="marketplace" className="px-6 py-12 sm:py-16">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-10">
-          <h2 className="text-3xl sm:text-4xl font-bold">Discover stores on ReelMart</h2>
-          <p className="mt-3 text-secondary">Real sellers across India — explore their stores and products.</p>
+          <h2 className="text-3xl sm:text-4xl font-bold">Discover products on ReelMart</h2>
+          <p className="mt-3 text-secondary">Shop by category from real sellers across India.</p>
         </div>
 
         <div className="space-y-6">
-          {orderedStores.map(s => {
-            const meta = CATEGORY_META[s.category] ?? CATEGORY_META.other
-            const storeProducts = productsByStore.get(s.store_slug) ?? []
-            const insta = instaUsername(s.instagram_handle)
+          {sections.map(cat => {
+            const catProducts = productsByCat.get(cat.id) ?? []
             return (
-              <div key={s.id} className="rounded-card border border-border p-5 sm:p-7 bg-white shadow-card">
-                {/* Seller header: name + Instagram handle */}
-                <div className="flex items-center gap-3 mb-5">
-                  <Link
-                    href={`/store/${s.store_slug}`}
-                    className="w-12 h-12 rounded-full overflow-hidden bg-surface flex items-center justify-center shrink-0 border border-border"
-                  >
-                    {s.logo_url
-                      ? <img src={s.logo_url} alt="" className="w-full h-full object-cover" />
-                      : <span className="font-bold text-lg text-secondary">{s.store_name?.[0]?.toUpperCase()}</span>}
-                  </Link>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <Link href={`/store/${s.store_slug}`} className="font-bold text-lg text-text truncate hover:text-primary">
-                        {s.store_name}
-                      </Link>
-                      {s.is_verified && (
-                        <span title="Verified seller" className="text-primary shrink-0" aria-label="Verified">
-                          <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 inline">
-                            <path d="M12 2l2.4 1.8 3 .1 1 2.8 2.3 1.9-.9 2.9.9 2.9-2.3 1.9-1 2.8-3 .1L12 22l-2.4-1.8-3-.1-1-2.8L3.3 15.4l.9-2.9-.9-2.9 2.3-1.9 1-2.8 3-.1L12 2z" />
-                            <path d="M10.6 14.6l-2.2-2.2 1.1-1.1 1.1 1.1 3.3-3.3 1.1 1.1-4.4 4.4z" fill="#fff" />
-                          </svg>
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5 text-sm">
-                      {insta ? (
-                        <a
-                          href={`https://instagram.com/${insta}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-secondary hover:text-primary"
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4">
-                            <rect x="2.5" y="2.5" width="19" height="19" rx="5" />
-                            <circle cx="12" cy="12" r="4" />
-                            <circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none" />
-                          </svg>
-                          @{insta}
-                        </a>
-                      ) : (
-                        <span className="text-muted">{meta.icon} {meta.label}{s.city ? ` · ${s.city}` : ''}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <Link
-                    href={`/store/${s.store_slug}`}
-                    className="shrink-0 hidden sm:inline-flex h-9 px-4 items-center rounded-btn border border-border text-sm font-medium text-text hover:bg-surface transition"
-                  >
-                    Visit store →
-                  </Link>
+              <div key={cat.id} className="rounded-card p-5 sm:p-7" style={{ backgroundColor: cat.bg }}>
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-2xl">{cat.icon}</span>
+                  <h3 className="text-xl font-bold" style={{ color: cat.accent }}>{cat.label}</h3>
+                  <span className="text-sm text-secondary">· {catProducts.length} {catProducts.length === 1 ? 'product' : 'products'}</span>
                 </div>
 
-                {/* Seller's products */}
-                {storeProducts.length > 0 ? (
-                  <ProductCarousel products={storeProducts} />
-                ) : (
-                  <p className="text-sm text-muted">New products coming soon.</p>
-                )}
+                {/* Individual products, each credited to its seller */}
+                <ProductCarousel products={catProducts} />
               </div>
             )
           })}
