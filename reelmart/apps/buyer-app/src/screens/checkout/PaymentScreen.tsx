@@ -5,10 +5,12 @@ import { RouteProp } from '@react-navigation/native'
 import { colors, spacing } from '../../constants/theme'
 import { useAuthStore } from '../../store/authStore'
 
-// RazorpayCheckout is a native module — install with:
-// yarn add react-native-razorpay
-let RazorpayCheckout: any
-try { RazorpayCheckout = require('react-native-razorpay').default } catch { RazorpayCheckout = null }
+// Online payment (Razorpay) is paused. The native `react-native-razorpay`
+// module was removed because it lacks an Android `namespace` and fails the
+// AGP 8 build (Expo SDK 54 / RN 0.81). Checkout uses Cash on Delivery for now.
+// To re-enable: re-add react-native-razorpay with a patch-package/config-plugin
+// that sets its android namespace, then restore the require below.
+const RazorpayCheckout: any = null
 
 const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3003').replace(/\/$/, '')
 const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ?? ''
@@ -36,7 +38,7 @@ export default function PaymentScreen({ navigation, route }: Props) {
     }
 
     if (!RazorpayCheckout) {
-      Alert.alert('Payment unavailable', 'Razorpay SDK not installed. Run: yarn add react-native-razorpay')
+      Alert.alert('Online payment coming soon', 'Please choose Cash on Delivery for now.')
       navigation.goBack()
       return
     }
