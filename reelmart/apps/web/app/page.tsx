@@ -16,7 +16,6 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-white text-text">
       <Header />
-      <Hero />
       <Marketplace />
       <BuyerAppCallout />
       <Footer />
@@ -47,40 +46,6 @@ function Header() {
         </nav>
       </div>
     </header>
-  )
-}
-
-function Hero() {
-  return (
-    <section className="px-6 pt-16 pb-12 sm:pt-24 sm:pb-16">
-      <div className="max-w-4xl mx-auto text-center">
-        <span className="inline-block px-3 py-1 rounded-full bg-surface border border-border text-xs font-medium text-secondary mb-6">
-          Real products. Real sellers.
-        </span>
-        <h1 className="text-4xl sm:text-6xl font-bold leading-tight tracking-tight">
-          Shop local sellers,<br />
-          <span className="text-primary">all in one place.</span>
-        </h1>
-        <p className="mt-6 text-lg sm:text-xl text-secondary max-w-2xl mx-auto">
-          Discover stores and products from sellers across India. Browse by category,
-          order in a tap, and track your delivery — no app required.
-        </p>
-        <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
-          <a
-            href="#marketplace"
-            className="inline-flex h-12 px-7 items-center justify-center rounded-btn bg-primary text-white font-medium hover:opacity-90 transition"
-          >
-            Browse stores ↓
-          </a>
-          <a
-            href="#get-app"
-            className="inline-flex h-12 px-7 items-center justify-center rounded-btn bg-white border border-border text-text font-medium hover:bg-surface transition"
-          >
-            Get the app
-          </a>
-        </div>
-      </div>
-    </section>
   )
 }
 
