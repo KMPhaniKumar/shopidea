@@ -1,27 +1,60 @@
 name: Deploy
 
+# Backend runs on AWS ECS Fargate (cluster reelmart-dev, ap-south-1); images in
+# ECR (reelmart/<service>:dev-latest). Web on Vercel; DB on Supabase.
+#
+# One-time setup required (GitHub repo settings → Secrets and variables → Actions):
+#   AWS_DEPLOY_ROLE_ARN   IAM role this repo can assume via GitHub OIDC, with
+#                         ECR push + ecs:UpdateService/Describe permissions.
+#                         (Create an OIDC provider for token.actions.githubusercontent.com
+#                          and a role trusting this repo.)
+#   VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
+#   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
+#   SUPABASE_DB_URL, SUPABASE_PROJECT_REF, SUPABASE_ACCESS_TOKEN
+#
+# (If you prefer static keys over OIDC, swap the configure-aws-credentials step
+#  for aws-access-key-id/aws-secret-access-key secrets.)
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
+env:
+  AWS_REGION: ap-south-1
+  ECR_REGISTRY: 632127307144.dkr.ecr.ap-south-1.amazonaws.com
+  ECS_CLUSTER: reelmart-dev
+
 jobs:
-  lint-backend:
-    name: Lint & Build Backend
+  # ---- Build & lint (runs on PRs and pushes) -------------------------------
+  build-services:
+    name: Build backend services
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: reelmart/backend
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - admin-service
+          - analytics-service
+          - catalog-service
+          - delivery-service
+          - notification-service
+          - order-service
+          - payment-service
+          - payout-service
+          - return-service
+          - whatsapp-service
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: reelmart/backend/package-lock.json
-      - run: npm ci
-      - run: npx tsc --noEmit
+      - name: Type-check & build
+        working-directory: reelmart/services/${{ matrix.service }}
+        run: |
+          npm install
+          npm run build
 
   lint-web:
     name: Lint & Build Web
@@ -42,26 +75,51 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
-  deploy-backend:
-    name: Deploy Backend to Railway
-    needs: lint-backend
-    runs-on: ubuntu-latest
+  # ---- Deploy (push to main only) ------------------------------------------
+  deploy-services:
+    name: Deploy ${{ matrix.service }} to Fargate
+    needs: build-services
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # for AWS OIDC
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - admin-service
+          - analytics-service
+          - catalog-service
+          - delivery-service
+          - notification-service
+          - order-service
+          - payment-service
+          - payout-service
+          - return-service
+          - whatsapp-service
     steps:
       - uses: actions/checkout@v4
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-      - name: Deploy
-        run: railway up --service backend --detach
-        working-directory: reelmart/backend
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Login to ECR
+        run: aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+      - name: Build, push & roll out
+        run: |
+          IMAGE=$ECR_REGISTRY/reelmart/${{ matrix.service }}:dev-latest
+          docker build -t "$IMAGE" reelmart/services/${{ matrix.service }}
+          docker push "$IMAGE"
+          aws ecs update-service --cluster $ECS_CLUSTER --service ${{ matrix.service }} --force-new-deployment >/dev/null
+          aws ecs wait services-stable --cluster $ECS_CLUSTER --services ${{ matrix.service }}
 
   deploy-web:
     name: Deploy Web to Vercel
     needs: lint-web
-    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -77,9 +135,8 @@ jobs:
 
   deploy-supabase:
     name: Apply Supabase Migrations
-    needs: lint-backend
-    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
