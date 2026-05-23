@@ -1,0 +1,36 @@
+{
+  "cli": {
+    "version": ">= 18.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": { "buildType": "apk" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://nysgwdpmpxqmfwelfaxo.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im55c2d3ZHBtcHhxbWZ3ZWxmYXhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NTM3ODIsImV4cCI6MjA5MzMyOTc4Mn0.0XxU5z0K5xj1NsRFsY-w2F2grO8ZIyp2t6gEH8HlJb0",
+        "EXPO_PUBLIC_API_URL": "https://api-dev.reelmart.in",
+        "EXPO_PUBLIC_BACKEND_URL": "https://api-dev.reelmart.in"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "android": { "buildType": "app-bundle" },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://nysgwdpmpxqmfwelfaxo.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im55c2d3ZHBtcHhxbWZ3ZWxmYXhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NTM3ODIsImV4cCI6MjA5MzMyOTc4Mn0.0XxU5z0K5xj1NsRFsY-w2F2grO8ZIyp2t6gEH8HlJb0",
+        "EXPO_PUBLIC_API_URL": "https://api-dev.reelmart.in",
+        "EXPO_PUBLIC_BACKEND_URL": "https://api-dev.reelmart.in"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
