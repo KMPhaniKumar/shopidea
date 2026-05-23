@@ -3,31 +3,11 @@
 // Server component — reads via the anon SSR client (RLS allows public reads of
 // active stores + available products).
 import { createClient } from '@/lib/supabase/server'
+import { CATEGORIES, instaUsername } from '@/lib/categories'
 import { ProductCarousel, type CarouselProduct } from './ProductCarousel'
-
-// Category id (as stored on stores.category) → display + section colour.
-const CATEGORIES: { id: string; label: string; icon: string; bg: string; accent: string }[] = [
-  { id: 'jewellery',   label: 'Jewellery',          icon: '💍', bg: '#FFF9E6', accent: '#C99A00' },
-  { id: 'clothing',    label: 'Clothing & Fashion', icon: '👗', bg: '#FDEAF3', accent: '#D6336C' },
-  { id: 'food',        label: 'Food & Beverages',   icon: '🍱', bg: '#FFF4EC', accent: '#FF6B2B' },
-  { id: 'electronics', label: 'Electronics',        icon: '📱', bg: '#E9F1FF', accent: '#1E88E5' },
-  { id: 'home',        label: 'Home & Decor',       icon: '🏡', bg: '#E9F8F0', accent: '#1A8F5A' },
-  { id: 'beauty',      label: 'Beauty & Wellness',  icon: '💄', bg: '#F4EAFE', accent: '#7C3AED' },
-  { id: 'other',       label: 'More products',      icon: '🛍️', bg: '#F4F4F5', accent: '#555555' },
-]
 
 function firstImage(images: unknown): string | null {
   return Array.isArray(images) && images.length > 0 ? String(images[0]) : null
-}
-
-// Normalise a stored Instagram handle to a bare username (no @, no URL).
-function instaUsername(handle: string | null | undefined): string | null {
-  if (!handle) return null
-  let h = handle.trim()
-  if (!h) return null
-  h = h.replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/\/+$/, '')
-  h = h.replace(/^@/, '')
-  return h || null
 }
 
 export async function Marketplace() {
@@ -91,7 +71,7 @@ export async function Marketplace() {
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-10">
           <h2 className="text-3xl sm:text-4xl font-bold">Discover products on ReelMart</h2>
-          <p className="mt-3 text-secondary">Shop by category from real sellers across India.</p>
+          <p className="mt-3 text-secondary">Shop by category from real instagram sellers across India.</p>
         </div>
 
         <div className="space-y-6">

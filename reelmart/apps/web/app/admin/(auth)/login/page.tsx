@@ -40,7 +40,11 @@ export default function AdminLoginPage() {
       return
     }
 
-    router.push('/admin')
+    // Hard navigation (not router.push): the admin layout checks the session
+    // server-side, and a soft client transition doesn't carry the just-set
+    // auth cookies — so getUser() returns null and bounces back to login.
+    // A full document request includes the cookies, so the server sees the session.
+    window.location.assign('/admin')
   }
 
   function devLogin() {

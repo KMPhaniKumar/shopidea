@@ -31,15 +31,17 @@ function Header() {
           <Image src="/logo.png" alt="ReelMart" width={140} height={50} priority className="object-contain" />
         </Link>
         <nav className="flex items-center gap-3">
-          <a
-            href="#marketplace"
-            className="hidden sm:inline-flex h-10 px-4 items-center text-sm font-medium text-text hover:text-primary"
+          <Link
+            href="/stores"
+            className="hidden sm:inline-flex h-10 px-4 items-center text-sm font-medium text-primary hover:opacity-80"
           >
             Browse stores
-          </a>
+          </Link>
           <Link
             href="/seller"
-            className="inline-flex h-10 px-5 items-center rounded-btn border border-border text-text text-sm font-medium hover:bg-surface transition"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-10 px-5 items-center rounded-btn border border-border text-primary text-sm font-medium hover:bg-surface transition"
           >
             Sell on ReelMart →
           </Link>
@@ -103,9 +105,12 @@ function Footer() {
           <span className="text-sm text-muted">© 2026 ReelMart™</span>
         </div>
         <nav className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-secondary">
-          <a href="#marketplace" className="hover:text-primary">Browse stores</a>
+          <Link href="/stores" className="hover:text-primary">Browse stores</Link>
           <Link href="/seller" className="hover:text-primary">Sell on ReelMart</Link>
-          <a href="mailto:hello@reelmart.in" className="hover:text-primary">Contact</a>
+          <a href="/legal/privacy-policy.html" className="hover:text-primary">Privacy Policy</a>
+          <a href="/legal/terms.html" className="hover:text-primary">Terms &amp; Conditions</a>
+          <a href="/legal/refund-return.html" className="hover:text-primary">Refund &amp; Returns</a>
+          <a href="mailto:support@reelmart.in" className="hover:text-primary">Contact</a>
         </nav>
       </div>
     </footer>

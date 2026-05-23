@@ -231,7 +231,7 @@ function Footer() {
           <Link href="/seller/login" className="hover:text-primary">Seller login</Link>
           <Link href="/seller/register" className="hover:text-primary">Get started</Link>
           <Link href="/" className="hover:text-primary">Shop on ReelMart</Link>
-          <a href="mailto:hello@reelmart.in" className="hover:text-primary">Contact</a>
+          <a href="mailto:support@reelmart.in" className="hover:text-primary">Contact</a>
         </nav>
       </div>
     </footer>
