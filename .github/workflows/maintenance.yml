@@ -1,0 +1,61 @@
+name: Maintenance
+
+# Automated, unattended maintenance. Uses the GitHub OIDC role (no human AWS
+# session). Failures surface in the Actions tab / email so the solo maintainer
+# gets notified without watching dashboards.
+
+on:
+  schedule:
+    - cron: '30 19 * * *'   # ~01:00 IST daily — Terraform drift
+    - cron: '0 20 * * 0'    # ~01:30 IST Sunday — dependency audit
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write   # AWS OIDC
+  contents: read
+
+jobs:
+  tf-drift:
+    name: Terraform drift (${{ matrix.layer }})
+    if: github.event.schedule == '30 19 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        layer: [network, cluster, services]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-south-1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: terraform plan (detailed exit code)
+        working-directory: infra/terraform/environments/dev/${{ matrix.layer }}
+        run: |
+          terraform init -input=false
+          set +e
+          terraform plan -no-color -input=false -detailed-exitcode
+          code=$?
+          if [ $code -eq 2 ]; then
+            echo "::warning title=Terraform drift::Layer '${{ matrix.layer }}' has drift (plan shows changes). Run /tf-drift and reconcile."
+            exit 1
+          fi
+          exit $code
+
+  dep-audit:
+    name: Dependency audit (web)
+    if: github.event.schedule == '0 20 * * 0' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: npm audit (high+)
+        working-directory: reelmart/apps/web
+        run: |
+          npm install --package-lock-only
+          npm audit --audit-level=high || echo "::warning title=npm audit::High/critical vulnerabilities found in apps/web — review."

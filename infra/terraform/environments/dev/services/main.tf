@@ -40,6 +40,8 @@ locals {
   task_role_arn            = data.terraform_remote_state.network.outputs.task_role_arn
   secret_arns              = data.terraform_remote_state.network.outputs.secret_arns
   alb_dns_name             = data.terraform_remote_state.network.outputs.alb_dns_name
+  subnet_ids               = data.terraform_remote_state.network.outputs.public_subnet_ids
+  fargate_sg_id            = data.terraform_remote_state.network.outputs.fargate_security_group_id
 
   base_url = "http://${local.alb_dns_name}"
 
@@ -166,6 +168,8 @@ module "ecs_service" {
   min_capacity            = 1
   max_capacity            = each.value.max_capacity
   target_group_arn        = local.target_group_arns[each.key]
+  subnet_ids              = local.subnet_ids
+  security_group_ids      = [local.fargate_sg_id]
   task_execution_role_arn = local.task_execution_role_arn
   task_role_arn           = local.task_role_arn
 

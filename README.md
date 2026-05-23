@@ -2,7 +2,8 @@
 
 Social commerce platform for Indian micro-sellers — sell on WhatsApp / Instagram with a real storefront, order management, payments, and delivery.
 
-> **Status:** all 18/18 agents complete; production-blockers tracked in [`agents/AUDIT_gaps.md`](agents/AUDIT_gaps.md).
+> **Status (2026-05):** feature-complete platform live on AWS. Backend = 10 microservices on **ECS Fargate** (`api-dev.reelmart.in`), web on **Vercel** (`dev.reelmart.in`), DB on **Supabase**, infra in **Terraform**.
+> **👉 Read [`agents/AUDIT_gaps.md`](agents/AUDIT_gaps.md) first** — it's the canonical current status (real architecture, what's built, what's pending, test accounts).
 
 ---
 
@@ -12,20 +13,21 @@ Social commerce platform for Indian micro-sellers — sell on WhatsApp / Instagr
 shopidea/
 ├── reelmart/                         # all source code lives here
 │   ├── apps/
-│   │   ├── buyer-app/                # React Native (Expo) — buyer mobile app
-│   │   ├── seller-app/               # React Native (Expo) — seller mobile app
-│   │   └── web/                      # Next.js 14 — public storefront + seller dashboard + admin
-│   ├── backend/                      # Node + Express — payments, delivery, WhatsApp, push, payouts
+│   │   ├── buyer-app/                # React Native (Expo) — buyer mobile app (active)
+│   │   ├── seller-app/               # React Native (Expo) — parked; web is the seller surface
+│   │   └── web/                      # Next.js 14 — marketplace home + storefront + seller dashboard + admin
+│   ├── services/                     # 10 Node + Express microservices (ECS Fargate). NOTE: old reelmart/backend is gone
+│   │   ├── admin-service/            # incl. MSG91 auth-bridge (/api/admin/auth/*)
+│   │   ├── catalog/order/payment/delivery(NimbusPost)/notification/whatsapp/payout/return/analytics-service/
 │   ├── supabase/
-│   │   ├── migrations/               # 001-015 — full schema + RLS + Realtime publication
-│   │   └── functions/                # Edge Functions (order-notifications, store-router, send-sms-msg91)
+│   │   ├── migrations/               # 001-020 — schema + RLS + Realtime + storage
+│   │   └── functions/                # Edge Functions
 │   └── shared/                       # cross-package TypeScript types
 │
-├── agents/                           # implementation guides (reference)
-├── documents/                        # idea + tech stack + naming docs
-├── TRACKER.md                        # daily log + agent completion board
-├── FLOWS.md                          # end-to-end functionality flows for every screen
-├── DEPLOYMENT_PLAN.md                # production deploy plan
+├── infra/terraform/                  # IaC: VPC/ALB/ECS-Fargate/ECR/IAM (layers: network, cluster, services)
+├── agents/                           # status + implementation guides — AUDIT_gaps.md is canonical
+├── .github/workflows/deploy.yml      # CI: build→ECR→ECS update + Vercel + supabase db push
+├── TRACKER.md   FLOWS.md   DEPLOYMENT_PLAN.md   DLT_SETUP.md
 └── README.md                         # ← you are here
 ```
 
@@ -37,17 +39,16 @@ shopidea/
 # Web (seller dashboard + admin + public storefront)
 cd reelmart/apps/web && npm install && npm run dev      # localhost:3000
 
-# Backend (payments, delivery, WhatsApp bot)
-cd reelmart/backend && npm install && npm run dev       # localhost:3001
+# Backend microservices (run all locally via docker-compose, or one at a time)
+cd reelmart/services && docker compose up --build       # or: cd reelmart/services/<svc> && npm install && npm run dev
 
 # Buyer mobile app
 cd reelmart/apps/buyer-app && npm install && npx expo start
-
-# Seller mobile app
-cd reelmart/apps/seller-app && npm install && npx expo start
 ```
 
-Supabase project is hosted (no local Supabase needed). Env vars are already wired to project `nysgwdpmpxqmfwelfaxo`.
+The web app normally talks to the **deployed** API (`api-dev.reelmart.in`) — its `apps/web/.env.local` mostly comes from Vercel. Supabase is hosted (project `nysgwdpmpxqmfwelfaxo`); no local Supabase needed.
+
+**Deploy:** push to `main` → `.github/workflows/deploy.yml` builds each service image → ECR → `ecs update-service` on Fargate, deploys web to Vercel, and runs `supabase db push`. Infra changes go through Terraform in `infra/terraform/`.
 
 ---
 
@@ -79,15 +80,14 @@ Every screen's full data flow is documented in [`FLOWS.md`](FLOWS.md).
 
 ## Tech stack (canonical — see `.claude/CLAUDE.md` for full conventions)
 
-- **DB / Auth / Storage / Realtime:** Supabase (Postgres + RLS + Edge Functions)
+- **DB / Auth / Storage / Realtime:** Supabase (Postgres + RLS + Edge Functions), project `nysgwdpmpxqmfwelfaxo`
+- **Login auth:** MSG91 OTP widget → auth-bridge in `admin-service` → Supabase session (NOT Supabase Phone/Twilio)
+- **Backend:** 10 Node + Express/TS microservices (`reelmart/services/*`) on **AWS ECS Fargate** (ap-south-1), ALB `api-dev.reelmart.in`, Terraform-managed
+- **Web:** Next.js 14 App Router on **Vercel** (`dev.reelmart.in`)
 - **Mobile:** React Native (Expo), React Navigation, Zustand
-- **Web:** Next.js 14 App Router, RSC, Tailwind
-- **Backend:** Node + Express
-- **Payments:** Razorpay (mobile wired; web wiring pending)
-- **Delivery:** Shiprocket
-- **WhatsApp:** Gupshup (alerts + conversational ordering bot)
-- **Push:** Firebase FCM
-- **SMS OTP:** Twilio via Supabase Phone provider (DLT pending for India production)
+- **Payments:** Razorpay (web checkout + RazorpayX payouts still PENDING)
+- **Delivery:** **NimbusPost** (per-seller pickup registration)
+- **WhatsApp:** Gupshup · **Push:** Firebase FCM · **SMS:** MSG91 (DLT pending)
 
 ---
 
@@ -116,6 +116,7 @@ For real OTP testing the test phone number must be configured in **Supabase Dash
 
 See [`agents/AUDIT_gaps.md`](agents/AUDIT_gaps.md) for the full list. Headlines:
 
-1. **Razorpay web checkout SDK** — not yet wired (~30 min)
-2. **DLT registration** for SMS to Indian numbers (Twilio rejects without it; possible workaround: switch to Indian SMS provider via Supabase Send-SMS Hook)
-3. **App store submission** — Play Store + App Store assets, builds, listings
+1. **DB migrations 014/015/019/020 not applied to the dev Supabase** — KYC/approval/pickup columns missing until applied (verify + `supabase db push`)
+2. **Razorpay web checkout** + **RazorpayX payouts** — PAUSED; not wired
+3. **`delivery-service` task def lacks `NIMBUS_AUTH_TOKEN`** — NimbusPost no-ops until set
+4. **App store submission** — buyer-app APK (`eas.json` ready) + listings; DLT registration for +91 SMS

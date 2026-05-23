@@ -10,19 +10,8 @@ Terraform + AWS infra for the ReelMart platform. Two environments: `dev` and `pr
 infra/
 ├── README.md                  ← you are here
 ├── DIAGRAM.md                 ← full architecture diagram
-├── agents/                    ← phase-by-phase execution playbooks
-│   ├── 00_master.md           ← index + execution order + global conventions
-│   ├── 01_aws_bootstrap.md    ← Phase 0  (one-time AWS account prep)
-│   ├── 02_network_ecs.md      ← Phase 1  (VPC, ALB, cluster, ECR, IAM, secrets)
-│   ├── 03_ec2_asg.md          ← Phase 2  (launch template + ASG)
-│   ├── 04_build_push.md       ← Phase 3  (build + push 10 service images)
-│   ├── 05_ecs_services.md     ← Phase 4  (task definitions + services + autoscaling)
-│   ├── 06_dns_ssl.md          ← Phase 5  (Route 53 + ACM)
-│   ├── 07_cicd_oidc.md        ← Phase 6  (GitHub Actions OIDC + matrix workflow)
-│   ├── 08_vercel_web.md       ← Phase 7  (web on Vercel)
-│   ├── 09_mobile_dev.md       ← Phase 8  (buyer app dev build via EAS)
-│   └── 10_monitoring.md       ← Phase 9  (CloudWatch alarms + SNS)
-├── terraform/
+│   (historical build playbooks archived → agents/archive/infra-build-guides/)
+├── terraform/                 ← CURRENT source of truth (see terraform/CLAUDE.md)
 │   ├── bootstrap/             ← state bucket + lock table + OIDC provider (run ONCE, manually)
 │   ├── modules/               ← reusable modules
 │   │   ├── network/           ← VPC, subnets, IGW, SGs
@@ -47,9 +36,9 @@ infra/
     └── _build-push.yml        ← reusable workflow called by deploy.yml
 ```
 
-## Execution order
+## Current state
 
-Follow [agents/00_master.md](agents/00_master.md). Phases must run in order — each one depends on the previous.
+Infra is **built and live** (ECS Fargate, ap-south-1) and managed by Terraform in `terraform/`. Read [`terraform/CLAUDE.md`](terraform/CLAUDE.md) for the rules (3 layers: network/cluster/services; change here, apply via TF, never raw CLI). The original phase-by-phase bring-up playbooks are archived at [`../agents/archive/infra-build-guides/`](../agents/archive/infra-build-guides/) (historical — stale in places).
 
 ## Local prerequisites
 

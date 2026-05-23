@@ -50,6 +50,22 @@ variable "target_group_arn" {
   type = string
 }
 
+variable "subnet_ids" {
+  type        = list(string)
+  description = "Subnets for the Fargate task ENIs (awsvpc)."
+}
+
+variable "security_group_ids" {
+  type        = list(string)
+  description = "Security groups for the Fargate task ENIs."
+}
+
+variable "assign_public_ip" {
+  type        = bool
+  default     = true
+  description = "Public IP on the task ENI (required to reach ECR/internet without a NAT)."
+}
+
 variable "task_execution_role_arn" {
   type = string
 }

@@ -1,6 +1,17 @@
 # Shopidea — Development Tracker
 ### Social Commerce Platform for Indian Micro-Sellers
-### Last Updated: 2026-05-09
+### Last Updated: 2026-05-23
+
+> **Canonical status is [`agents/AUDIT_gaps.md`](agents/AUDIT_gaps.md)** (architecture, features, gaps, test accounts). This file is just the daily log.
+
+---
+
+## Daily Log — 2026-05-23
+- Backend migrated **ECS EC2 → ECS Fargate** (all 10 services), reconciled into **Terraform** (`infra/terraform/`); EC2 ASG/capacity-provider/instance-TGs decommissioned. Live & verified via ALB.
+- Shipped: seller **KYC** (PAN/GST/selfie) on onboarding+settings+admin review; **login rejects unregistered numbers** + no auto-create; **dashboard approval gating**; **Google Maps autocomplete** on seller pickup; product **share to WhatsApp/Instagram**; admin **order detail + courier tracking + payments page**; **app-download link** in order SMS/WhatsApp; **marketplace home** (web, sellers-by-category + auto-scroll product carousels); buyer-app home shows **products w/ descriptions**.
+- Earlier: NimbusPost per-seller **pickup registration**.
+- Rewrote `.github/workflows/deploy.yml` for the Fargate setup; created `eas.json` (buyer APK); seeded test accounts.
+- **Pending:** apply DB migrations 014/015/019/020 to dev; Razorpay checkout + RazorpayX payouts (paused); `NIMBUS_AUTH_TOKEN` on delivery task def; buyer-app Razorpay/Maps env names.
 
 ---
 

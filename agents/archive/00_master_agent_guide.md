@@ -4,6 +4,15 @@
 
 ---
 
+> ## ⚠️ HISTORICAL BUILD GUIDE — read [`AUDIT_gaps.md`](AUDIT_gaps.md) for current status
+> The platform is already built and deployed. The agent build-order below is the
+> **original construction plan** (kept for reference on how features were built),
+> not the current state. Before any new work:
+> 1. Read **[`AUDIT_gaps.md`](AUDIT_gaps.md)** — canonical current architecture, features, gaps, test accounts.
+> 2. Note what's changed since this guide was written: backend is now **10 microservices on AWS ECS Fargate** (Terraform-managed; `reelmart/services/*`, not `reelmart/backend`); auth is **MSG91 widget → admin-service auth-bridge** (not Supabase Phone/Twilio); courier is **NimbusPost** (not Shiprocket); web is on **Vercel**. The `microservices/` guides here (`ms_00`…`ms_06`) describe the microservice split.
+
+---
+
 ## 1. Your Development Setup
 
 ```

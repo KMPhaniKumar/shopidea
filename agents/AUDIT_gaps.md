@@ -1,127 +1,91 @@
-# ReelMart — Current Gaps vs Built Functionality
-### Last reviewed: 2026-05-08
+# ReelMart — Current Status & Gaps (canonical truth)
+### Last reviewed: 2026-05-23
 
-This file tracks the delta between what is *built and working* in `reelmart/` vs what is still pending. Anything not listed here is considered done.
+This is the single source of truth for **what exists, where it runs, and what's pending**.
+A new engineer or LLM should be able to read this file + `.claude/CLAUDE.md` and start working immediately. Code lives in `reelmart/` and infra-as-code in `infra/terraform/`.
 
 ---
 
-## ✅ BUILT & WORKING
+## 1. Architecture (as actually deployed — read this first)
 
-### Mobile (buyer-app — React Native / Expo)
-- Phone OTP auth (Supabase) with dev test number `+919999999999 / OTP 123456`
-- Profile setup → role detection (buyer/seller/both)
-- Home screen: hero header, search, address bar, categories, Top Rated / New Arrivals, **colored seller-group sections** (Clothing → orange, Jewellery → green, Beauty → blue), per-category lists
-- LocationPromptModal — search + saved addresses + new address form (Google Places autocomplete; manual fallback)
-- Storefront screen — products with **wishlist heart** overlay, add-to-cart with qty controls
-- Cart store + checkout (uses LocationPromptModal for address selection)
-- Orders: list + tracking with **realtime status updates** + **order date/time displayed**
-- Wishlist screen, Profile, Saved Addresses (synced via Supabase `addresses` table)
-- Realtime order subscription on Orders tab — buyer sees status changes instantly when seller accepts/packs/ships
-- Pull-to-refresh on order history
+**The backend is 10 microservices, NOT the old `reelmart/backend` monolith (that directory is gone).**
 
-### Public Web (apps/web)
-- **`/store/[slug]`** — public storefront (RSC, ISR `revalidate: 60`, OG metadata, mobile-first)
-  - product grid + search + add-to-cart (cart persists in localStorage, scoped per store)
-  - sticky cart footer → "Proceed to Checkout"
-- **`/store/[slug]/checkout`** — multi-step web checkout
-  - Cart review → Phone OTP login → Address selection (or new address form) → Payment method → Place order
-  - Reuses Supabase `orders` + `addresses` tables; same RLS as mobile
-- **`/order/[id]`** — order confirmation
-  - Order summary, delivery address
-  - Prominent "Track in ReelMart app" CTA with Play Store / App Store links
-  - Tagline: "Login with same number — your order and addresses are already there"
-- **`/s/[slug]`** legacy URL → redirects to `/store/[slug]`
+| Layer | Reality | Notes |
+|---|---|---|
+| **Backend** | 10 Express/TypeScript microservices in `reelmart/services/*` | admin, analytics, catalog, delivery, notification, order, payment, payout, return, whatsapp. Each has its own `Dockerfile`, `package.json` (`build`=tsc, `start`=node dist), port 3000. |
+| **Backend hosting** | **AWS ECS Fargate** | Cluster `reelmart-dev`, region `ap-south-1`, account `632127307144`. Images in ECR `reelmart/<svc>:dev-latest`. 256 CPU / 512 MB, awsvpc, public subnets + public IP, CloudWatch logs `/ecs/reelmart-dev-<svc>`. (Migrated off EC2 launch type 2026-05-23.) |
+| **API gateway** | ALB `reelmart-dev-alb` → `https://api-dev.reelmart.in` | Path-routed on the `:443` listener to IP target groups `reelmart-dev-tgip-<svc>` (e.g. `/api/catalog/*`→catalog, `/api/admin/*`→admin). |
+| **Infra-as-code** | **Terraform** in `infra/terraform/` | S3 backend `reelmart-tf-state-632127307144`, layers `environments/dev/{network,cluster,services}`. All layers `plan` clean. **Make infra changes in Terraform, then apply — not via raw AWS CLI** (avoids drift). |
+| **Web** | Next.js 14 (App Router) on **Vercel** | `https://dev.reelmart.in` (Vercel project `shopidea`). `reelmart/apps/web`. |
+| **Buyer mobile** | React Native / **Expo** SDK 54 | `reelmart/apps/buyer-app`. APK via EAS (`eas.json` `preview` profile). |
+| **Seller mobile** | Parked | `apps/seller-app` exists but the web seller dashboard is the active surface. |
+| **DB / Auth / Storage / Realtime** | **Supabase** project `nysgwdpmpxqmfwelfaxo` | Postgres + RLS + Storage + Realtime + Edge Functions. |
 
-### Seller Web (apps/web)
-- Phone OTP login + dev "Skip OTP" button (dev mode only)
-- Seller registration (phone → profile → store)
-- Dashboard (greeting, today/week/month revenue, pending alerts, low stock, realtime new-order toast)
-- Products CRUD + variants + image upload
-- Orders page with **fixed realtime subscription** (separate `useEffect`, proper cleanup), refresh button, status filter tabs, status update actions, invoice print, Excel export
-- Coupons, Broadcast, Customers, Analytics, Marketing, Payouts, Settings
-- Auth middleware redirects to `/seller/register` if user has no seller role; bypassed in dev mode
+**Auth:** MSG91 OTP **widget** (web) → auth-bridge endpoint in **admin-service** (`/api/admin/auth/msg91-exchange`, `/check-phone`) → mints a Supabase session via synthetic email/`HMAC(phone, AUTH_BRIDGE_SECRET)` password. **Not** Supabase Phone provider / Twilio for login.
 
-### Admin Web
-- `/admin/login` (email + password + `is_admin` guard)
-- Dashboard (GMV, seller/buyer counts, returns alert)
-- Sellers (verify / suspend), Orders (paginated + filtered), Returns (approve / reject / refund), Payouts
+**Courier:** **NimbusPost** (`delivery-service`). Shiprocket is dead (stale env/columns only).
 
-### Backend (`backend/`)
-- Express + Supabase + Sentry
-- Routes: payments (Razorpay create/verify/refund), delivery (Shiprocket), whatsapp (Gupshup webhook + bot + broadcast), notifications (FCM), payouts
-- Rate limiting, health check
-- WhatsApp bot — full menu → product → variant → quantity → address → Razorpay payment-link flow
+**Deploy a backend service:** build linux/amd64 → push ECR `:dev-latest` → `aws ecs update-service --cluster reelmart-dev --service <svc> --force-new-deployment`. CI: `.github/workflows/deploy.yml` does this on push to `main` (needs GitHub secret `AWS_DEPLOY_ROLE_ARN` = `arn:aws:iam::632127307144:role/reelmart-gha-deploy`, which already exists) + Vercel + `supabase db push`.
+
+---
+
+## 2. ✅ Built & working
+
+### Seller (web `apps/web/app/seller/`)
+- Register: phone → OTP (MSG91) → profile → store, with **full pickup address + Google Maps autocomplete** and **KYC** (PAN number + PAN card upload, shop selfie, optional GST). Submits as `approval_status='pending'`.
+- **Login rejects unregistered numbers** (calls `/check-phone` before OTP, shows "please sign up"); login never auto-creates accounts (`createIfMissing:false`).
+- **Dashboard approval gating** (`components/seller/SellerGate.tsx`): pending/rejected sellers see a waiting screen; only approved sellers reach the dashboard.
+- Products CRUD + variants + images; enable/disable visibility; **share product to WhatsApp + Instagram** + copy link.
+- Settings: store info + address (Maps autocomplete) + KYC view/replace (private docs via signed URLs) + pickup-status banner.
+- Dashboard, orders (realtime), coupons, broadcast, customers, analytics, marketing, payouts.
+
+### Admin (web `apps/web/app/admin/`)
+- Email+password login (`is_admin` guard).
+- **Sellers list + detail page** (`/admin/sellers/[id]`) showing business details + KYC doc previews (signed URLs), approve/reject/activate/deactivate. **The real approval path is the Next.js route `app/api/admin/stores/[id]`** (the `admin-service/stores.ts` route is stale — ignore).
+- **Orders list + detail** (`/admin/orders/[id]`) with items, address, payment, **live NimbusPost courier tracking timeline**.
+- **Payments page** (`/admin/payments`) — collected total + paid/pending/refunded + transactions.
+- Returns, payouts.
+
+### Public web
+- **Marketplace home** (`/`): all active stores grouped by category + **auto-scrolling, colored product carousels** (`components/home/Marketplace.tsx` + `ProductCarousel.tsx`); "Seller login" + "Browse stores" CTAs.
+- `/store/[slug]` storefront (RSC, ISR), `/store/[slug]/product/[id]`, `/store/[slug]/checkout` (cart → OTP → address → place order), `/order/[id]` confirmation with app-download CTA, `/track/[awb]`.
+
+### Buyer app (Expo)
+- Phone OTP, profile setup, **home feed: stores by category + product carousels with descriptions** (auto-scroll), storefront, cart, checkout, orders + **realtime tracking**, wishlist, profile, saved addresses.
+
+### Backend services + pickup
+- NimbusPost per-seller **pickup-warehouse registration** (`delivery-service`): registered on admin approval + re-synced on Settings address change (`/api/delivery/pickup/register|refresh`, internal-key); shipments use the seller's verified pickup, else fall back to `NIMBUS_WAREHOUSE_NAME`. Pickup lifecycle on `stores` (`pickup_status` none/pending/verified/failed).
+- Order WhatsApp/SMS now include an **app-download link** (`notification-service`, `APP_DOWNLOAD_URL`).
 
 ### Database (Supabase)
-Migrations 001–015 deployed:
-| # | File | Purpose |
-|---|------|---------|
-| 001 | users.sql | users + role + is_admin |
-| 002 | stores.sql | stores + slug + RLS |
-| 003 | products.sql | products + variants |
-| 004 | orders.sql | orders + status flow + RLS |
-| 005 | reviews.sql | reviews + photos |
-| 006 | seller_payouts.sql | bank accounts + payouts |
-| 007 | buyer_features.sql | addresses, wishlist, cart_items, coins, referrals |
-| 008 | marketing.sql | coupons + broadcasts |
-| 009 | returns.sql | returns + refunds |
-| 010 | followed_stores.sql | follow/unfollow |
-| 011 | admin_platform.sql | admin tables + audit |
-| 012 | rls_fixes.sql | RLS gaps + Realtime publication + storage buckets + policies |
-| 013 | cart_selected_variant.sql | variant_id on cart_items |
-| 014 | stores_address_category.sql | additional store fields |
-| 015 | store_approval.sql | approval_status workflow |
+Migrations through **020** in `reelmart/supabase/migrations/`. Newest: 019 (`stores` pickup_*), 020 (`stores` pan_number/pan_doc_path/gst_number/selfie_path/kyc_submitted_at). KYC docs live in the private `seller-documents` storage bucket keyed by user id.
 
-### Third-party integrations
-| Service | Status | Notes |
-|---------|--------|-------|
-| Supabase | ✅ Live | Project `nysgwdpmpxqmfwelfaxo`. Auth + DB + Storage + Realtime + Edge Functions all in use |
-| Twilio | ⚠️ Connected | Credentials in Supabase Dashboard, but **DLT not registered** → SMS to +91 numbers blocked (error 30007) |
-| Razorpay | ⚠️ Mobile only | Mobile uses Razorpay SDK (test key in `.env`); **web checkout is COD-only** (online radio sets `payment_status: pending` but doesn't open payment yet) |
-| Shiprocket | ✅ Backend wired | Rates endpoint working; production API key needed |
-| Gupshup | ✅ Backend wired | WhatsApp webhook + bot |
-| Firebase FCM | ✅ Backend wired | Token registration endpoint working |
-| Google Maps | ✅ In LocationPromptModal | Places Autocomplete API key in mobile app |
-| Sentry | ✅ Backend | Mobile Sentry not yet installed |
+### Test accounts (seeded in the dev DB)
+- **Admin:** `admin@reelmart.test` / `ReelMartAdmin#2026` (email+password at `/admin/login`).
+- **Seller:** `+91 99999 99999` (dev OTP `123456`), store `suryaboutiques`.
+- **Buyer:** `+91 90000 00007` (has a saved address).
+Seed script: `reelmart/apps/web/scripts/seed-test-accounts.mjs`.
 
 ---
 
-## ⚠️ KNOWN GAPS (real, today)
+## 3. ⚠️ Pending / gaps (real, today)
 
-### Critical for production launch
-- [ ] **Razorpay web checkout** — `/store/[slug]/checkout` "Pay Online" radio currently doesn't open Razorpay modal. Backend endpoints exist (`/api/payments/create-order`, `/verify`); needs frontend wiring. ETA ~30–45 min.
-- [ ] **DLT registration** for SMS — Twilio rejects +91 SMS without it. Three options:
-  - Complete DLT (1–3 days) → keep Twilio
-  - Switch to Indian provider (MSG91 / Gupshup / Textlocal) via Supabase Send-SMS Hook
-  - `send-sms-msg91` Edge Function scaffolded in `supabase/functions/` but not deployed (MSG91 mandates IP whitelisting which Edge Functions can't satisfy)
-- [ ] App store submission — Play Store + App Store assets, builds, listings
+### Blockers
+- [ ] **DB migrations 014, 015, 019, 020 are NOT applied to the remote dev Supabase** (016–018 are). Until applied, the `stores` columns the new seller features use (`approval_status`, `address`/`state`, `pickup_*`, KYC) don't exist → KYC/approval/pickup break. Apply via the Supabase SQL editor or `supabase db push`. **Verify current state before relying on it.**
+- [ ] **Razorpay web checkout** — PAUSED by request. `CheckoutClient.tsx` still has a `TODO: Razorpay integration`; online orders are inserted `payment_status:'pending'` with no payment modal (effectively COD-only). Backend `/api/payments/create-order|verify` exist.
+- [ ] **RazorpayX payouts** — PAUSED by request. `payout-service` only writes DB rows (`razorpay_payout_id=null`), makes no RazorpayX API calls; schema mismatch (`seller_id` vs `store_id`); admin payouts summary/history endpoints don't exist.
+- [ ] **delivery-service task def lacks `NIMBUS_AUTH_TOKEN`** (+`NIMBUS_WAREHOUSE_NAME`) — NimbusPost calls degrade gracefully (no-op/fallback) until set on the ECS task def.
 
-### Nice-to-haves / non-blocking
-- [ ] Sentry in mobile apps (`@sentry/react-native`)
-- [ ] Mobile push notifications wired to FCM token register endpoint (backend exists, mobile-side hook not finalized)
-- [ ] App deep-linking — opening `/store/[slug]` should launch the mobile app if installed
-- [ ] Onboarding tour for first-time users
-- [ ] Email OTP fallback (we tried it once, reverted; could re-add as user-choice)
-- [ ] Store image cards on `/store/[slug]` use `<img>` not Next `<Image>` — would benefit from optimization
-
-### Dev / ops cleanup
-- [ ] Dev mode currently lets unauthenticated requests load "first store in DB" on seller dashboard — fine for testing, must be removed before prod
-- [ ] `console.log` calls in admin/sellers query for diagnostics — remove once stable
-- [ ] App download URLs in `OrderConfirmedClient.tsx` are placeholder Play Store / App Store IDs — replace before launch
+### Smaller
+- [ ] Buyer app env name mismatch: code reads `EXPO_PUBLIC_RAZORPAY_KEY_ID` + `EXPO_PUBLIC_GOOGLE_MAPS_KEY` but `.env`/`eas.json` have `EXPO_PUBLIC_RAZORPAY_KEY` and no Maps key → payments/maps undefined in the APK.
+- [ ] `deploy.yml` needs GitHub secret `AWS_DEPLOY_ROLE_ARN` set (role exists) for the Fargate rollout job to run.
+- [ ] App store submission (Play/App Store assets, builds, listings); `APP_DOWNLOAD_URL` defaults to `dev.reelmart.in/app` (page may not exist yet).
+- [ ] DLT registration for transactional SMS (real OTP/order SMS to +91) — see `DLT_SETUP.md`.
 
 ---
 
-## NEW WORK SINCE LAST AUDIT (2026-05-03 → 2026-05-08)
-
-- Public web storefront moved from `/s/[slug]` → `/store/[slug]` with full checkout + order confirmation
-- Address persistence migrated from AsyncStorage to Supabase `addresses` table (cross-device sync; merges guest addresses into account on first login)
-- Realtime order updates added to buyer Orders tab (was previously only on tracking detail screen)
-- Order date/time now visible on order cards and tracking screen
-- Seller-group sections (Clothing/Jewellery/Beauty) with colored backgrounds on Home
-- Wishlist heart overlay added to product cards in StorefrontScreen
-- Header redesign: orange hero, circular logo, white categories, search + address bar
-- LocationPromptModal — full custom search using Places API (replaced GooglePlacesAutocomplete component)
-- Saved-address default tracking switched from city-based to **address-id based** (fixed bug where two addresses sharing a city couldn't both be set as default)
-- Seller orders page realtime subscription rewritten — proper cleanup, manual refresh button
-- Dev OTP banner on both buyer + seller auth pages (fills `9999999999 / 123456`)
-- Auth middleware: bypass in dev mode; production redirects unauth'd users to `/seller/register` if they have no seller role (was previously `/seller/login`, causing loops)
+## 4. Deployment status of recent work
+- **Backend services:** the session's code is built + pushed to ECR and live on Fargate (verified via ALB).
+- **Web:** changes are committed/pushed to `main`; Vercel deploys `dev.reelmart.in` (verify the latest deploy).
+- **Buyer app:** code changes are **not** built into an APK yet (`eas.json` ready; run `eas build -p android --profile preview`).
+- **Terraform:** code + state reconciled to the Fargate reality; all 3 layers `plan` clean.

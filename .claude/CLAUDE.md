@@ -9,23 +9,26 @@ You are building a unified social commerce platform for Indian micro-sellers
 who sell via WhatsApp and Instagram. The platform gives sellers a storefront,
 order management, and catalogue via a shareable link.
 
-**Code lives in `reelmart/`. Read these before starting work:**
+**Code lives in `reelmart/`; infra-as-code in `infra/terraform/`. Read these before starting work:**
+- [`agents/AUDIT_gaps.md`](../agents/AUDIT_gaps.md) — **START HERE.** Canonical current status: real architecture, what's built, what's pending, test accounts.
 - [`README.md`](../README.md) — project orientation
-- [`TRACKER.md`](../TRACKER.md) — daily log + agent completion board
-- [`agents/AUDIT_gaps.md`](../agents/AUDIT_gaps.md) — what's done vs pending (canonical truth)
+- [`MAINTENANCE.md`](../MAINTENANCE.md) — AI-maintenance setup: skills (`/deploy-service`, `/health-check`, `/db-migrate`, `/tf-drift`, `/triage`, `/aws-session`, `/refresh-status`), agents (deployer, infra-guardian, db-keeper, ops-triage), guardrails, CI
+- [`TRACKER.md`](../TRACKER.md) — daily log
 - [`FLOWS.md`](../FLOWS.md) — every screen's data flow
 
-## Tech Stack
+Nested `CLAUDE.md` files add local context automatically in `reelmart/services/`, `infra/terraform/`, and `reelmart/apps/web/`.
 
-- **Database + Auth + Storage + Realtime**: Supabase
-- **Mobile Apps**: React Native (seller app + buyer app)
-- **Web**: Next.js 14 (storefront + admin dashboard)
-- **Custom Backend**: Node.js + Express (delivery, WhatsApp bot, payouts)
-- **Payments**: Razorpay
-- **Delivery**: Shiprocket
-- **WhatsApp**: Gupshup
-- **Push Notifications**: Firebase FCM
-- **Hosting**: Vercel (web) + Railway (backend)
+## Tech Stack (current — 2026-05)
+
+- **Database + Auth + Storage + Realtime**: Supabase (project `nysgwdpmpxqmfwelfaxo`)
+- **Auth (login)**: MSG91 OTP **widget** → auth-bridge in `admin-service` → Supabase session. (NOT Supabase Phone/Twilio.)
+- **Backend**: **10 Node/Express/TS microservices** in `reelmart/services/*` (admin, analytics, catalog, delivery, notification, order, payment, payout, return, whatsapp). The old `reelmart/backend` monolith is GONE.
+- **Backend hosting**: **AWS ECS Fargate** (cluster `reelmart-dev`, ap-south-1), images in ECR, behind ALB `api-dev.reelmart.in`. Infra in **Terraform** (`infra/terraform/`) — change infra there, not via raw AWS CLI.
+- **Web**: Next.js 14 (App Router) on **Vercel** (`dev.reelmart.in`) — public storefront + marketplace home + seller dashboard + admin
+- **Mobile**: React Native / **Expo** — `buyer-app` is the active app (seller-app parked)
+- **Payments**: Razorpay (web checkout wiring + RazorpayX payouts still PENDING — see AUDIT)
+- **Delivery / courier**: **NimbusPost** (NOT Shiprocket). Per-seller pickup registration in `delivery-service`.
+- **WhatsApp**: Gupshup · **Push**: Firebase FCM · **SMS**: MSG91 (DLT pending)
 
 ## Coding Standards
 

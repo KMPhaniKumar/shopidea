@@ -20,10 +20,10 @@ resource "aws_lb" "this" {
 resource "aws_lb_target_group" "service" {
   for_each = var.services
 
-  name        = "${local.name}-tg-${each.key}"
-  port        = 80
+  name        = "${local.name}-tgip-${each.key}"
+  port        = var.container_port
   protocol    = "HTTP"
-  target_type = "instance"
+  target_type = "ip" # Fargate awsvpc tasks register by IP
   vpc_id      = var.vpc_id
 
   health_check {

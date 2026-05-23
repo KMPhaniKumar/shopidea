@@ -29,6 +29,12 @@ variable "health_check_path" {
   default = "/health"
 }
 
+variable "container_port" {
+  type        = number
+  default     = 3000
+  description = "Port the service container listens on (Fargate awsvpc target group port)."
+}
+
 variable "cert_arn" {
   type        = string
   default     = null

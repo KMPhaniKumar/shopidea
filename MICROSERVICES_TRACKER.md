@@ -1,9 +1,9 @@
 # ReelMart — Microservices Conversion Tracker
-> Monolith → 11 ECS microservices on AWS
+> Monolith → 10 ECS microservices on AWS
 
 **Target:** AWS ECS (Fargate) + ALB + ECR  
 **Started:** 2026-05-03  
-**Status:** 📋 Agent Files Complete — Ready for Phase 1 (Service Extraction)
+**Status:** ✅ DONE — 10 services live on **ECS Fargate** (cluster `reelmart-dev`, ap-south-1), behind ALB `api-dev.reelmart.in`, images in ECR, **Terraform-managed** (`infra/terraform/`). Canonical status: [`agents/AUDIT_gaps.md`](agents/AUDIT_gaps.md).
 
 ---
 

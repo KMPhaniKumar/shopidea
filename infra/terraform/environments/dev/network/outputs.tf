@@ -18,6 +18,10 @@ output "ecs_security_group_id" {
   value = module.network.ecs_security_group_id
 }
 
+output "fargate_security_group_id" {
+  value = module.network.fargate_security_group_id
+}
+
 output "alb_arn" {
   value = module.alb.alb_arn
 }

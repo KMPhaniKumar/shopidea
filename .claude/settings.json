@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(aws sts get-caller-identity:*)",
+      "Bash(aws ecs describe-services:*)",
+      "Bash(aws ecs list-services:*)",
+      "Bash(aws ecs list-tasks:*)",
+      "Bash(aws ecs describe-tasks:*)",
+      "Bash(aws ecs describe-task-definition:*)",
+      "Bash(aws ecs describe-clusters:*)",
+      "Bash(aws ecs list-task-definition-families:*)",
+      "Bash(aws elbv2 describe-target-health:*)",
+      "Bash(aws elbv2 describe-target-groups:*)",
+      "Bash(aws elbv2 describe-load-balancers:*)",
+      "Bash(aws elbv2 describe-rules:*)",
+      "Bash(aws elbv2 describe-listeners:*)",
+      "Bash(aws ecr describe-repositories:*)",
+      "Bash(aws ecr describe-images:*)",
+      "Bash(aws logs tail:*)",
+      "Bash(aws logs filter-log-events:*)",
+      "Bash(aws logs describe-log-groups:*)",
+      "Bash(aws ec2 describe-instances:*)",
+      "Bash(aws autoscaling describe-auto-scaling-groups:*)",
+      "Bash(terraform init:*)",
+      "Bash(terraform plan:*)",
+      "Bash(terraform validate:*)",
+      "Bash(terraform fmt:*)",
+      "Bash(terraform state list:*)",
+      "Bash(terraform output:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npx tsc --noEmit:*)",
+      "Bash(curl https://api-dev.reelmart.in/*)"
+    ],
+    "deny": [
+      "Bash(terraform destroy:*)",
+      "Bash(terraform apply -auto-approve:*)",
+      "Bash(aws ecs delete-cluster:*)",
+      "Bash(supabase db reset:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Read(./reelmart/services/.env)",
+      "Read(./reelmart/apps/web/.env.local)",
+      "Read(./**/.env)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.sh\"", "timeout": 10 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-reminder.sh\"", "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}
