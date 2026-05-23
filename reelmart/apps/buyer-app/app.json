@@ -2,7 +2,9 @@
   "expo": {
     "name": "ReelMart",
     "slug": "reelmart-buyer",
+    "owner": "reelmart",
     "version": "1.0.0",
+    "newArchEnabled": false,
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -28,7 +30,11 @@
         "googleMaps": {
           "apiKey": "AIzaSyDtu00tuOZpIzPRASPFScWJRu1GkpaaSIU"
         }
-      }
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "scheme": "reelmart",
     "plugins": [
@@ -38,10 +44,14 @@
         {
           "locationWhenInUsePermission": "Allow ReelMart to use your location to find nearby stores and auto-fill your delivery address."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
-      "EXPO_PUBLIC_API_URL": "http://localhost:3001"
+      "EXPO_PUBLIC_API_URL": "https://api-dev.reelmart.in",
+      "eas": {
+        "projectId": "8c61695c-256c-418e-9102-dafb8d76730a"
+      }
     }
   }
 }
