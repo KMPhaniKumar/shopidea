@@ -1,8 +1,15 @@
 import React, { useEffect, useState } from 'react'
-import { View, Image, StyleSheet, Animated } from 'react-native'
+import { View, Image, StyleSheet, Animated, Platform } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
 import RootNavigator from './src/navigation/RootNavigator'
+
+// Match each platform's native splash so the handoff is invisible:
+// iOS shows the full wordmark (splash.png); Android's circular system splash
+// shows the symbol, so we continue with the symbol too.
+const SPLASH_IMAGE = Platform.OS === 'android'
+  ? require('./assets/splash-icon.png')
+  : require('./assets/logo.png')
 
 SplashScreen.preventAutoHideAsync()
 
@@ -31,8 +38,8 @@ export default function App() {
       {!ready && (
         <Animated.View style={[StyleSheet.absoluteFill, styles.splash, { opacity }]}>
           <Image
-            source={require('./assets/logo.png')}
-            style={styles.logo}
+            source={SPLASH_IMAGE}
+            style={Platform.OS === 'android' ? styles.symbol : styles.logo}
             resizeMode="contain"
           />
         </Animated.View>
@@ -51,5 +58,10 @@ const styles = StyleSheet.create({
     width: '65%',
     height: undefined,
     aspectRatio: 1536 / 1024,
+  },
+  symbol: {
+    width: '38%',
+    height: undefined,
+    aspectRatio: 1,
   },
 })
