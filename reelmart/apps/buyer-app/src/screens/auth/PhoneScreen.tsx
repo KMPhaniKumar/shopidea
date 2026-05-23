@@ -47,126 +47,85 @@ export default function PhoneScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
+        contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-      {/* Top dark brand panel */}
-      <View style={styles.topPanel}>
-        <View style={styles.orangeGlow} />
-        <View style={styles.greenGlow} />
-        <View style={styles.logoCard}>
+        {/* Brand */}
+        <View style={styles.brand}>
           <Image
             source={require('../../../assets/logo.png')}
             style={styles.logo}
             resizeMode="contain"
           />
         </View>
-        <Text style={styles.tagline}>Real Products. Real Sellers.</Text>
-      </View>
 
-      {/* Bottom form panel */}
-      <View style={styles.formPanel}>
-        {/* accent bar */}
-        <View style={styles.accentBar}>
-          <View style={[styles.accentPill, { backgroundColor: colors.primary, width: 36 }]} />
-          <View style={[styles.accentPill, { backgroundColor: GREEN, width: 14 }]} />
-        </View>
-
-        <Text style={styles.heading}>Login / Sign Up 👋</Text>
-        <Text style={styles.sub}>Discover and shop from local sellers near you</Text>
-
-        <View style={styles.phoneRow}>
-          <View style={styles.prefixBox}>
-            <Text style={styles.prefix}>+91</Text>
+        {/* Form */}
+        <View style={styles.form}>
+          <View style={styles.accentBar}>
+            <View style={[styles.accentPill, { backgroundColor: colors.primary, width: 36 }]} />
+            <View style={[styles.accentPill, { backgroundColor: GREEN, width: 14 }]} />
           </View>
-          <TextInput
-            style={styles.input}
-            placeholder="98765 43210"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="number-pad"
-            maxLength={10}
-            value={phone}
-            onChangeText={setPhone}
-            autoFocus
-          />
-        </View>
 
-        {__DEV__ && (
-          <TouchableOpacity onPress={fillDevNumber} style={styles.devBanner} activeOpacity={0.7}>
-            <Text style={styles.devBannerText}>🛠 DEV — Tap to use {DEV_PHONE} (OTP: 123456)</Text>
+          <Text style={styles.heading}>Login / Sign Up 👋</Text>
+          <Text style={styles.sub}>Discover and shop from local sellers near you</Text>
+
+          <View style={styles.phoneRow}>
+            <View style={styles.prefixBox}>
+              <Text style={styles.prefix}>+91</Text>
+            </View>
+            <TextInput
+              style={styles.input}
+              placeholder="98765 43210"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="number-pad"
+              maxLength={10}
+              value={phone}
+              onChangeText={setPhone}
+              autoFocus
+            />
+          </View>
+
+          {__DEV__ && (
+            <TouchableOpacity onPress={fillDevNumber} style={styles.devBanner} activeOpacity={0.7}>
+              <Text style={styles.devBannerText}>🛠 DEV — Tap to use {DEV_PHONE} (OTP: 123456)</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleContinue}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading
+              ? <ActivityIndicator color={colors.white} />
+              : <Text style={styles.buttonText}>Continue →</Text>
+            }
           </TouchableOpacity>
-        )}
 
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleContinue}
-          disabled={loading}
-          activeOpacity={0.85}
-        >
-          {loading
-            ? <ActivityIndicator color={colors.white} />
-            : <Text style={styles.buttonText}>Continue →</Text>
-          }
-        </TouchableOpacity>
-
-        <Text style={styles.terms}>
-          By continuing you agree to our Terms of Service and Privacy Policy
-        </Text>
-      </View>
+          <Text style={styles.terms}>
+            By continuing you agree to our Terms of Service and Privacy Policy
+          </Text>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1A1A1A' },
+  container: { flex: 1, backgroundColor: colors.white },
+  scroll: { flexGrow: 1, paddingTop: 56 },
 
-  topPanel: {
-    backgroundColor: '#1A1A1A',
+  brand: {
     alignItems: 'center',
-    paddingTop: 60,
-    paddingBottom: 36,
-    overflow: 'hidden',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
   },
-  orangeGlow: {
-    position: 'absolute', top: -60, left: -60,
-    width: 220, height: 220, borderRadius: 110,
-    backgroundColor: '#FF6B2B',
-    opacity: 0.15,
-  },
-  greenGlow: {
-    position: 'absolute', bottom: -40, right: -40,
-    width: 180, height: 180, borderRadius: 90,
-    backgroundColor: '#00B98E',
-    opacity: 0.12,
-  },
-  logoCard: {
-    backgroundColor: colors.white,
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  logo: { width: width * 0.85, height: 130 },
-  tagline: {
-    fontSize: 13,
-    color: '#AAAAAA',
-    letterSpacing: 1.2,
-  },
+  logo: { width: width * 0.7, height: 150 },
 
-  formPanel: {
-    flex: 1,
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: spacing.lg,
-    paddingTop: 28,
+  form: {
+    paddingHorizontal: spacing.lg,
   },
   accentBar: { flexDirection: 'row', gap: 6, marginBottom: 20 },
   accentPill: { height: 4, borderRadius: 99 },

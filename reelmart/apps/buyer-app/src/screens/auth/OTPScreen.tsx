@@ -78,131 +78,96 @@ export default function OTPScreen({ navigation, route }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
+        contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-      {/* Top dark brand panel */}
-      <View style={styles.topPanel}>
-        <View style={styles.orangeGlow} />
-        <View style={styles.greenGlow} />
-        <View style={styles.logoCard}>
+        {/* Brand */}
+        <View style={styles.brand}>
           <Image
             source={require('../../../assets/logo.png')}
             style={styles.logo}
             resizeMode="contain"
           />
         </View>
-        <Text style={styles.tagline}>Real Products. Real Sellers.</Text>
-      </View>
 
-      {/* Bottom form panel */}
-      <View style={styles.formPanel}>
-        <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-
-        {/* accent bar */}
-        <View style={styles.accentBar}>
-          <View style={[styles.accentPill, { backgroundColor: colors.primary, width: 36 }]} />
-          <View style={[styles.accentPill, { backgroundColor: GREEN, width: 14 }]} />
-        </View>
-
-        <Text style={styles.heading}>Enter OTP</Text>
-        <Text style={styles.sub}>
-          We sent a 6-digit code to{'\n'}
-          <Text style={styles.phone}>{maskedPhone}</Text>
-        </Text>
-
-        {__DEV__ && (
-          <TouchableOpacity onPress={() => setOtp('123456')} style={styles.devBanner} activeOpacity={0.7}>
-            <Text style={styles.devBannerText}>🛠 DEV — Tap to fill OTP 123456</Text>
+        {/* Form */}
+        <View style={styles.form}>
+          <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
+            <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-        )}
 
-        <TextInput
-          style={styles.otpInput}
-          placeholder="• • • • • •"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="number-pad"
-          maxLength={6}
-          value={otp}
-          onChangeText={setOtp}
-          autoFocus
-          textAlign="center"
-        />
+          <View style={styles.accentBar}>
+            <View style={[styles.accentPill, { backgroundColor: colors.primary, width: 36 }]} />
+            <View style={[styles.accentPill, { backgroundColor: GREEN, width: 14 }]} />
+          </View>
 
-        {attempts > 0 && (
-          <Text style={styles.attemptsText}>
-            {3 - attempts} attempt{3 - attempts !== 1 ? 's' : ''} remaining
+          <Text style={styles.heading}>Enter OTP</Text>
+          <Text style={styles.sub}>
+            We sent a 6-digit code to{'\n'}
+            <Text style={styles.phone}>{maskedPhone}</Text>
           </Text>
-        )}
 
-        <TouchableOpacity
-          style={[styles.button, (loading || otp.length < 6) && styles.buttonDisabled]}
-          onPress={handleVerify}
-          disabled={loading || otp.length < 6}
-          activeOpacity={0.85}
-        >
-          {loading
-            ? <ActivityIndicator color={colors.white} />
-            : <Text style={styles.buttonText}>Verify & Continue →</Text>
-          }
-        </TouchableOpacity>
+          {__DEV__ && (
+            <TouchableOpacity onPress={() => setOtp('123456')} style={styles.devBanner} activeOpacity={0.7}>
+              <Text style={styles.devBannerText}>🛠 DEV — Tap to fill OTP 123456</Text>
+            </TouchableOpacity>
+          )}
 
-        <TouchableOpacity onPress={handleResend} disabled={countdown > 0}>
-          <Text style={[styles.resend, countdown > 0 && styles.resendDisabled]}>
-            {countdown > 0 ? `Resend OTP in ${countdown}s` : 'Resend OTP'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <TextInput
+            style={styles.otpInput}
+            placeholder="• • • • • •"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="number-pad"
+            maxLength={6}
+            value={otp}
+            onChangeText={setOtp}
+            autoFocus
+            textAlign="center"
+          />
+
+          {attempts > 0 && (
+            <Text style={styles.attemptsText}>
+              {3 - attempts} attempt{3 - attempts !== 1 ? 's' : ''} remaining
+            </Text>
+          )}
+
+          <TouchableOpacity
+            style={[styles.button, (loading || otp.length < 6) && styles.buttonDisabled]}
+            onPress={handleVerify}
+            disabled={loading || otp.length < 6}
+            activeOpacity={0.85}
+          >
+            {loading
+              ? <ActivityIndicator color={colors.white} />
+              : <Text style={styles.buttonText}>Verify & Continue →</Text>
+            }
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={handleResend} disabled={countdown > 0}>
+            <Text style={[styles.resend, countdown > 0 && styles.resendDisabled]}>
+              {countdown > 0 ? `Resend OTP in ${countdown}s` : 'Resend OTP'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1A1A1A' },
+  container: { flex: 1, backgroundColor: colors.white },
+  scroll: { flexGrow: 1, paddingTop: 56 },
 
-  topPanel: {
-    backgroundColor: '#1A1A1A',
+  brand: {
     alignItems: 'center',
-    paddingTop: 60,
-    paddingBottom: 36,
-    overflow: 'hidden',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
   },
-  orangeGlow: {
-    position: 'absolute', top: -60, left: -60,
-    width: 220, height: 220, borderRadius: 110,
-    backgroundColor: '#FF6B2B', opacity: 0.15,
-  },
-  greenGlow: {
-    position: 'absolute', bottom: -40, right: -40,
-    width: 180, height: 180, borderRadius: 90,
-    backgroundColor: '#00B98E', opacity: 0.12,
-  },
-  logoCard: {
-    backgroundColor: colors.white,
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  logo: { width: width * 0.75, height: 110 },
-  tagline: { fontSize: 13, color: '#AAAAAA', letterSpacing: 1.2 },
+  logo: { width: width * 0.6, height: 120 },
 
-  formPanel: {
-    flex: 1,
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: spacing.lg,
-    paddingTop: 28,
+  form: {
+    paddingHorizontal: spacing.lg,
   },
   back: { marginBottom: 16 },
   backText: { fontSize: 15, color: colors.primary, fontWeight: '600' },
