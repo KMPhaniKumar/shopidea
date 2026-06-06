@@ -1,11 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
 import { Upload, CheckCircle, Clock } from 'lucide-react'
-import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
+import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, preloadOtpWidget, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
 import { uploadKycFile, isValidPan, isValidGst } from '@/lib/kyc'
 import { AddressSearch } from '@/components/AddressSearch'
 
@@ -61,6 +61,14 @@ export default function SellerRegister() {
   // Logo
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
+
+  // Pre-init the MSG91 widget while the phone box is shown so its captcha
+  // renders upfront — otherwise the first "Send OTP" click fails with
+  // "invalid captcha" before the captcha has appeared.
+  useEffect(() => {
+    if (step !== 'phone') return
+    preloadOtpWidget().catch(() => {})
+  }, [step])
 
   function startCountdown() {
     setCountdown(60)

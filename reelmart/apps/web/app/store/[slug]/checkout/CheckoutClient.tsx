@@ -7,7 +7,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { ArrowLeft, MapPin, ChevronRight, Plus, Loader2, Search } from 'lucide-react'
 import { CartItem, loadCart, clearCart, cartTotal } from '@/lib/cart'
 import { saveAddress, searchPlaces, fetchPlaceDetails, type PlacePrediction } from '@/lib/saved-addresses'
-import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
+import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, preloadOtpWidget, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
 
 interface Store {
   id: string
@@ -161,6 +161,15 @@ export default function CheckoutClient({ store }: { store: Store }) {
       .catch(() => {})
       .finally(() => setEstimateLoading(false))
   }, [store.pincode, selectedAddress?.pincode, paymentMethod, subtotal])
+
+  // Initialise the MSG91 widget as soon as the phone box is shown so its
+  // captcha renders alongside the number input. Without this the first "Send
+  // OTP" click both initialises the widget and fails with "invalid captcha"
+  // (the captcha only appears afterward).
+  useEffect(() => {
+    if (step !== 'phone') return
+    preloadOtpWidget().catch(() => {})
+  }, [step])
 
   // STEP HANDLERS
 

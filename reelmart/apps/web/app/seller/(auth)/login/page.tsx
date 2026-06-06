@@ -1,10 +1,10 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
-import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, checkPhoneRegistered, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
+import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, checkPhoneRegistered, preloadOtpWidget, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
 
 const DEV_PHONE = '9999999999'
 const IS_DEV = process.env.NODE_ENV === 'development'
@@ -18,6 +18,14 @@ export default function SellerLogin() {
   const [notRegistered, setNotRegistered] = useState(false)
   const supabase = createClient()
   const router = useRouter()
+
+  // Pre-init the MSG91 widget while the phone box is shown so its captcha
+  // renders upfront — otherwise the first "Send OTP" click fails with
+  // "invalid captcha" before the captcha has appeared.
+  useEffect(() => {
+    if (step !== 'phone') return
+    preloadOtpWidget().catch(() => {})
+  }, [step])
 
   function startCountdown() {
     setCountdown(60)

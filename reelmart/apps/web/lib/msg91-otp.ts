@@ -93,6 +93,15 @@ function initWidget(): Promise<void> {
   })
 }
 
+// Eagerly load + initialise the MSG91 widget so its captcha renders into the
+// CAPTCHA_CONTAINER_ID div BEFORE the user clicks "Send OTP". Without this the
+// widget initialises lazily on the first sendOtp() call, which renders the
+// captcha and fails that same click with "invalid captcha". Call this once the
+// phone-input UI (with the captcha div) is on screen. Safe to call repeatedly.
+export async function preloadOtpWidget(): Promise<void> {
+  await loadScript()
+}
+
 export async function sendOtp(phoneE164: string): Promise<void> {
   await loadScript()
   // MSG91 wants identifier without '+', e.g. "919876543210"
