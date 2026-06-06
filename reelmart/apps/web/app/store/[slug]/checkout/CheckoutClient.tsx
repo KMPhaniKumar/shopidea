@@ -81,15 +81,30 @@ export default function CheckoutClient({ store }: { store: Store }) {
   useEffect(() => {
     setCart(loadCart(store.store_slug))
     setHydrated(true)
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const loginPhone = user.phone?.replace(/^\+?91/, '') ?? ''
+
+      // Only treat an existing session as "the buyer" (and skip OTP) when it's
+      // actually a buyer account. A seller/admin session — e.g. a seller opening
+      // their own shared product link — must still verify by OTP so the order is
+      // tied to a real customer, not the seller's user id. Unknown role => OTP.
+      const { data: profile } = await supabase
+        .from('users').select('role').eq('id', user.id).single()
+
+      if (profile?.role === 'buyer') {
         setUserId(user.id)
-        const loginPhone = user.phone?.replace(/^\+?91/, '') ?? ''
         setPhone(loginPhone)
         setNewAddr(a => ({ ...a, phone: loginPhone }))
         loadAddresses(user.id)
+      } else if (loginPhone) {
+        // Prefill the number for convenience, but leave userId null so
+        // startCheckout() routes through phone → OTP verification.
+        setPhone(loginPhone)
+        setNewAddr(a => ({ ...a, phone: loginPhone }))
       }
-    })
+    })()
   }, [])
 
   async function loadAddresses(uid: string) {
