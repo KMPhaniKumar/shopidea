@@ -35,9 +35,11 @@ paymentsRouter.post('/verify', requireAuth, async (req: Request, res: Response) 
   const valid = verifySignature(parsed.data.razorpay_order_id, parsed.data.razorpay_payment_id, parsed.data.razorpay_signature)
   if (!valid) return res.status(400).json({ success: false, error: 'Invalid payment signature' })
 
-  const { data } = await supabaseAdmin.from('orders')
-    .update({ payment_status: 'paid', payment_id: parsed.data.razorpay_payment_id, status: 'pending' })
+  const { data, error } = await supabaseAdmin.from('orders')
+    .update({ payment_status: 'paid', razorpay_payment_id: parsed.data.razorpay_payment_id, status: 'pending' })
     .eq('id', parsed.data.orderId).select('*').single()
+
+  if (error) return res.status(500).json({ success: false, error: error.message })
 
   res.json({ success: true, data })
 })
@@ -55,7 +57,7 @@ paymentsRouter.post('/webhook', async (req: Request, res: Response) => {
   if (event.event === 'payment.captured') {
     const payment = event.payload.payment.entity
     await supabaseAdmin.from('orders')
-      .update({ payment_status: 'paid', payment_id: payment.id, status: 'pending' })
+      .update({ payment_status: 'paid', razorpay_payment_id: payment.id, status: 'pending' })
       .eq('razorpay_order_id', payment.order_id)
   }
   if (event.event === 'refund.processed') {
@@ -74,11 +76,11 @@ paymentsRouter.post('/refund', requireAuth, async (req: Request, res: Response) 
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message })
 
-  const { data: order } = await supabaseAdmin.from('orders').select('payment_id').eq('id', parsed.data.orderId).single()
-  if (!order?.payment_id) return res.status(400).json({ success: false, error: 'No payment ID found' })
+  const { data: order } = await supabaseAdmin.from('orders').select('razorpay_payment_id').eq('id', parsed.data.orderId).single()
+  if (!order?.razorpay_payment_id) return res.status(400).json({ success: false, error: 'No payment ID found' })
 
   try {
-    const refund = await createRefund(order.payment_id, Math.round(parsed.data.amount * 100))
+    const refund = await createRefund(order.razorpay_payment_id, Math.round(parsed.data.amount * 100))
     await supabaseAdmin.from('returns').update({ razorpay_refund_id: refund.id, refund_amount: parsed.data.amount, status: 'refund_initiated' }).eq('id', parsed.data.returnId)
     res.json({ success: true, data: { refundId: refund.id } })
   } catch (err: any) {

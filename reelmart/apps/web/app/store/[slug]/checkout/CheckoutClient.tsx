@@ -252,10 +252,22 @@ export default function CheckoutClient({ store }: { store: Store }) {
       } as any,
       payment_method: paymentMethod,
       status: 'pending',
-      payment_status: paymentMethod === 'cod' ? 'pending' : 'pending',
+      payment_status: 'pending',
     }).select('id, order_number').single()
 
     if (error || !data) { setPlacing(false); toast.error(error?.message ?? 'Order failed'); return }
+
+    // Online: collect payment via Razorpay before confirming. On failure the
+    // order stays pending (recoverable by webhook or retry) and the cart is kept.
+    if (paymentMethod === 'online') {
+      try {
+        await payOnline(data.id, data.order_number)
+      } catch (err: any) {
+        setPlacing(false)
+        toast.error(err?.message ?? 'Payment failed')
+        return
+      }
+    }
 
     // Fire-and-forget: ask backend to send WhatsApp + SMS to the buyer.
     // Idempotent on the server, so a slow/aborted call doesn't hurt.
@@ -268,10 +280,80 @@ export default function CheckoutClient({ store }: { store: Store }) {
       }).catch(() => {})
     }
 
-    // For online payment, redirect to payment page (TODO: Razorpay integration)
-    // For COD, go straight to confirmation
     clearCart(store.store_slug)
     router.push(`/order/${data.id}`)
+  }
+
+  // Drives Razorpay Standard Checkout for an already-created order.
+  // Resolves only once the payment signature is verified server-side.
+  async function payOnline(orderId: string, orderNumber: string) {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
+    if (!apiUrl) throw new Error('Online payment is not configured')
+
+    await loadRazorpayScript()
+
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) throw new Error('Session expired — please log in again')
+
+    // Create the Razorpay order on the backend (amount in rupees; converted to paise there).
+    const res = await fetch(`${apiUrl}/api/payments/create-order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ orderId, amount: total }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || !json?.success) throw new Error(json?.error ?? 'Could not start payment')
+
+    const { razorpayOrderId, amount, currency, keyId } = json.data
+    const key = keyId ?? process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+    if (!key) throw new Error('Payment gateway key missing')
+
+    return new Promise<void>((resolve, reject) => {
+      const rzp = new (window as any).Razorpay({
+        key,
+        amount,
+        currency,
+        order_id: razorpayOrderId,
+        name: store.store_name,
+        description: `Order ${orderNumber}`,
+        image: store.logo_url ?? undefined,
+        prefill: {
+          name: selectedAddress?.name,
+          contact: selectedAddress?.phone,
+        },
+        theme: { color: '#FF6B2B' },
+        handler: async (resp: any) => {
+          try {
+            const vr = await fetch(`${apiUrl}/api/payments/verify`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                orderId,
+                razorpay_order_id: resp.razorpay_order_id,
+                razorpay_payment_id: resp.razorpay_payment_id,
+                razorpay_signature: resp.razorpay_signature,
+              }),
+            })
+            const vj = await vr.json().catch(() => ({}))
+            if (!vr.ok || !vj?.success) {
+              reject(new Error(vj?.error ?? 'Payment verification failed'))
+              return
+            }
+            resolve()
+          } catch (e: any) {
+            reject(new Error(e?.message ?? 'Payment verification failed'))
+          }
+        },
+        modal: {
+          ondismiss: () => reject(new Error('Payment cancelled')),
+        },
+      })
+      rzp.on('payment.failed', (resp: any) =>
+        reject(new Error(resp?.error?.description ?? 'Payment failed, please try again')),
+      )
+      rzp.open()
+    })
   }
 
   if (!hydrated) return null
@@ -637,6 +719,26 @@ function Input({ label, value, onChange, placeholder, inputMode }: { label: stri
       />
     </label>
   )
+}
+
+// Loads the Razorpay Standard Checkout script once, on demand.
+function loadRazorpayScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') return reject(new Error('Unavailable'))
+    if ((window as any).Razorpay) return resolve()
+    const existing = document.getElementById('razorpay-checkout-js') as HTMLScriptElement | null
+    if (existing) {
+      existing.addEventListener('load', () => resolve())
+      existing.addEventListener('error', () => reject(new Error('Failed to load payment gateway')))
+      return
+    }
+    const script = document.createElement('script')
+    script.id = 'razorpay-checkout-js'
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Failed to load payment gateway'))
+    document.body.appendChild(script)
+  })
 }
 
 function formatDeliveryDate(daysFromNow: number) {
