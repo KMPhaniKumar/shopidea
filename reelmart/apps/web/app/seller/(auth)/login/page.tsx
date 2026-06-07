@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
 import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, checkPhoneRegistered, preloadOtpWidget, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
+import TestLoginButtons from '@/components/TestLoginButtons'
 
 const DEV_PHONE = '9999999999'
 const IS_DEV = process.env.NODE_ENV === 'development'
@@ -209,6 +210,8 @@ return (
               </div>
             </div>
           )}
+
+          <TestLoginButtons roles={['seller']} redirectTo={{ seller: '/seller/dashboard' }} />
         </div>
 
         <p className="mt-8 text-xs text-[#CCCCCC] text-center">

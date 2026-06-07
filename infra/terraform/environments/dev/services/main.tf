@@ -148,6 +148,9 @@ locals {
       extra_env      = {
         AUTH_BRIDGE_ALLOWED_ORIGINS = "http://localhost:3000,https://dev.reelmart.in,https://reelmart.in,https://shopidea.vercel.app"
         SITE_URL                    = "https://dev.reelmart.in"
+        # DEV ONLY — enables the OTP-less /api/admin/auth/test-login endpoint.
+        # NEVER set this in a production environment.
+        ALLOW_TEST_LOGIN            = "true"
       }
     }
   }

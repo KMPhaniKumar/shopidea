@@ -10,6 +10,7 @@ import {
   preloadOtpWidget,
   CAPTCHA_CONTAINER_ID,
 } from '@/lib/msg91-otp'
+import TestLoginButtons from './TestLoginButtons'
 
 // Reusable buyer phone → OTP login, shown as a centered modal. Drives the same
 // MSG91 widget flow used by checkout / orders (lib/msg91-otp). preloadOtpWidget
@@ -168,6 +169,11 @@ export default function BuyerLoginModal({
             </div>
           </>
         )}
+
+        <TestLoginButtons
+          roles={['buyer']}
+          onDone={(_role, userId) => { onSuccess?.(userId); onClose() }}
+        />
       </div>
     </div>
   )

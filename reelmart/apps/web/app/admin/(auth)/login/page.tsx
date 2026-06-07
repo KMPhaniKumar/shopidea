@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import TestLoginButtons from '@/components/TestLoginButtons'
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
@@ -134,6 +135,8 @@ export default function AdminLoginPage() {
               </button>
             )}
           </form>
+
+          <TestLoginButtons roles={['admin']} redirectTo={{ admin: '/admin' }} />
         </div>
 
         <p className="mt-8 text-xs text-[#CCCCCC] text-center">
