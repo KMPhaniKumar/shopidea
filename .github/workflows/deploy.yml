@@ -78,7 +78,11 @@ jobs:
   # ---- Deploy (push to main only) ------------------------------------------
   deploy-services:
     name: Deploy ${{ matrix.service }} to Fargate
-    needs: build-services
+    # Intentionally NOT `needs: build-services`: that job is a 10-service matrix,
+    # so a single service failing to build would mark the whole job failed and
+    # skip ALL deploys (this is why nothing deployed after May 9). Each leg here
+    # builds its own image, so a broken service fails only its own leg
+    # (fail-fast:false) and the other nine still deploy.
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -103,7 +107,9 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          # Role ARN is not a secret (account id is already in ECR_REGISTRY).
+          # Hardcoded so a missing/blank AWS_DEPLOY_ROLE_ARN secret can't break auth.
+          role-to-assume: arn:aws:iam::632127307144:role/reelmart-gha-deploy
           aws-region: ${{ env.AWS_REGION }}
       - name: Login to ECR
         run: aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
