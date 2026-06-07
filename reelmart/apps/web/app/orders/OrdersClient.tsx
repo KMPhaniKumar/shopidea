@@ -62,6 +62,8 @@ export default function OrdersClient() {
     const { data, error } = await supabase
       .from('orders')
       .select('id, order_number, status, payment_status, payment_method, total_amount, items, created_at, stores(store_name, logo_url, store_slug)')
+      // Hide online orders with an incomplete (abandoned/cancelled) payment.
+      .or('payment_method.eq.cod,payment_status.in.(paid,refunded)')
       .order('created_at', { ascending: false })
     if (error) toast.error(error.message)
     setOrders((data as any) ?? [])

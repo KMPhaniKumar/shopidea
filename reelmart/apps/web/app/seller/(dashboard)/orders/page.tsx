@@ -73,7 +73,11 @@ export default function OrdersPage() {
 
   async function loadOrders(sid: string) {
     setLoadingOrders(true)
-    let q = supabase.from('orders').select('*').eq('store_id', sid).order('created_at', { ascending: false }).limit(100)
+    let q = supabase.from('orders').select('*').eq('store_id', sid)
+      // Hide online orders whose payment was never completed (abandoned/cancelled
+      // checkout). COD always shows; online shows once paid/refunded.
+      .or('payment_method.eq.cod,payment_status.in.(paid,refunded)')
+      .order('created_at', { ascending: false }).limit(100)
     if (tab !== 'all') q = q.eq('status', tab)
     const { data, error } = await q
     if (error) { setStoreError(`Failed to load orders: ${error.message}`); setLoadingOrders(false); return }
