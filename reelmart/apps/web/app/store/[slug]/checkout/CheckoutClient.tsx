@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
-import { ArrowLeft, MapPin, ChevronRight, Plus, Loader2, Search } from 'lucide-react'
-import { CartItem, loadCart, clearCart, cartTotal } from '@/lib/cart'
+import { ArrowLeft, MapPin, ChevronRight, Plus, Minus, Trash2, Loader2, Search } from 'lucide-react'
+import { CartItem, loadCart, saveCart, clearCart, cartTotal } from '@/lib/cart'
 import { saveAddress, searchPlaces, fetchPlaceDetails, type PlacePrediction } from '@/lib/saved-addresses'
 import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, preloadOtpWidget, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
 
@@ -115,6 +115,24 @@ export default function CheckoutClient({ store }: { store: Store }) {
     const list = (data ?? []) as Address[]
     setAddresses(list)
     setSelectedAddressId(list.find(a => a.is_default)?.id ?? list[0]?.id ?? null)
+  }
+
+  // Persist cart edits (qty change / remove) back to localStorage so they
+  // survive reloads and stay in sync with the store/product pages.
+  useEffect(() => {
+    if (hydrated) saveCart(store.store_slug, cart)
+  }, [cart, hydrated, store.store_slug])
+
+  function changeQty(productId: string, delta: number) {
+    setCart(prev => prev.flatMap(it => {
+      if (it.productId !== productId) return [it]
+      const q = it.qty + delta
+      return q <= 0 ? [] : [{ ...it, qty: q }]
+    }))
+  }
+
+  function removeItem(productId: string) {
+    setCart(prev => prev.filter(it => it.productId !== productId))
   }
 
   const subtotal = cartTotal(cart)
@@ -405,10 +423,30 @@ export default function CheckoutClient({ store }: { store: Store }) {
       <div className="max-w-2xl mx-auto px-4 py-4 pb-32 space-y-3">
         {/* Order summary */}
         <Section title={`Order from ${store.store_name}`}>
-          {cart.map((it, i) => (
-            <div key={i} className="flex justify-between text-sm py-1.5 border-b border-gray-100 last:border-0">
-              <span className="flex-1 truncate pr-3">{it.name} × {it.qty}</span>
-              <span className="font-semibold">₹{it.price * it.qty}</span>
+          {cart.map((it) => (
+            <div key={it.productId} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm truncate">{it.name}</p>
+                <p className="text-xs text-gray-500">₹{it.price} × {it.qty} = <span className="font-semibold text-gray-700">₹{it.price * it.qty}</span></p>
+              </div>
+              {step === 'cart' ? (
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5 bg-gray-100 rounded-full px-1 py-1">
+                    <button onClick={() => changeQty(it.productId, -1)} className="w-7 h-7 rounded-full bg-white text-[#FF6B2B] flex items-center justify-center hover:bg-gray-50" aria-label="Decrease quantity">
+                      <Minus size={13} />
+                    </button>
+                    <span className="text-sm font-bold w-5 text-center">{it.qty}</span>
+                    <button onClick={() => changeQty(it.productId, 1)} className="w-7 h-7 rounded-full bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]" aria-label="Increase quantity">
+                      <Plus size={13} />
+                    </button>
+                  </div>
+                  <button onClick={() => removeItem(it.productId)} className="p-1.5 text-gray-400 hover:text-red-500 transition" aria-label="Remove item">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ) : (
+                <span className="font-semibold text-sm shrink-0">₹{it.price * it.qty}</span>
+              )}
             </div>
           ))}
           <div className="pt-3 mt-2 border-t border-gray-100 space-y-1.5">
