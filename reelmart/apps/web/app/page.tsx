@@ -3,6 +3,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { Marketplace } from '@/components/home/Marketplace'
 import BuyerAuthNav from '@/components/BuyerAuthNav'
+import BrowseMenu from '@/components/home/BrowseMenu'
 
 // Always render fresh marketplace data (new stores/products show up without a redeploy).
 export const revalidate = 60
@@ -31,13 +32,9 @@ function Header() {
         <Link href="/" aria-label="ReelMart home">
           <Image src="/logo.png" alt="ReelMart" width={140} height={50} priority className="object-contain" />
         </Link>
-        <nav className="flex items-center gap-3">
-          <Link
-            href="/stores"
-            className="hidden sm:inline-flex h-10 px-4 items-center text-sm font-medium text-primary hover:opacity-80"
-          >
-            Browse stores
-          </Link>
+        <nav className="flex items-center gap-2 sm:gap-3">
+          <BrowseMenu />
+          <BuyerAuthNav />
           <Link
             href="/seller"
             target="_blank"
@@ -46,7 +43,6 @@ function Header() {
           >
             Sell on ReelMart →
           </Link>
-          <BuyerAuthNav />
         </nav>
       </div>
     </header>

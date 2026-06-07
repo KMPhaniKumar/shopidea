@@ -15,7 +15,7 @@ export default function BuyerAuthNav() {
   const [ready, setReady] = useState(false)
   const [phone, setPhone] = useState<string | null>(null)
   const [name, setName] = useState<string | null>(null)
-  const [loginOpen, setLoginOpen] = useState(false)
+  const [modalMode, setModalMode] = useState<'login' | 'signup' | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -90,18 +90,27 @@ export default function BuyerAuthNav() {
           )}
         </div>
       ) : (
-        <button
-          onClick={() => setLoginOpen(true)}
-          className="inline-flex h-10 px-5 items-center rounded-btn bg-primary text-white text-sm font-medium hover:opacity-90 transition"
-        >
-          Login
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setModalMode('login')}
+            className="h-10 px-3 text-sm font-medium text-primary hover:opacity-80"
+          >
+            Log in
+          </button>
+          <button
+            onClick={() => setModalMode('signup')}
+            className="inline-flex h-10 px-4 items-center rounded-btn bg-primary text-white text-sm font-medium hover:opacity-90 transition"
+          >
+            Sign up
+          </button>
+        </div>
       )}
 
       <BuyerLoginModal
-        open={loginOpen}
-        onClose={() => setLoginOpen(false)}
-        onSuccess={() => { setLoginOpen(false); refresh() }}
+        open={modalMode !== null}
+        mode={modalMode ?? 'login'}
+        onClose={() => setModalMode(null)}
+        onSuccess={() => { setModalMode(null); refresh() }}
       />
     </>
   )

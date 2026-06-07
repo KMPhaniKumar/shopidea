@@ -20,10 +20,12 @@ export default function BuyerLoginModal({
   open,
   onClose,
   onSuccess,
+  mode = 'login',
 }: {
   open: boolean
   onClose: () => void
   onSuccess?: (userId: string) => void
+  mode?: 'login' | 'signup'
 }) {
   const [step, setStep] = useState<'phone' | 'otp'>('phone')
   const [phone, setPhone] = useState('')
@@ -109,10 +111,10 @@ export default function BuyerLoginModal({
           <X size={20} />
         </button>
 
-        <h2 className="text-xl font-bold text-text mb-1">Login</h2>
+        <h2 className="text-xl font-bold text-text mb-1">{mode === 'signup' ? 'Create your account' : 'Login'}</h2>
         <p className="text-sm text-secondary mb-6">
           {step === 'phone'
-            ? 'Verify your phone number to continue.'
+            ? (mode === 'signup' ? 'Enter your phone number to get started.' : 'Verify your phone number to continue.')
             : `Enter the code sent to +91 ${phone}`}
         </p>
 
