@@ -40,7 +40,9 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       >
         <div className="p-6 border-b border-gray-100 flex items-start justify-between">
           <div>
-            <Image src="/logo.png" alt="ReelMart" width={140} height={48} className="object-contain" />
+            <Link href="/" aria-label="ReelMart home">
+              <Image src="/logo.png" alt="ReelMart" width={140} height={48} className="object-contain" />
+            </Link>
             <div className="text-xs text-gray-400 mt-1">Seller Panel</div>
           </div>
           <button

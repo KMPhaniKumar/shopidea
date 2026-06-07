@@ -26,7 +26,9 @@ export default function AdminNav({ adminName }: { adminName: string }) {
   return (
     <aside className="w-60 bg-white border-r border-gray-200 flex flex-col shrink-0">
       <div className="p-6 border-b border-gray-100">
-        <Image src="/logo.png" alt="ReelMart" width={140} height={48} className="object-contain" />
+        <Link href="/" aria-label="ReelMart home">
+          <Image src="/logo.png" alt="ReelMart" width={140} height={48} className="object-contain" />
+        </Link>
         <div className="text-xs text-gray-400 mt-1">Admin Panel</div>
       </div>
 
