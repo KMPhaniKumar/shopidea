@@ -8,7 +8,8 @@ const app = express()
 const PORT = process.env.PORT || 3000
 
 app.use(helmet())
-app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(',') || '*' }))
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean)
+app.use(cors({ origin: !allowedOrigins || allowedOrigins.includes('*') ? true : allowedOrigins }))
 app.use(express.json())
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'return-service' }))
