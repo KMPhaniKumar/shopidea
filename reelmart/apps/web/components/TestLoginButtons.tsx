@@ -1,15 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 
-// OTP-less test login buttons. Render NOTHING unless NEXT_PUBLIC_ALLOW_TEST_LOGIN
-// === 'true' (set on dev only). Calls the gated admin-service /test-login endpoint
-// (which itself only works when ALLOW_TEST_LOGIN is on), drops the returned
-// Supabase session into the browser client, then navigates / signals success.
-const ENABLED = process.env.NEXT_PUBLIC_ALLOW_TEST_LOGIN === 'true'
+// OTP-less test login buttons. Auto-enabled on dev/preview hosts (dev.reelmart.in,
+// localhost, *.vercel.app) — or forced on with NEXT_PUBLIC_ALLOW_TEST_LOGIN=true.
+// Never renders on the production host (reelmart.in). Calls the gated admin-service
+// /test-login endpoint, drops the returned Supabase session into the browser
+// client, then navigates / signals success.
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
+
+function computeEnabled(): boolean {
+  if (process.env.NEXT_PUBLIC_ALLOW_TEST_LOGIN === 'true') return true
+  if (typeof window === 'undefined') return false
+  const h = window.location.hostname
+  return h === 'localhost' || h === '127.0.0.1' || h.startsWith('dev.') || h.endsWith('.vercel.app')
+}
 
 type Role = 'buyer' | 'seller' | 'admin'
 
@@ -25,7 +32,11 @@ export default function TestLoginButtons({
   onDone?: (role: Role, userId: string) => void
 }) {
   const [busy, setBusy] = useState<Role | null>(null)
-  if (!ENABLED) return null
+  // Resolve after mount so SSR (which renders null) and the first client paint
+  // match — then reveal on dev hosts.
+  const [enabled, setEnabled] = useState(false)
+  useEffect(() => { setEnabled(computeEnabled()) }, [])
+  if (!enabled) return null
 
   async function login(role: Role) {
     setBusy(role)

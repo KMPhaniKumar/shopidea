@@ -198,7 +198,15 @@ authRouter.post('/check-phone', requireAllowedOrigin, async (req, res) => {
 // with the flag on, the blast radius is three known throwaway accounts.
 // Body: { role: 'buyer' | 'seller' | 'admin' }
 authRouter.post('/test-login', requireAllowedOrigin, async (req, res) => {
-  if (process.env.ALLOW_TEST_LOGIN !== 'true') {
+  // Enabled explicitly via ALLOW_TEST_LOGIN, or implicitly on the dev environment
+  // (SITE_URL points at dev/localhost). Production's SITE_URL is reelmart.in, so
+  // this stays off there.
+  const site = process.env.SITE_URL ?? ''
+  const testLoginEnabled =
+    process.env.ALLOW_TEST_LOGIN === 'true' ||
+    site.includes('dev.reelmart.in') ||
+    site.includes('localhost')
+  if (!testLoginEnabled) {
     return res.status(403).json({ success: false, error: 'test-login-disabled' })
   }
 

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
 import { Loader2, Package, ShoppingBag, Smartphone, Apple } from 'lucide-react'
 import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
+import TestLoginButtons from '@/components/TestLoginButtons'
 
 interface Order {
   id: string
@@ -166,6 +167,11 @@ export default function OrdersClient() {
                 </div>
               </>
             )}
+
+            <TestLoginButtons
+              roles={['buyer']}
+              onDone={() => { setAuthStep('ready'); loadOrders() }}
+            />
           </div>
         </div>
       </div>
