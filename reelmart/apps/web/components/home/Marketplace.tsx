@@ -1,10 +1,10 @@
-// Public marketplace: products grouped into category widgets (Jewellery,
-// Clothing, …). Each product card credits its seller — store name + Instagram.
-// Server component — reads via the anon SSR client (RLS allows public reads of
-// active stores + available products).
+// Public marketplace home. Loads active stores + available products (server,
+// anon SSR client under RLS), then hands them to <MarketplaceClient> which adds
+// search (products + shops), category pills, a sellers widget, and the
+// per-category product carousels. Each product card credits its seller.
 import { createClient } from '@/lib/supabase/server'
-import { CATEGORIES, instaUsername } from '@/lib/categories'
-import { ProductCarousel, type CarouselProduct } from './ProductCarousel'
+import { CATEGORIES, instaUsername, bucketCategory } from '@/lib/categories'
+import { MarketplaceClient, type MProduct, type MSeller } from './MarketplaceClient'
 
 function firstImage(images: unknown): string | null {
   return Array.isArray(images) && images.length > 0 ? String(images[0]) : null
@@ -16,7 +16,7 @@ export async function Marketplace() {
   const [{ data: stores }, { data: products }] = await Promise.all([
     supabase
       .from('stores')
-      .select('store_slug, store_name, instagram_handle')
+      .select('store_slug, store_name, instagram_handle, logo_url, category, city')
       .eq('is_active', true),
     supabase
       .from('products')
@@ -27,9 +27,10 @@ export async function Marketplace() {
       .limit(400),
   ])
 
+  const allStores = stores ?? []
   const allProducts = products ?? []
 
-  if ((stores ?? []).length === 0) {
+  if (allStores.length === 0) {
     return (
       <section className="px-6 py-16 text-center">
         <h2 className="text-2xl font-bold">Stores are on their way</h2>
@@ -38,60 +39,39 @@ export async function Marketplace() {
     )
   }
 
-  // Map products to the carousel shape (with seller credit), grouped by category.
-  const productsByCat = new Map<string, CarouselProduct[]>()
+  // Map products to the carousel/search shape (with seller credit + category).
+  const productItems: MProduct[] = []
+  const countBySlug = new Map<string, number>()
   for (const p of allProducts as any[]) {
     const store = p.stores
     if (!store?.store_slug) continue
-    const cat = CATEGORIES.some(c => c.id === store.category) ? store.category : 'other'
-    const item: CarouselProduct = {
-      id: p.id, name: p.name, price: p.price, description: p.description,
+    const cat = bucketCategory(store.category)
+    productItems.push({
+      id: p.id,
+      name: p.name,
+      price: p.price,
+      description: p.description,
       image: firstImage(p.images),
       store_slug: store.store_slug,
       store_name: store.store_name,
       store_instagram: instaUsername(store.instagram_handle),
-    }
-    if (!productsByCat.has(cat)) productsByCat.set(cat, [])
-    productsByCat.get(cat)!.push(item)
+      category: cat,
+    })
+    countBySlug.set(store.store_slug, (countBySlug.get(store.store_slug) ?? 0) + 1)
   }
 
-  const sections = CATEGORIES.filter(c => (productsByCat.get(c.id)?.length ?? 0) > 0)
+  // Sellers for the "Shops to explore" widget — most-stocked first.
+  const sellers: MSeller[] = (allStores as any[])
+    .map(s => ({
+      store_slug: s.store_slug,
+      store_name: s.store_name,
+      logo_url: s.logo_url ?? null,
+      category: bucketCategory(s.category),
+      store_instagram: instaUsername(s.instagram_handle),
+      product_count: countBySlug.get(s.store_slug) ?? 0,
+      city: s.city ?? null,
+    }))
+    .sort((a, b) => b.product_count - a.product_count)
 
-  if (sections.length === 0) {
-    return (
-      <section className="px-6 py-16 text-center">
-        <h2 className="text-2xl font-bold">Products are on their way</h2>
-        <p className="mt-2 text-secondary">Sellers are stocking their shelves. Check back soon!</p>
-      </section>
-    )
-  }
-
-  return (
-    <section id="marketplace" className="px-6 py-12 sm:py-16">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl sm:text-4xl font-bold">Discover products on ReelMart</h2>
-          <p className="mt-3 text-secondary">Shop by category from real instagram sellers across India.</p>
-        </div>
-
-        <div className="space-y-6">
-          {sections.map(cat => {
-            const catProducts = productsByCat.get(cat.id) ?? []
-            return (
-              <div key={cat.id} className="rounded-card p-5 sm:p-7" style={{ backgroundColor: cat.bg }}>
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="text-2xl">{cat.icon}</span>
-                  <h3 className="text-xl font-bold" style={{ color: cat.accent }}>{cat.label}</h3>
-                  <span className="text-sm text-secondary">· {catProducts.length} {catProducts.length === 1 ? 'product' : 'products'}</span>
-                </div>
-
-                {/* Individual products, each credited to its seller */}
-                <ProductCarousel products={catProducts} />
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </section>
-  )
+  return <MarketplaceClient products={productItems} sellers={sellers} />
 }
