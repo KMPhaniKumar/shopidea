@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, ShoppingBag, Plus, Minus, Download } from 'lucide-react'
+import { Search, ShoppingBag, Plus, Minus, Download, Star, MapPin } from 'lucide-react'
 import { CartItem, loadCart, saveCart, cartTotal, cartCount } from '@/lib/cart'
 
 interface Store {
@@ -103,47 +103,56 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
     <div className="min-h-screen bg-[#F9F9F9]">
       {/* App install banner */}
       <div className="bg-[#FF6B2B] text-white px-4 py-2.5 flex items-center justify-between text-sm">
-        <span className="flex items-center gap-2">📱 <span>Track orders, get rewards on the ReelMart app</span></span>
+        <span className="flex items-center gap-2">📱 <span className="hidden sm:inline">Track orders, get rewards on the ReelMart app</span><span className="sm:hidden">Get the ReelMart app</span></span>
         <a href="/download" className="font-semibold underline hover:no-underline flex items-center gap-1">
           <Download size={14} /> Download
         </a>
       </div>
 
-      {/* Store header */}
+      {/* Store header — cover banner with overlapping logo */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-2xl mx-auto px-4 py-5">
-          <div className="flex items-center gap-4">
+        <div className="h-24 sm:h-32 bg-gradient-to-br from-[#FF6B2B] via-[#ff8347] to-[#ffb98a]" />
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-12 sm:-mt-14 pb-5">
             {store.logo_url ? (
-              <img src={store.logo_url} alt={store.store_name} className="w-16 h-16 rounded-2xl object-cover border border-gray-100" />
+              <img src={store.logo_url} alt={store.store_name} className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl object-cover ring-4 ring-white shadow-md bg-white" />
             ) : (
-              <div className="w-16 h-16 rounded-2xl bg-orange-50 flex items-center justify-center text-2xl font-black text-orange-400">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-orange-50 flex items-center justify-center text-4xl font-black text-orange-400 ring-4 ring-white shadow-md">
                 {store.store_name[0]?.toUpperCase()}
               </div>
             )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-lg font-black text-[#1A1A1A] truncate">{store.store_name}</h1>
-                {store.is_verified && <span className="text-[#FF6B2B] text-sm">✓</span>}
+            <div className="flex-1 min-w-0 sm:pb-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-black text-[#1A1A1A] truncate">{store.store_name}</h1>
+                {store.is_verified && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#FF6B2B] bg-orange-50 px-2 py-0.5 rounded-full">✓ Verified</span>
+                )}
+                {!store.is_open && (
+                  <span className="text-[11px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-semibold">🔴 Closed</span>
+                )}
               </div>
-              <p className="text-xs text-gray-500 capitalize">{store.category} · {store.area ?? store.city}</p>
-              {store.rating_avg > 0 && (
-                <p className="text-xs text-gray-600 mt-0.5">⭐ {store.rating_avg.toFixed(1)} · {store.total_reviews} reviews</p>
-              )}
-              {!store.is_open && (
-                <span className="inline-block mt-1 text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-semibold">🔴 Closed</span>
-              )}
+              <div className="flex items-center gap-3 mt-1 text-sm text-gray-500 flex-wrap">
+                <span className="capitalize">{store.category}</span>
+                <span className="flex items-center gap-1"><MapPin size={13} /> {store.area ?? store.city}</span>
+                {store.rating_avg > 0 && (
+                  <span className="flex items-center gap-1 text-gray-700 font-semibold">
+                    <Star size={13} className="fill-amber-400 text-amber-400" /> {store.rating_avg.toFixed(1)}
+                    <span className="text-gray-400 font-normal">({store.total_reviews})</span>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           {store.description && (
-            <p className="mt-3 text-sm text-gray-600 leading-relaxed">{store.description}</p>
+            <p className="-mt-1 pb-5 text-sm text-gray-600 leading-relaxed max-w-3xl">{store.description}</p>
           )}
         </div>
       </div>
 
       {/* Search */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-200">
-        <div className="max-w-2xl mx-auto px-4 py-3">
-          <div className="relative">
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-gray-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3">
+          <div className="relative max-w-xl">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               value={search}
@@ -156,59 +165,74 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
       </div>
 
       {/* Products */}
-      <div className="max-w-2xl mx-auto px-4 py-4 pb-32">
-        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 pb-32">
+        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-4">
           Products ({filtered.length})
         </h2>
         {filtered.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
+          <div className="text-center py-20 text-gray-400">
             <ShoppingBag size={36} className="mx-auto mb-3 opacity-50" />
             <p className="text-sm">{search.trim() ? 'No matches' : 'No products yet'}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {filtered.map(p => {
               const qty = qtyOf(p.id)
               const outOfStock = p.stock_type === 'counted' && (p.stock_count ?? 0) <= 0
+              const lowStock = p.stock_type === 'counted' && (p.stock_count ?? 0) > 0 && (p.stock_count ?? 99) <= 5
+              const discountPct = p.compare_price && p.compare_price > p.price
+                ? Math.round((1 - p.price / p.compare_price) * 100)
+                : 0
               return (
-                <div key={p.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                  <Link href={`/store/${storeSlug}/product/${p.id}`} className="block aspect-square bg-gray-50 relative hover:opacity-95 transition">
+                <div key={p.id} className="group bg-white rounded-2xl border border-gray-100 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition">
+                  <Link href={`/store/${storeSlug}/product/${p.id}`} className="block aspect-square bg-gray-50 relative overflow-hidden">
                     {p.images?.[0] ? (
-                      <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+                      <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-3xl">📦</div>
+                      <div className="w-full h-full flex items-center justify-center text-4xl">📦</div>
+                    )}
+                    {discountPct > 0 && (
+                      <span className="absolute top-2 left-2 bg-[#00B98E] text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">{discountPct}% OFF</span>
+                    )}
+                    {outOfStock && (
+                      <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
+                        <span className="bg-gray-900 text-white text-xs font-bold px-3 py-1.5 rounded-full">Out of Stock</span>
+                      </div>
                     )}
                   </Link>
-                  <div className="p-2.5">
+                  <div className="p-3 flex flex-col flex-1">
                     <Link href={`/store/${storeSlug}/product/${p.id}`} className="block">
-                      <p className="text-sm font-semibold text-[#1A1A1A] line-clamp-2 mb-1 leading-tight hover:text-[#FF6B2B]">{p.name}</p>
+                      <p className="text-sm font-semibold text-[#1A1A1A] line-clamp-2 mb-1 leading-tight min-h-[2.5rem] group-hover:text-[#FF6B2B] transition">{p.name}</p>
                     </Link>
-                    <div className="flex items-baseline gap-1.5 mb-2">
+                    <div className="flex items-baseline gap-1.5 mb-1">
                       <span className="text-base font-black text-[#1A1A1A]">₹{p.price}</span>
                       {p.compare_price && p.compare_price > p.price && (
                         <span className="text-xs text-gray-400 line-through">₹{p.compare_price}</span>
                       )}
                     </div>
-                    {outOfStock ? (
-                      <div className="text-xs text-gray-400 text-center py-1.5">Out of stock</div>
-                    ) : qty === 0 ? (
-                      <button
-                        onClick={() => addToCart(p)}
-                        className="w-full bg-[#FF6B2B] text-white text-sm font-bold py-1.5 rounded-lg hover:bg-[#e55a1f] transition"
-                      >
-                        Add
-                      </button>
-                    ) : (
-                      <div className="flex items-center justify-between">
-                        <button onClick={() => decrement(p.id)} className="w-8 h-8 rounded-full bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]">
-                          <Minus size={14} />
+                    {lowStock && <p className="text-[11px] text-orange-600 font-semibold mb-2">⚡ Only {p.stock_count} left</p>}
+                    <div className="mt-auto pt-1">
+                      {outOfStock ? (
+                        <div className="text-xs text-gray-400 text-center py-2 bg-gray-50 rounded-lg">Out of stock</div>
+                      ) : qty === 0 ? (
+                        <button
+                          onClick={() => addToCart(p)}
+                          className="w-full bg-[#FF6B2B] text-white text-sm font-bold py-2 rounded-lg hover:bg-[#e55a1f] active:scale-[0.98] transition flex items-center justify-center gap-1.5"
+                        >
+                          <Plus size={15} /> Add
                         </button>
-                        <span className="text-sm font-bold text-[#1A1A1A]">{qty}</span>
-                        <button onClick={() => addToCart(p)} className="w-8 h-8 rounded-full bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]">
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="flex items-center justify-between bg-orange-50 rounded-lg p-1">
+                          <button onClick={() => decrement(p.id)} className="w-8 h-8 rounded-md bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]">
+                            <Minus size={14} />
+                          </button>
+                          <span className="text-sm font-bold text-[#1A1A1A]">{qty}</span>
+                          <button onClick={() => addToCart(p)} className="w-8 h-8 rounded-md bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]">
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
@@ -220,14 +244,14 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
       {/* Sticky cart footer */}
       {count > 0 && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl">
-          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs text-gray-500">{count} item{count !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-gray-500">{count} item{count !== 1 ? 's' : ''} in cart</p>
               <p className="text-lg font-black text-[#1A1A1A]">₹{subtotal}</p>
             </div>
             <button
               onClick={goToCheckout}
-              className="flex-1 bg-[#FF6B2B] text-white py-3 px-6 rounded-full font-bold text-sm hover:bg-[#e55a1f] transition flex items-center justify-center gap-2"
+              className="flex-1 sm:flex-none sm:px-10 bg-[#FF6B2B] text-white py-3 px-6 rounded-full font-bold text-sm hover:bg-[#e55a1f] transition flex items-center justify-center gap-2"
             >
               <ShoppingBag size={16} /> Proceed to Checkout
             </button>
