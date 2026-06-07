@@ -2,6 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { Marketplace } from '@/components/home/Marketplace'
+import BuyerAuthNav from '@/components/BuyerAuthNav'
 
 // Always render fresh marketplace data (new stores/products show up without a redeploy).
 export const revalidate = 60
@@ -41,10 +42,11 @@ function Header() {
             href="/seller"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex h-10 px-5 items-center rounded-btn border border-border text-primary text-sm font-medium hover:bg-surface transition"
+            className="hidden sm:inline-flex h-10 px-5 items-center rounded-btn border border-border text-primary text-sm font-medium hover:bg-surface transition"
           >
             Sell on ReelMart →
           </Link>
+          <BuyerAuthNav />
         </nav>
       </div>
     </header>
