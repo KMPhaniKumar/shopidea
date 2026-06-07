@@ -8,6 +8,7 @@ import { ArrowLeft, MapPin, ChevronRight, Plus, Minus, Trash2, Loader2, Search }
 import { CartItem, loadCart, saveCart, clearCart, cartTotal } from '@/lib/cart'
 import { saveAddress, searchPlaces, fetchPlaceDetails, type PlacePrediction } from '@/lib/saved-addresses'
 import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, preloadOtpWidget, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
+import TestLoginButtons from '@/components/TestLoginButtons'
 
 interface Store {
   id: string
@@ -503,6 +504,14 @@ export default function CheckoutClient({ store }: { store: Store }) {
             >
               {otpLoading ? <Loader2 className="animate-spin mx-auto" size={18} /> : 'Send OTP →'}
             </button>
+            <TestLoginButtons
+              roles={['buyer']}
+              onDone={async (_role, uid) => {
+                setUserId(uid)
+                await loadAddresses(uid)
+                setStep('address')
+              }}
+            />
           </Section>
         )}
 
