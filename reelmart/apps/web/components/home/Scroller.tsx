@@ -10,7 +10,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 export function Scroller<T>({
   items,
   render,
-  speed = 0.4,
+  speed = 1.1,
 }: {
   items: T[]
   render: (item: T, index: number) => ReactNode

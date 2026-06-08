@@ -3,7 +3,7 @@
 // search (products + shops), category pills, a sellers widget, and the
 // per-category product carousels. Each product card credits its seller.
 import { createClient } from '@/lib/supabase/server'
-import { CATEGORIES, instaUsername, bucketCategory } from '@/lib/categories'
+import { instaUsername, bucketCategory } from '@/lib/categories'
 import { MarketplaceClient, type MProduct, type MSeller } from './MarketplaceClient'
 
 function firstImage(images: unknown): string | null {
@@ -20,7 +20,7 @@ export async function Marketplace() {
       .eq('is_active', true),
     supabase
       .from('products')
-      .select('id, name, price, images, description, stores!inner(store_slug, store_name, category, instagram_handle, is_active)')
+      .select('id, name, price, images, description, category, stores!inner(store_slug, store_name, category, instagram_handle, is_active)')
       .eq('is_available', true)
       .eq('stores.is_active', true)
       .order('created_at', { ascending: false })
@@ -45,7 +45,10 @@ export async function Marketplace() {
   for (const p of allProducts as any[]) {
     const store = p.stores
     if (!store?.store_slug) continue
-    const cat = bucketCategory(store.category)
+    // Group by the PRODUCT's own category (e.g. "Men's Wear", "Bangles",
+    // "Home Decor"); fall back to the store's category, then "Other".
+    const raw = typeof p.category === 'string' ? p.category.trim() : ''
+    const cat = raw || bucketCategory(store.category) || 'Other'
     productItems.push({
       id: p.id,
       name: p.name,

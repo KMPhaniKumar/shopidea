@@ -1,9 +1,10 @@
 'use client'
 
-// Interactive marketplace: a search box (products + shops), category pills,
-// a "Shops to explore" seller widget, and the per-category product carousels.
-// Receives all data as props from the server <Marketplace> (≤400 products +
-// active stores), so search/filtering is instant client-side.
+// Interactive marketplace: search box (products + shops), category pills, a
+// "Shops to explore" seller widget, and ONE product widget PER product category
+// (e.g. Men's Wear, Bangles, Home Decor). Each widget auto-scrolls and is also
+// manually scrollable (<Scroller>). All client-side over the data the server
+// <Marketplace> loads.
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Search, X } from 'lucide-react'
@@ -23,7 +24,26 @@ export interface MSeller {
   city: string | null
 }
 
-const catLabel = (id: string) => CATEGORIES.find(c => c.id === id)?.label ?? id
+// Soft bg + accent pairs cycled per category widget.
+const PALETTE = [
+  { bg: '#FDEAF3', accent: '#D6336C' },
+  { bg: '#FFF9E6', accent: '#C99A00' },
+  { bg: '#E9F1FF', accent: '#1E88E5' },
+  { bg: '#E9F8F0', accent: '#1A8F5A' },
+  { bg: '#F4EAFE', accent: '#7C3AED' },
+  { bg: '#FFF4EC', accent: '#FF6B2B' },
+]
+
+function iconFor(name: string): string {
+  const n = name.toLowerCase()
+  if (/jewel|neck|bangle|ring|earring|chain|pendant|bracelet/.test(n)) return '💍'
+  if (/cloth|wear|shirt|tee|t-shirt|kurti|kurta|saree|dress|chudidar|trouser|jean|fashion|ethnic/.test(n)) return '👗'
+  if (/home|decor|lamp|furnit|kitchen/.test(n)) return '🏡'
+  if (/beauty|cosmet|makeup|skin|hair/.test(n)) return '💄'
+  if (/food|bever|snack|sweet|bak/.test(n)) return '🍱'
+  if (/electro|gadget|phone|mobile|laptop/.test(n)) return '📱'
+  return '🛍️'
+}
 
 export function MarketplaceClient({ products, sellers }: { products: MProduct[]; sellers: MSeller[] }) {
   const [query, setQuery] = useState('')
@@ -32,10 +52,12 @@ export function MarketplaceClient({ products, sellers }: { products: MProduct[];
   const q = query.trim().toLowerCase()
   const searching = q.length > 0
 
-  const presentCats = useMemo(
-    () => CATEGORIES.filter(c => products.some(p => p.category === c.id)),
-    [products],
-  )
+  // Distinct product categories, most-stocked first.
+  const catList = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of products) m.set(p.category, (m.get(p.category) ?? 0) + 1)
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }))
+  }, [products])
 
   const matchedProducts = useMemo(() => {
     if (!searching) return []
@@ -43,7 +65,7 @@ export function MarketplaceClient({ products, sellers }: { products: MProduct[];
       p.name.toLowerCase().includes(q) ||
       (p.description ?? '').toLowerCase().includes(q) ||
       p.store_name.toLowerCase().includes(q) ||
-      catLabel(p.category).toLowerCase().includes(q),
+      p.category.toLowerCase().includes(q),
     )
   }, [products, q, searching])
 
@@ -51,13 +73,11 @@ export function MarketplaceClient({ products, sellers }: { products: MProduct[];
     if (!searching) return []
     return sellers.filter(s =>
       s.store_name.toLowerCase().includes(q) ||
-      catLabel(s.category).toLowerCase().includes(q) ||
       (s.store_instagram ?? '').toLowerCase().includes(q),
     )
   }, [sellers, q, searching])
 
-  const sections = presentCats.filter(c => activeCat === 'all' || c.id === activeCat)
-  const shownSellers = activeCat === 'all' ? sellers : sellers.filter(s => s.category === activeCat)
+  const sections = activeCat === 'all' ? catList : catList.filter(c => c.name === activeCat)
 
   return (
     <section id="marketplace" className="px-4 sm:px-6 py-10 sm:py-14">
@@ -84,12 +104,12 @@ export function MarketplaceClient({ products, sellers }: { products: MProduct[];
         </div>
 
         {/* Category pills (hidden while searching) */}
-        {!searching && presentCats.length > 0 && (
+        {!searching && catList.length > 0 && (
           <div className="flex flex-wrap justify-center gap-2 mb-8">
             <Pill active={activeCat === 'all'} onClick={() => setActiveCat('all')}>All</Pill>
-            {presentCats.map(c => (
-              <Pill key={c.id} active={activeCat === c.id} onClick={() => setActiveCat(c.id)}>
-                <span className="mr-1">{c.icon}</span>{c.label}
+            {catList.map(c => (
+              <Pill key={c.name} active={activeCat === c.name} onClick={() => setActiveCat(c.name)}>
+                <span className="mr-1">{iconFor(c.name)}</span>{c.name}
               </Pill>
             ))}
           </div>
@@ -99,17 +119,18 @@ export function MarketplaceClient({ products, sellers }: { products: MProduct[];
           <SearchResults q={query.trim()} products={matchedProducts} sellers={matchedSellers} />
         ) : (
           <>
-            <SellersWidget sellers={shownSellers} />
+            <SellersWidget sellers={sellers} />
 
             <div className="space-y-6 mt-10">
-              {sections.map(cat => {
-                const cp = products.filter(p => p.category === cat.id)
+              {sections.map((c, i) => {
+                const cp = products.filter(p => p.category === c.name)
                 if (cp.length === 0) return null
+                const sty = PALETTE[i % PALETTE.length]
                 return (
-                  <div key={cat.id} className="rounded-card p-5 sm:p-7" style={{ backgroundColor: cat.bg }}>
+                  <div key={c.name} className="rounded-card p-5 sm:p-7" style={{ backgroundColor: sty.bg }}>
                     <div className="flex items-center gap-2 mb-4">
-                      <span className="text-2xl">{cat.icon}</span>
-                      <h3 className="text-xl font-bold" style={{ color: cat.accent }}>{cat.label}</h3>
+                      <span className="text-2xl">{iconFor(c.name)}</span>
+                      <h3 className="text-xl font-bold" style={{ color: sty.accent }}>{c.name}</h3>
                       <span className="text-sm text-secondary">· {cp.length} {cp.length === 1 ? 'product' : 'products'}</span>
                     </div>
                     <ProductCarousel products={cp} />
