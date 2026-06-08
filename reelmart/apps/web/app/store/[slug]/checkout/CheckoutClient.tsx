@@ -271,11 +271,8 @@ export default function CheckoutClient({ store }: { store: Store }) {
     }
   }
 
-  async function placeOrder() {
-    if (!userId || !selectedAddress) return
-    setPlacing(true)
-    const { data, error } = await supabase.from('orders').insert({
-      buyer_id: userId,
+  function orderPayload() {
+    return {
       store_id: store.id,
       items: cart as any,
       subtotal,
@@ -283,53 +280,68 @@ export default function CheckoutClient({ store }: { store: Store }) {
       discount_amount: 0,
       total_amount: total,
       delivery_address: {
-        name: selectedAddress.name,
-        phone: selectedAddress.phone,
-        alt_phone: selectedAddress.alt_phone,
-        line1: selectedAddress.line1,
-        line2: selectedAddress.line2,
-        area: selectedAddress.area,
-        city: selectedAddress.city,
-        state: selectedAddress.state,
-        pincode: selectedAddress.pincode,
+        name: selectedAddress!.name,
+        phone: selectedAddress!.phone,
+        alt_phone: selectedAddress!.alt_phone,
+        line1: selectedAddress!.line1,
+        line2: selectedAddress!.line2,
+        area: selectedAddress!.area,
+        city: selectedAddress!.city,
+        state: selectedAddress!.state,
+        pincode: selectedAddress!.pincode,
       } as any,
-      payment_method: paymentMethod,
-      status: 'pending',
-      payment_status: 'pending',
-    }).select('id, order_number').single()
-
-    if (error || !data) { setPlacing(false); toast.error(error?.message ?? 'Order failed'); return }
-
-    // Online: collect payment via Razorpay before confirming. On failure the
-    // order stays pending (recoverable by webhook or retry) and the cart is kept.
-    if (paymentMethod === 'online') {
-      try {
-        await payOnline(data.id, data.order_number)
-      } catch (err: any) {
-        setPlacing(false)
-        toast.error(err?.message ?? 'Payment failed')
-        return
-      }
     }
-
-    // Fire-and-forget: ask backend to send WhatsApp + SMS to the buyer.
-    // Idempotent on the server, so a slow/aborted call doesn't hurt.
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
-    if (apiUrl) {
-      fetch(`${apiUrl}/api/notifications/order-placed`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: data.id }),
-      }).catch(() => {})
-    }
-
-    clearCart(store.store_slug)
-    router.push(`/order/${data.id}`)
   }
 
-  // Drives Razorpay Standard Checkout for an already-created order.
-  // Resolves only once the payment signature is verified server-side.
-  async function payOnline(orderId: string, orderNumber: string) {
+  // Fire-and-forget WhatsApp/SMS notification (idempotent on the server).
+  function notifyOrderPlaced(orderId: string) {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
+    if (!apiUrl) return
+    fetch(`${apiUrl}/api/notifications/order-placed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId }),
+    }).catch(() => {})
+  }
+
+  async function placeOrder() {
+    if (!userId || !selectedAddress) return
+    setPlacing(true)
+
+    // COD: the order is real on placement — create it now.
+    if (paymentMethod === 'cod') {
+      const { data, error } = await supabase.from('orders').insert({
+        buyer_id: userId,
+        ...orderPayload(),
+        payment_method: 'cod',
+        status: 'pending',
+        payment_status: 'pending',
+      }).select('id, order_number').single()
+      if (error || !data) { setPlacing(false); toast.error(error?.message ?? 'Order failed'); return }
+      notifyOrderPlaced(data.id)
+      clearCart(store.store_slug)
+      router.push(`/order/${data.id}`)
+      return
+    }
+
+    // Online: pay FIRST. The order row is created by the backend only after the
+    // payment signature is verified (/confirm) — so cancelled/failed payments
+    // leave NO order behind.
+    try {
+      const created = await payOnline()
+      notifyOrderPlaced(created.id)
+      clearCart(store.store_slug)
+      router.push(`/order/${created.id}`)
+    } catch (err: any) {
+      setPlacing(false)
+      toast.error(err?.message ?? 'Payment failed')
+    }
+  }
+
+  // Razorpay Standard Checkout. Mints a Razorpay order (no DB row), opens the
+  // modal, and on success calls /confirm which verifies the signature and creates
+  // the paid order. Resolves with the created { id, order_number }.
+  async function payOnline(): Promise<{ id: string; order_number: string }> {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
     if (!apiUrl) throw new Error('Online payment is not configured')
 
@@ -339,11 +351,10 @@ export default function CheckoutClient({ store }: { store: Store }) {
     const token = session?.access_token
     if (!token) throw new Error('Session expired — please log in again')
 
-    // Create the Razorpay order on the backend (amount in rupees; converted to paise there).
     const res = await fetch(`${apiUrl}/api/payments/create-order`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ orderId, amount: total }),
+      body: JSON.stringify({ amount: total }),
     })
     const json = await res.json().catch(() => ({}))
     if (!res.ok || !json?.success) throw new Error(json?.error ?? 'Could not start payment')
@@ -351,15 +362,16 @@ export default function CheckoutClient({ store }: { store: Store }) {
     const { razorpayOrderId, amount, currency, keyId } = json.data
     const key = keyId ?? process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
     if (!key) throw new Error('Payment gateway key missing')
+    const payload = orderPayload()
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const rzp = new (window as any).Razorpay({
         key,
         amount,
         currency,
         order_id: razorpayOrderId,
         name: store.store_name,
-        description: `Order ${orderNumber}`,
+        description: `Order from ${store.store_name}`,
         image: store.logo_url ?? undefined,
         prefill: {
           name: selectedAddress?.name,
@@ -368,22 +380,22 @@ export default function CheckoutClient({ store }: { store: Store }) {
         theme: { color: '#FF6B2B' },
         handler: async (resp: any) => {
           try {
-            const vr = await fetch(`${apiUrl}/api/payments/verify`, {
+            const cr = await fetch(`${apiUrl}/api/payments/confirm`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
               body: JSON.stringify({
-                orderId,
                 razorpay_order_id: resp.razorpay_order_id,
                 razorpay_payment_id: resp.razorpay_payment_id,
                 razorpay_signature: resp.razorpay_signature,
+                order: payload,
               }),
             })
-            const vj = await vr.json().catch(() => ({}))
-            if (!vr.ok || !vj?.success) {
-              reject(new Error(vj?.error ?? 'Payment verification failed'))
+            const cj = await cr.json().catch(() => ({}))
+            if (!cr.ok || !cj?.success) {
+              reject(new Error(cj?.error ?? 'Payment verification failed'))
               return
             }
-            resolve()
+            resolve(cj.data)
           } catch (e: any) {
             reject(new Error(e?.message ?? 'Payment verification failed'))
           }
