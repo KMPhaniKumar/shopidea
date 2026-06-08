@@ -52,6 +52,30 @@ variable "use_fargate_spot" {
   description = "Run the service on FARGATE_SPOT (~70% cheaper, may be interrupted) instead of on-demand FARGATE. Suitable for dev."
 }
 
+variable "enable_scheduled_shutdown" {
+  type        = bool
+  default     = false
+  description = "Scale the service to 0 tasks overnight on a schedule, then back up in the morning (dev cost saving)."
+}
+
+variable "shutdown_schedule" {
+  type        = string
+  default     = "cron(0 22 * * ? *)"
+  description = "Application Auto Scaling cron for scaling to 0 (interpreted in schedule_timezone)."
+}
+
+variable "startup_schedule" {
+  type        = string
+  default     = "cron(0 8 * * ? *)"
+  description = "Application Auto Scaling cron for scaling back up (interpreted in schedule_timezone)."
+}
+
+variable "schedule_timezone" {
+  type        = string
+  default     = "Asia/Kolkata"
+  description = "IANA timezone for the scheduled scale actions."
+}
+
 variable "target_group_arn" {
   type = string
 }

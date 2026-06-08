@@ -124,3 +124,37 @@ resource "aws_appautoscaling_policy" "cpu" {
     scale_out_cooldown = 60
   }
 }
+
+# ─── Scheduled scale-to-zero (dev cost saving) ────────────────────────────────
+# Overnight the service is scaled to 0 tasks, then back up in the morning.
+# Times are interpreted in var.schedule_timezone.
+
+resource "aws_appautoscaling_scheduled_action" "shutdown" {
+  count              = var.enable_scheduled_shutdown ? 1 : 0
+  name               = "${local.full_name}-night-shutdown"
+  service_namespace  = aws_appautoscaling_target.this.service_namespace
+  resource_id        = aws_appautoscaling_target.this.resource_id
+  scalable_dimension = aws_appautoscaling_target.this.scalable_dimension
+  schedule           = var.shutdown_schedule
+  timezone           = var.schedule_timezone
+
+  scalable_target_action {
+    min_capacity = 0
+    max_capacity = 0
+  }
+}
+
+resource "aws_appautoscaling_scheduled_action" "startup" {
+  count              = var.enable_scheduled_shutdown ? 1 : 0
+  name               = "${local.full_name}-morning-startup"
+  service_namespace  = aws_appautoscaling_target.this.service_namespace
+  resource_id        = aws_appautoscaling_target.this.resource_id
+  scalable_dimension = aws_appautoscaling_target.this.scalable_dimension
+  schedule           = var.startup_schedule
+  timezone           = var.schedule_timezone
+
+  scalable_target_action {
+    min_capacity = var.min_capacity
+    max_capacity = var.max_capacity
+  }
+}

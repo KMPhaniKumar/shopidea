@@ -160,22 +160,27 @@ module "ecs_service" {
   source   = "../../../modules/ecs-service"
   for_each = local.services
 
-  environment             = var.environment
-  service_name            = each.key
-  cluster_name            = local.cluster_name
-  container_image         = "${local.ecr_repo_urls[each.key]}:${var.image_tag}"
-  container_port          = var.container_port
-  cpu                     = var.default_cpu
-  memory                  = var.default_memory
-  desired_count           = 1
-  min_capacity            = 1
-  max_capacity            = each.value.max_capacity
-  use_fargate_spot        = var.use_fargate_spot
-  target_group_arn        = local.target_group_arns[each.key]
-  subnet_ids              = local.subnet_ids
-  security_group_ids      = [local.fargate_sg_id]
-  task_execution_role_arn = local.task_execution_role_arn
-  task_role_arn           = local.task_role_arn
+  environment      = var.environment
+  service_name     = each.key
+  cluster_name     = local.cluster_name
+  container_image  = "${local.ecr_repo_urls[each.key]}:${var.image_tag}"
+  container_port   = var.container_port
+  cpu              = var.default_cpu
+  memory           = var.default_memory
+  desired_count    = 1
+  min_capacity     = 1
+  max_capacity     = each.value.max_capacity
+  use_fargate_spot = var.use_fargate_spot
+
+  enable_scheduled_shutdown = var.enable_scheduled_shutdown
+  shutdown_schedule         = var.shutdown_schedule
+  startup_schedule          = var.startup_schedule
+  schedule_timezone         = var.schedule_timezone
+  target_group_arn          = local.target_group_arns[each.key]
+  subnet_ids                = local.subnet_ids
+  security_group_ids        = [local.fargate_sg_id]
+  task_execution_role_arn   = local.task_execution_role_arn
+  task_role_arn             = local.task_role_arn
 
   env_vars = merge(local.base_env, each.value.extra_env)
 
