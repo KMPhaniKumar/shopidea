@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -94,7 +95,11 @@ export default function BuyerLoginModal({
     }
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  // Portal to <body> so the overlay isn't trapped by the header's backdrop-blur
+  // (backdrop-filter creates a containing block for fixed-position children).
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4"
       onClick={onClose}
@@ -177,6 +182,7 @@ export default function BuyerLoginModal({
           onDone={(_role, userId) => { onSuccess?.(userId); onClose() }}
         />
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
