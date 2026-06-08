@@ -26,17 +26,40 @@ How this solo-maintained project stays healthy with Claude. The setup has four l
 | `/aws-session` | Check/refresh AWS SSO creds when commands expire |
 | `/refresh-status` | Regenerate `agents/AUDIT_gaps.md` from live reality |
 
-## 3. Agents — specialists Claude delegates to (`.claude/agents/`)
-- **deployer** — ships service images to Fargate.
-- **infra-guardian** — read-only Terraform/AWS drift review; never applies.
-- **db-keeper** — Supabase schema/migration safety; never destructive.
-- **ops-triage** — read-only incident investigation.
+## 3. Agents — your team (`.claude/agents/<team>/`)
+Organized into teams (folders are organizational — Claude delegates by agent **name**). Architects design & write ADRs; engineers implement; security reviews & fixes.
+
+**architects/** — design & advise
+- **product-architect** — end-to-end system design & technical strategy
+- **infrastructure-architect** — AWS/Terraform target-state, scaling, cost, DR
+- **devops-architect** — CI/CD, environments, release/rollback, observability strategy
+- **infra-security-architect** — IAM / network / secrets / encryption design
+- **app-security-architect** — authn/authz, API, payment, threat models
+- **data-architect** — Supabase data model, indexing, migrations governance
+- **data-security-architect** — RLS strategy, PII/KYC, retention, compliance
+
+**development/** — build
+- **backend-engineer** — the 10 Express/TS microservices
+- **ui-engineer** — Next.js web + Expo buyer-app
+- **database-engineer** — Supabase schema/migrations/RLS/data (+ read-only migration-sync check)
+
+**ops/** — operate & ship
+- **infra-engineer** — Terraform/AWS infra changes (+ read-only drift review)
+- **devops-engineer** — CI/CD, deploys, releases, observability, rollback
+- **ops-triage** — read-only incident investigation
+
+**security/** — review & fix
+- **security-engineer** — whole-project security (app + infra + data); reviews, threat-models, coordinates
+- **app-security-engineer** — finds & fixes app/service vulnerabilities
+- **infra-security-engineer** — audits & hardens AWS via Terraform
+
+> Supersedes the earlier flat set: `deployer`→**devops-engineer**, `db-keeper`→**database-engineer**, `infra-guardian`→**infra-engineer** (drift-review mode).
 
 ## 4. Guardrails + automation
 - **Permissions** (`.claude/settings.json`): read-only `aws describe/list`, `terraform plan`, `git`, `gh`, `curl api-dev` are auto-approved; destructive ones still prompt; a few (`terraform destroy`, `apply -auto-approve`, `delete-cluster`, `db reset`, force-push, reading `.env`) are denied.
 - **Hooks** (`.claude/hooks/`): `guard.sh` (PreToolUse) blocks catastrophic/secret commands; `stop-reminder.sh` nudges to refresh `AUDIT_gaps.md` after code/infra changes.
 - **CI** (`.github/workflows/`):
-  - `deploy.yml` — on push to `main`: build each service image → ECR → `ecs update-service`, deploy web to Vercel, `supabase db push` (needs secret `AWS_DEPLOY_ROLE_ARN`).
+  - `deploy.yml` — on push to `main`: build each service image → ECR → `ecs update-service`, deploy web to Vercel, `supabase db push`. Assumes the OIDC role via its hardcoded ARN (`reelmart-gha-deploy`); each service deploys independently (a single failed build no longer blocks the rest).
   - `maintenance.yml` — nightly **Terraform drift** check + weekly **dependency audit** via the OIDC role; failures notify you.
 
 ## Cadence
@@ -46,10 +69,10 @@ How this solo-maintained project stays healthy with Claude. The setup has four l
 - **Monthly:** `/security-review`, dependency upgrades, secret rotation, a restore-from-backup test.
 
 ## One-time setup to finish
-- Add GitHub Actions secret **`AWS_DEPLOY_ROLE_ARN`** = `arn:aws:iam::632127307144:role/reelmart-gha-deploy` (role already exists) — enables `deploy.yml` + `maintenance.yml`.
+- `deploy.yml` now uses the OIDC role's **hardcoded** ARN (`reelmart-gha-deploy`), so no `AWS_DEPLOY_ROLE_ARN` secret is needed for it. (`maintenance.yml` may still reference that secret — set it if you enable that workflow.) Web/DB jobs still need `VERCEL_*` / `SUPABASE_*` secrets.
 - Optional: schedule recurring Claude agents (log triage, weekly `/refresh-status`) with the `/schedule` skill.
 
 ## Extending
 - New runbook → add `.claude/skills/<name>/SKILL.md`.
-- New specialist → add `.claude/agents/<name>.md` (keep maintenance agents read-only by default).
+- New specialist → add `.claude/agents/<team>/<name>.md` under the right team (architects / development / ops / security).
 - New guardrail → extend `.claude/hooks/guard.sh` or `.claude/settings.json`.

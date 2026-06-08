@@ -12,7 +12,7 @@ order management, and catalogue via a shareable link.
 **Code lives in `reelmart/`; infra-as-code in `infra/terraform/`. Read these before starting work:**
 - [`agents/AUDIT_gaps.md`](../agents/AUDIT_gaps.md) — **START HERE.** Canonical current status: real architecture, what's built, what's pending, test accounts.
 - [`README.md`](../README.md) — project orientation
-- [`MAINTENANCE.md`](../MAINTENANCE.md) — AI-maintenance setup: skills (`/deploy-service`, `/health-check`, `/db-migrate`, `/tf-drift`, `/triage`, `/aws-session`, `/refresh-status`), agents (deployer, infra-guardian, db-keeper, ops-triage), guardrails, CI
+- [`MAINTENANCE.md`](../MAINTENANCE.md) — AI-maintenance setup: skills (`/deploy-service`, `/health-check`, `/db-migrate`, `/tf-drift`, `/triage`, `/aws-session`, `/refresh-status`), agents (team-organized: architects / development / ops / security), guardrails, CI
 - [`TRACKER.md`](../TRACKER.md) — daily log
 - [`FLOWS.md`](../FLOWS.md) — every screen's data flow
 
