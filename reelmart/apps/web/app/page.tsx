@@ -28,7 +28,7 @@ export default function HomePage() {
 function Header() {
   return (
     <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-border">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
+      <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
         {/* Left: logo + Browse */}
         <div className="flex items-center gap-1 sm:gap-3 min-w-0">
           <Link href="/" aria-label="ReelMart home" className="shrink-0">
