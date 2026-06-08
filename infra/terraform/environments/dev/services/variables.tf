@@ -28,3 +28,9 @@ variable "log_region" {
   type    = string
   default = "ap-south-1"
 }
+
+variable "use_fargate_spot" {
+  type        = bool
+  default     = true
+  description = "Run dev services on FARGATE_SPOT (~70% cheaper compute; may be briefly interrupted)."
+}

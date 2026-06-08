@@ -62,7 +62,17 @@ resource "aws_ecs_service" "this" {
   cluster         = var.cluster_name
   task_definition = aws_ecs_task_definition.this.arn
   desired_count   = var.desired_count
-  launch_type     = "FARGATE"
+
+  # On-demand FARGATE by default; FARGATE_SPOT when enabled (cheaper, dev).
+  launch_type = var.use_fargate_spot ? null : "FARGATE"
+
+  dynamic "capacity_provider_strategy" {
+    for_each = var.use_fargate_spot ? [1] : []
+    content {
+      capacity_provider = "FARGATE_SPOT"
+      weight            = 1
+    }
+  }
 
   health_check_grace_period_seconds = var.health_check_grace_period_seconds
 

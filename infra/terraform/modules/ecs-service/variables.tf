@@ -46,6 +46,12 @@ variable "max_capacity" {
   default = 2
 }
 
+variable "use_fargate_spot" {
+  type        = bool
+  default     = false
+  description = "Run the service on FARGATE_SPOT (~70% cheaper, may be interrupted) instead of on-demand FARGATE. Suitable for dev."
+}
+
 variable "target_group_arn" {
   type = string
 }
@@ -75,14 +81,14 @@ variable "task_role_arn" {
 }
 
 variable "log_group_name" {
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
   description = "Unused since CloudWatch was disabled; kept for backward compat. Remove once all callers stop passing it."
 }
 
 variable "log_region" {
-  type    = string
-  default = "ap-south-1"
+  type        = string
+  default     = "ap-south-1"
   description = "Unused since CloudWatch was disabled; kept for backward compat."
 }
 

@@ -33,23 +33,23 @@ data "terraform_remote_state" "cluster" {
 }
 
 locals {
-  cluster_name             = data.terraform_remote_state.network.outputs.cluster_name
-  ecr_repo_urls            = data.terraform_remote_state.network.outputs.ecr_repo_urls
-  target_group_arns        = data.terraform_remote_state.network.outputs.target_group_arns
-  task_execution_role_arn  = data.terraform_remote_state.network.outputs.task_execution_role_arn
-  task_role_arn            = data.terraform_remote_state.network.outputs.task_role_arn
-  secret_arns              = data.terraform_remote_state.network.outputs.secret_arns
-  alb_dns_name             = data.terraform_remote_state.network.outputs.alb_dns_name
-  subnet_ids               = data.terraform_remote_state.network.outputs.public_subnet_ids
-  fargate_sg_id            = data.terraform_remote_state.network.outputs.fargate_security_group_id
+  cluster_name            = data.terraform_remote_state.network.outputs.cluster_name
+  ecr_repo_urls           = data.terraform_remote_state.network.outputs.ecr_repo_urls
+  target_group_arns       = data.terraform_remote_state.network.outputs.target_group_arns
+  task_execution_role_arn = data.terraform_remote_state.network.outputs.task_execution_role_arn
+  task_role_arn           = data.terraform_remote_state.network.outputs.task_role_arn
+  secret_arns             = data.terraform_remote_state.network.outputs.secret_arns
+  alb_dns_name            = data.terraform_remote_state.network.outputs.alb_dns_name
+  subnet_ids              = data.terraform_remote_state.network.outputs.public_subnet_ids
+  fargate_sg_id           = data.terraform_remote_state.network.outputs.fargate_security_group_id
 
   base_url = "http://${local.alb_dns_name}"
 
   # Common env vars across services
   base_env = {
-    NODE_ENV         = "production"
-    PORT             = tostring(var.container_port)
-    ALLOWED_ORIGINS  = "*"
+    NODE_ENV                 = "production"
+    PORT                     = tostring(var.container_port)
+    ALLOWED_ORIGINS          = "*"
     PAYMENT_SERVICE_URL      = "${local.base_url}/api/payments"
     NOTIFICATION_SERVICE_URL = "${local.base_url}/api/notifications"
   }
@@ -57,33 +57,33 @@ locals {
   # JSON-keyed Secrets Manager refs: <secret-arn>:<json-key>::
   # Common secrets every service needs.
   base_secrets = [
-    { name = "SUPABASE_URL",          valueFrom = "${local.secret_arns["supabase"]}:url::" },
-    { name = "SUPABASE_SERVICE_KEY",  valueFrom = "${local.secret_arns["supabase"]}:service_key::" },
-    { name = "SUPABASE_ANON_KEY",     valueFrom = "${local.secret_arns["supabase"]}:anon_key::" },
-    { name = "INTERNAL_API_KEY",      valueFrom = "${local.secret_arns["jwt"]}:secret::" },
-    { name = "JWT_SECRET",            valueFrom = "${local.secret_arns["jwt"]}:secret::" },
+    { name = "SUPABASE_URL", valueFrom = "${local.secret_arns["supabase"]}:url::" },
+    { name = "SUPABASE_SERVICE_KEY", valueFrom = "${local.secret_arns["supabase"]}:service_key::" },
+    { name = "SUPABASE_ANON_KEY", valueFrom = "${local.secret_arns["supabase"]}:anon_key::" },
+    { name = "INTERNAL_API_KEY", valueFrom = "${local.secret_arns["jwt"]}:secret::" },
+    { name = "JWT_SECRET", valueFrom = "${local.secret_arns["jwt"]}:secret::" },
   ]
 
   razorpay_secrets = [
-    { name = "RAZORPAY_KEY_ID",          valueFrom = "${local.secret_arns["razorpay"]}:key_id::" },
-    { name = "RAZORPAY_KEY_SECRET",      valueFrom = "${local.secret_arns["razorpay"]}:key_secret::" },
-    { name = "RAZORPAY_WEBHOOK_SECRET",  valueFrom = "${local.secret_arns["razorpay"]}:webhook_secret::" },
+    { name = "RAZORPAY_KEY_ID", valueFrom = "${local.secret_arns["razorpay"]}:key_id::" },
+    { name = "RAZORPAY_KEY_SECRET", valueFrom = "${local.secret_arns["razorpay"]}:key_secret::" },
+    { name = "RAZORPAY_WEBHOOK_SECRET", valueFrom = "${local.secret_arns["razorpay"]}:webhook_secret::" },
   ]
 
   shiprocket_secrets = [
-    { name = "SHIPROCKET_EMAIL",    valueFrom = "${local.secret_arns["shiprocket"]}:email::" },
+    { name = "SHIPROCKET_EMAIL", valueFrom = "${local.secret_arns["shiprocket"]}:email::" },
     { name = "SHIPROCKET_PASSWORD", valueFrom = "${local.secret_arns["shiprocket"]}:password::" },
   ]
 
   gupshup_secrets = [
-    { name = "GUPSHUP_API_KEY",       valueFrom = "${local.secret_arns["gupshup"]}:api_key::" },
+    { name = "GUPSHUP_API_KEY", valueFrom = "${local.secret_arns["gupshup"]}:api_key::" },
     { name = "GUPSHUP_SENDER_NUMBER", valueFrom = "${local.secret_arns["gupshup"]}:sender_number::" },
-    { name = "GUPSHUP_APP_NAME",      valueFrom = "${local.secret_arns["gupshup"]}:app_name::" },
+    { name = "GUPSHUP_APP_NAME", valueFrom = "${local.secret_arns["gupshup"]}:app_name::" },
   ]
 
   twilio_secrets = [
-    { name = "TWILIO_SID",          valueFrom = "${local.secret_arns["twilio"]}:sid::" },
-    { name = "TWILIO_TOKEN",        valueFrom = "${local.secret_arns["twilio"]}:token::" },
+    { name = "TWILIO_SID", valueFrom = "${local.secret_arns["twilio"]}:sid::" },
+    { name = "TWILIO_TOKEN", valueFrom = "${local.secret_arns["twilio"]}:token::" },
     { name = "TWILIO_PHONE_NUMBER", valueFrom = "${local.secret_arns["twilio"]}:phone_number::" },
   ]
 
@@ -93,64 +93,64 @@ locals {
 
   msg91_secrets = [
     { name = "MSG91_WIDGET_AUTHKEY", valueFrom = "${local.secret_arns["msg91"]}:widget_authkey::" },
-    { name = "AUTH_BRIDGE_SECRET",   valueFrom = "${local.secret_arns["msg91"]}:auth_bridge_secret::" },
+    { name = "AUTH_BRIDGE_SECRET", valueFrom = "${local.secret_arns["msg91"]}:auth_bridge_secret::" },
   ]
 
   services = {
     catalog = {
-      max_capacity   = 2
-      extra_secrets  = []
-      extra_env      = {}
+      max_capacity  = 2
+      extra_secrets = []
+      extra_env     = {}
     }
     order = {
-      max_capacity   = 2
-      extra_secrets  = []
-      extra_env      = {}
+      max_capacity  = 2
+      extra_secrets = []
+      extra_env     = {}
     }
     payment = {
-      max_capacity   = 2
-      extra_secrets  = local.razorpay_secrets
-      extra_env      = {}
+      max_capacity  = 2
+      extra_secrets = local.razorpay_secrets
+      extra_env     = {}
     }
     delivery = {
-      max_capacity   = 2
-      extra_secrets  = local.shiprocket_secrets
-      extra_env      = {}
+      max_capacity  = 2
+      extra_secrets = local.shiprocket_secrets
+      extra_env     = {}
     }
     notification = {
-      max_capacity   = 2
-      extra_secrets  = concat(local.twilio_secrets, local.firebase_secrets)
-      extra_env      = {}
+      max_capacity  = 2
+      extra_secrets = concat(local.twilio_secrets, local.firebase_secrets)
+      extra_env     = {}
     }
     whatsapp = {
-      max_capacity   = 2
-      extra_secrets  = concat(local.gupshup_secrets, local.twilio_secrets)
-      extra_env      = {}
+      max_capacity  = 2
+      extra_secrets = concat(local.gupshup_secrets, local.twilio_secrets)
+      extra_env     = {}
     }
     payout = {
-      max_capacity   = 1
-      extra_secrets  = local.razorpay_secrets
-      extra_env      = {}
+      max_capacity  = 1
+      extra_secrets = local.razorpay_secrets
+      extra_env     = {}
     }
     analytics = {
-      max_capacity   = 2
-      extra_secrets  = []
-      extra_env      = {}
+      max_capacity  = 2
+      extra_secrets = []
+      extra_env     = {}
     }
     return = {
-      max_capacity   = 2
-      extra_secrets  = []
-      extra_env      = {}
+      max_capacity  = 2
+      extra_secrets = []
+      extra_env     = {}
     }
     admin = {
-      max_capacity   = 1
-      extra_secrets  = local.msg91_secrets
-      extra_env      = {
+      max_capacity  = 1
+      extra_secrets = local.msg91_secrets
+      extra_env = {
         AUTH_BRIDGE_ALLOWED_ORIGINS = "http://localhost:3000,https://dev.reelmart.in,https://reelmart.in,https://shopidea.vercel.app"
         SITE_URL                    = "https://dev.reelmart.in"
         # DEV ONLY — enables the OTP-less /api/admin/auth/test-login endpoint.
         # NEVER set this in a production environment.
-        ALLOW_TEST_LOGIN            = "true"
+        ALLOW_TEST_LOGIN = "true"
       }
     }
   }
@@ -170,6 +170,7 @@ module "ecs_service" {
   desired_count           = 1
   min_capacity            = 1
   max_capacity            = each.value.max_capacity
+  use_fargate_spot        = var.use_fargate_spot
   target_group_arn        = local.target_group_arns[each.key]
   subnet_ids              = local.subnet_ids
   security_group_ids      = [local.fargate_sg_id]
