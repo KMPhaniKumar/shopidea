@@ -53,6 +53,15 @@ Organized into teams (folders are organizational — Claude delegates by agent *
 - **app-security-engineer** — finds & fixes app/service vulnerabilities
 - **infra-security-engineer** — audits & hardens AWS via Terraform
 
+**testing/** — write, run & maintain tests *(framework is greenfield — agents bootstrap it: Vitest+Supertest / Playwright / k6)*
+- **qa-lead** — testing strategy, framework setup, CI test pipeline, coverage; coordinates the specialists
+- **api-test-engineer** — backend endpoint tests (incl. authz/ownership)
+- **ui-test-engineer** — Playwright web screens (mobile-first)
+- **e2e-test-engineer** — full seller→buyer→delivery lifecycle
+- **performance-test-engineer** — k6 load/spike (read paths only; dev env)
+- **db-integrity-test-engineer** — atomicity, calc correctness, RLS isolation
+- **notification-test-engineer** — Gupshup/FCM/MSG91 (mocked, never real sends)
+
 > Supersedes the earlier flat set: `deployer`→**devops-engineer**, `db-keeper`→**database-engineer**, `infra-guardian`→**infra-engineer** (drift-review mode).
 
 ## 4. Guardrails + automation
