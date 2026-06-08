@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { Search, X } from 'lucide-react'
 import { CATEGORIES } from '@/lib/categories'
 import { ProductCarousel, type CarouselProduct } from './ProductCarousel'
+import { Scroller } from './Scroller'
 
 export type MProduct = CarouselProduct & { category: string }
 
@@ -144,9 +145,7 @@ function SellersWidget({ sellers }: { sellers: MSeller[] }) {
         <h3 className="text-xl font-bold">Shops to explore</h3>
         <Link href="/stores" className="text-sm font-semibold text-primary hover:opacity-80">View all →</Link>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {sellers.slice(0, 8).map(s => <SellerCard key={s.store_slug} s={s} />)}
-      </div>
+      <Scroller items={sellers} render={s => <div className="w-64"><SellerCard s={s} /></div>} />
     </div>
   )
 }
