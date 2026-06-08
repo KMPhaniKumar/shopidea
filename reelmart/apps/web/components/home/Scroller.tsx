@@ -23,9 +23,6 @@ export function Scroller<T>({
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const reduced = typeof window !== 'undefined'
-      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    if (reduced) return
 
     let raf = 0
     const step = () => {
