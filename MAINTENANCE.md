@@ -26,6 +26,9 @@ How this solo-maintained project stays healthy with Claude. The setup has four l
 | `/aws-session` | Check/refresh AWS SSO creds when commands expire |
 | `/refresh-status` | Regenerate `agents/AUDIT_gaps.md` from live reality |
 
+**Per-service knowledge skills** (one per backend service — deep context: endpoints, owned tables, integrations, auth/ownership, gotchas). The `backend-engineer` invokes the matching one before working on a service:
+`/admin-service` · `/analytics-service` · `/catalog-service` · `/delivery-service` · `/notification-service` · `/order-service` · `/payment-service` · `/payout-service` · `/return-service` · `/whatsapp-service`
+
 ## 3. Agents — your team (`.claude/agents/<team>/`)
 Organized into teams (folders are organizational — Claude delegates by agent **name**). Architects design & write ADRs; engineers implement; security reviews & fixes.
 
