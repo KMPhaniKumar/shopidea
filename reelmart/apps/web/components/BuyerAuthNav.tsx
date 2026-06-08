@@ -93,13 +93,13 @@ export default function BuyerAuthNav() {
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setModalMode('login')}
-            className="h-10 px-3 text-sm font-medium text-primary hover:opacity-80"
+            className="h-10 px-2 sm:px-3 text-sm font-medium text-primary hover:opacity-80"
           >
             Log in
           </button>
           <button
             onClick={() => setModalMode('signup')}
-            className="inline-flex h-10 px-4 items-center rounded-btn bg-primary text-white text-sm font-medium hover:opacity-90 transition"
+            className="inline-flex h-10 px-3 sm:px-4 items-center rounded-btn bg-primary text-white text-sm font-medium hover:opacity-90 transition"
           >
             Sign up
           </button>

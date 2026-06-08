@@ -4,7 +4,7 @@
 // store-browsing pages (/stores and /stores/[category]).
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown, Store } from 'lucide-react'
+import { ChevronDown, Store, LayoutGrid } from 'lucide-react'
 import { CATEGORIES } from '@/lib/categories'
 
 export default function BrowseMenu() {
@@ -23,9 +23,12 @@ export default function BrowseMenu() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="inline-flex h-10 px-3 items-center gap-1.5 text-sm font-medium text-primary hover:opacity-80"
+        aria-label="Browse categories"
+        className="inline-flex h-10 px-2.5 sm:px-3 items-center gap-1.5 text-sm font-medium text-primary hover:opacity-80"
       >
-        Browse <ChevronDown size={15} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        <LayoutGrid size={16} />
+        <span className="hidden sm:inline">Browse</span>
+        <ChevronDown size={15} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
         <div className="absolute left-0 mt-1 w-56 bg-white border border-border rounded-card shadow-hover py-1.5 z-50">
