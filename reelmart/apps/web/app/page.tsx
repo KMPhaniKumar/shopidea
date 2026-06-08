@@ -32,7 +32,7 @@ function Header() {
         {/* Left: logo + Browse */}
         <div className="flex items-center gap-1 sm:gap-3 min-w-0">
           <Link href="/" aria-label="ReelMart home" className="shrink-0">
-            <Image src="/logo.png" alt="ReelMart" width={140} height={50} priority className="h-8 sm:h-12 w-auto object-contain" />
+            <Image src="/logo.png" alt="ReelMart" width={140} height={50} priority className="object-contain" />
           </Link>
           <BrowseMenu />
         </div>
