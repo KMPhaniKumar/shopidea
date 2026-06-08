@@ -121,6 +121,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [followed, setFollowed] = useState<StoreCard[]>([])
   const [categoryStores, setCategoryStores] = useState<StoreCard[]>([])
   const [filtered, setFiltered] = useState<StoreCard[]>([])
+  const [filteredProducts, setFilteredProducts] = useState<ProductCard[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [clothingStores, setClothingStores] = useState<StoreCard[]>([])
@@ -170,11 +171,12 @@ export default function HomeScreen({ navigation }: Props) {
 
   // Search
   useEffect(() => {
-    if (!searchQuery.trim()) { setFiltered([]); setSearching(false); return }
+    if (!searchQuery.trim()) { setFiltered([]); setFilteredProducts([]); setSearching(false); return }
     setSearching(true)
     const timer = setTimeout(async () => {
       const res = await search(searchQuery, city)
       setFiltered(res.stores)
+      setFilteredProducts(res.products)
       setSearching(false)
     }, 400)
     return () => clearTimeout(timer)
@@ -276,15 +278,28 @@ export default function HomeScreen({ navigation }: Props) {
         <ScrollView contentContainerStyle={styles.body}>
           {searching ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
-          ) : filtered.length === 0 ? (
+          ) : (filtered.length === 0 && filteredProducts.length === 0) ? (
             <View style={styles.empty}>
               <Text style={styles.emptyIcon}>🔍</Text>
-              <Text style={styles.emptyText}>No stores found</Text>
+              <Text style={styles.emptyText}>No results found</Text>
+              <Text style={styles.emptySubText}>Try another product or shop name.</Text>
             </View>
           ) : (
             <>
-              <Text style={styles.sectionTitle}>Results ({filtered.length})</Text>
-              {filtered.map(s => <StoreRow key={s.id} store={s} onPress={() => goToStore(s.store_slug)} />)}
+              {filtered.length > 0 && (
+                <>
+                  <Text style={styles.sectionTitle}>Shops ({filtered.length})</Text>
+                  {filtered.map(s => <StoreRow key={s.id} store={s} onPress={() => goToStore(s.store_slug)} />)}
+                </>
+              )}
+              {filteredProducts.length > 0 && (
+                <>
+                  <Text style={[styles.sectionTitle, filtered.length > 0 && { marginTop: spacing.md }]}>Products ({filteredProducts.length})</Text>
+                  <View style={styles.prodGrid}>
+                    {filteredProducts.map(p => <ProductChip key={p.id} product={p} onPress={() => goToProduct(p)} />)}
+                  </View>
+                </>
+              )}
             </>
           )}
         </ScrollView>
@@ -526,6 +541,7 @@ const styles = StyleSheet.create({
   },
   sectionSeeAll: { fontSize: 13, fontWeight: '600', color: colors.primary },
   chipRow: { flexDirection: 'row', gap: spacing.sm },
+  prodGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 
   chip: {
     width: 108, alignItems: 'center', padding: 12,
