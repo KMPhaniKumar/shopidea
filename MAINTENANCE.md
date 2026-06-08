@@ -29,6 +29,11 @@ How this solo-maintained project stays healthy with Claude. The setup has four l
 **Per-service knowledge skills** (one per backend service — deep context: endpoints, owned tables, integrations, auth/ownership, gotchas). The `backend-engineer` invokes the matching one before working on a service:
 `/admin-service` · `/analytics-service` · `/catalog-service` · `/delivery-service` · `/notification-service` · `/order-service` · `/payment-service` · `/payout-service` · `/return-service` · `/whatsapp-service`
 
+**UI knowledge skills** (front-end surfaces — routes, components, design tokens, flows, gotchas). The `ui-engineer` invokes the relevant one:
+`/web-foundation` (read first: tokens, Supabase SSR, auth, deploy) · `/web-storefront` (public buyer) · `/web-seller-dashboard` · `/web-admin-dashboard` · `/buyer-app` (Expo mobile)
+
+Agents↔skills: `backend-engineer`→`<svc>-service` · `ui-engineer`→web-*/`buyer-app` · `infra-engineer`→`tf-drift`/`aws-session`/`health-check` · `devops-engineer`→`deploy-service`/`health-check`/`triage` · `database-engineer`→`db-migrate`.
+
 ## 3. Agents — your team (`.claude/agents/<team>/`)
 Organized into teams (folders are organizational — Claude delegates by agent **name**). Architects design & write ADRs; engineers implement; security reviews & fixes.
 
