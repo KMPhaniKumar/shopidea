@@ -61,6 +61,6 @@ Thumbs.db
 *.tsbuildinfo
 
 # Terraform plan files (per-machine, may contain sensitive ARNs)
-reelmart-infra/infra/terraform/**/tfplan*
+infra/terraform/**/tfplan*
 .vercel
 .env*.local

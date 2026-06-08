@@ -33,7 +33,7 @@ jobs:
         with:
           terraform_wrapper: false
       - name: terraform plan (detailed exit code)
-        working-directory: infra/terraform/environments/dev/${{ matrix.layer }}
+        working-directory: reelmart-infra/infra/terraform/environments/dev/${{ matrix.layer }}
         run: |
           terraform init -input=false
           set +e

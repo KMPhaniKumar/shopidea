@@ -11,7 +11,7 @@ How this solo-maintained project stays healthy with Claude. The setup has four l
 - `agents_reports/AUDIT_gaps.md` — canonical current status (architecture, features, gaps, test accounts).
 - Nested `CLAUDE.md` files load when you work in that area:
   - `reelmart/services/CLAUDE.md` (backend microservices)
-  - `infra/terraform/CLAUDE.md` (IaC rules)
+  - `reelmart-infra/infra/terraform/CLAUDE.md` (IaC rules)
   - `reelmart/apps/web/CLAUDE.md` (Next.js app)
 - Long-term facts live in Claude's memory (`~/.claude/.../memory/`).
 
@@ -36,6 +36,8 @@ Agents↔skills: `backend-engineer`→`<svc>-service` · `ui-engineer`→web-*/`
 
 ## 3. Agents — your team (`.claude/agents/<team>/`)
 Organized into teams (folders are organizational — Claude delegates by agent **name**). Architects design & write ADRs; engineers implement; security reviews & fixes.
+
+> **Layout note:** the **ops** team + **infra-security-engineer** + the infra/devops/infra-security **architects**, and the ops **skills** (`/deploy-service`, `/tf-drift`, `/health-check`, `/triage`, `/aws-session`), physically live in **`reelmart-infra/.claude/`** (the self-contained infra module). Claude Code discovers them recursively, so they stay available across the monorepo and travel with the module when it's extracted. App teams + app/web skills live in the root `.claude/`.
 
 **architects/** — design & advise
 - **product-architect** — end-to-end system design & technical strategy

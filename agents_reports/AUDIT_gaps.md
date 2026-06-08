@@ -2,7 +2,7 @@
 ### Last reviewed: 2026-05-23
 
 This is the single source of truth for **what exists, where it runs, and what's pending**.
-A new engineer or LLM should be able to read this file + `.claude/CLAUDE.md` and start working immediately. Code lives in `reelmart/` and infra-as-code in `infra/terraform/`.
+A new engineer or LLM should be able to read this file + `.claude/CLAUDE.md` and start working immediately. Code lives in `reelmart/` and infra-as-code in `reelmart-infra/infra/terraform/`.
 
 ---
 
@@ -15,7 +15,7 @@ A new engineer or LLM should be able to read this file + `.claude/CLAUDE.md` and
 | **Backend** | 10 Express/TypeScript microservices in `reelmart/services/*` | admin, analytics, catalog, delivery, notification, order, payment, payout, return, whatsapp. Each has its own `Dockerfile`, `package.json` (`build`=tsc, `start`=node dist), port 3000. |
 | **Backend hosting** | **AWS ECS Fargate** | Cluster `reelmart-dev`, region `ap-south-1`, account `632127307144`. Images in ECR `reelmart/<svc>:dev-latest`. 256 CPU / 512 MB, awsvpc, public subnets + public IP, CloudWatch logs `/ecs/reelmart-dev-<svc>`. (Migrated off EC2 launch type 2026-05-23.) |
 | **API gateway** | ALB `reelmart-dev-alb` → `https://api-dev.reelmart.in` | Path-routed on the `:443` listener to IP target groups `reelmart-dev-tgip-<svc>` (e.g. `/api/catalog/*`→catalog, `/api/admin/*`→admin). |
-| **Infra-as-code** | **Terraform** in `infra/terraform/` | S3 backend `reelmart-tf-state-632127307144`, layers `environments/dev/{network,cluster,services}`. All layers `plan` clean. **Make infra changes in Terraform, then apply — not via raw AWS CLI** (avoids drift). |
+| **Infra-as-code** | **Terraform** in `reelmart-infra/infra/terraform/` | S3 backend `reelmart-tf-state-632127307144`, layers `environments/dev/{network,cluster,services}`. All layers `plan` clean. **Make infra changes in Terraform, then apply — not via raw AWS CLI** (avoids drift). |
 | **Web** | Next.js 14 (App Router) on **Vercel** | `https://dev.reelmart.in` (Vercel project `shopidea`). `reelmart/apps/web`. |
 | **Buyer mobile** | React Native / **Expo** SDK 54 | `reelmart/apps/buyer-app`. APK via EAS (`eas.json` `preview` profile). |
 | **Seller mobile** | Parked | `apps/seller-app` exists but the web seller dashboard is the active surface. |

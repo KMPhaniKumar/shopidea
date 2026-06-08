@@ -11,7 +11,7 @@ Services: `admin analytics catalog delivery notification order payment payout re
 
 ## How to change / ship
 - **Deploy a service:** use the `/deploy-service` skill (build `linux/amd64` → push ECR → `ecs update-service --force-new-deployment`). CI does the same on push to `main` (`.github/workflows/deploy.yml`).
-- **Task defs, env vars, secrets, ALB, scaling are Terraform-managed** in `infra/terraform/environments/dev/services` — change them there, not via the AWS CLi. Secrets come from Secrets Manager via the task def.
+- **Task defs, env vars, secrets, ALB, scaling are Terraform-managed** in `reelmart-infra/infra/terraform/environments/dev/services` — change them there, not via the AWS CLi. Secrets come from Secrets Manager via the task def.
 - **Auth bridge** (MSG91 → Supabase session) lives in `admin-service` (`/api/admin/auth/*`).
 - **Courier = NimbusPost** (`delivery-service`); per-seller pickup registration via internal endpoints.
 - Inter-service calls authenticate with `x-internal-key` (`INTERNAL_API_KEY`) or a Bearer token.

@@ -20,7 +20,7 @@ description: Deep context + dev guide for ReelMart's delivery-service — Nimbus
 Mutations `requireAuth` + verify the caller owns the store/order. Tracking can be buyer-accessible by order/AWB. Service-role bypasses RLS → enforce in code.
 
 ## Gotchas / risks
-- **KNOWN GAP: `NIMBUS_AUTH_TOKEN` is missing from the delivery task def** — NimbusPost calls fail until it's added (Terraform `infra/terraform/environments/dev/services` + Secrets Manager). See `reelmart/services/CLAUDE.md`.
+- **KNOWN GAP: `NIMBUS_AUTH_TOKEN` is missing from the delivery task def** — NimbusPost calls fail until it's added (Terraform `reelmart-infra/infra/terraform/environments/dev/services` + Secrets Manager). See `reelmart/services/CLAUDE.md`.
 - Per-seller pickup registration is required before a seller's first shipment.
 - Tracking page is ReelMart-branded — don't leak NimbusPost branding to buyers.
 - NimbusPost webhook (status updates) → update `orders` (verify source).

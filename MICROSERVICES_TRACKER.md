@@ -3,7 +3,7 @@
 
 **Target:** AWS ECS (Fargate) + ALB + ECR  
 **Started:** 2026-05-03  
-**Status:** ✅ DONE — 10 services live on **ECS Fargate** (cluster `reelmart-dev`, ap-south-1), behind ALB `api-dev.reelmart.in`, images in ECR, **Terraform-managed** (`infra/terraform/`). Canonical status: [`agents_reports/AUDIT_gaps.md`](agents_reports/AUDIT_gaps.md).
+**Status:** ✅ DONE — 10 services live on **ECS Fargate** (cluster `reelmart-dev`, ap-south-1), behind ALB `api-dev.reelmart.in`, images in ECR, **Terraform-managed** (`reelmart-infra/infra/terraform/`). Canonical status: [`agents_reports/AUDIT_gaps.md`](agents_reports/AUDIT_gaps.md).
 
 ---
 

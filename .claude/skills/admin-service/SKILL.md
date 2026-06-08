@@ -26,6 +26,6 @@ Admin endpoints MUST enforce admin role (`requireAdmin`). The auth bridge uses `
 - Approve/ban/suspend must verify the actor is an admin before mutating.
 
 ## Dev workflow
-`cd reelmart/services/admin-service && npm install && npm run build` (tsc) before shipping. Deploy: `/deploy-service admin` (or CI on push to main). Env/secrets are Terraform-managed (`infra/terraform/environments/dev/services`).
+`cd reelmart/services/admin-service && npm install && npm run build` (tsc) before shipping. Deploy: `/deploy-service admin` (or CI on push to main). Env/secrets are Terraform-managed (`reelmart-infra/infra/terraform/environments/dev/services`).
 
 See `agents_reports/SECURITY_AUDIT.md` (auth/test-login findings), `reelmart/services/CLAUDE.md`.

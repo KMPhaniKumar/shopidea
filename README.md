@@ -24,10 +24,11 @@ shopidea/
 │   │   └── functions/                # Edge Functions
 │   └── shared/                       # cross-package TypeScript types
 │
-├── infra/terraform/                  # IaC: VPC/ALB/ECS-Fargate/ECR/IAM (layers: network, cluster, services)
+├── reelmart-infra/                   # SELF-CONTAINED infra + ops module (Terraform IaC, ops docs,
+│                                     #   own .claude agents/skills) — extractable later; see EXTRACT_INFRA.md
 ├── agents_reports/                   # project status & reports — AUDIT_gaps.md is canonical, SECURITY_AUDIT.md
 ├── .github/workflows/deploy.yml      # CI: build→ECR→ECS update + Vercel + supabase db push
-├── TRACKER.md   FLOWS.md   DEPLOYMENT_PLAN.md   DLT_SETUP.md
+├── TRACKER.md   FLOWS.md   DLT_SETUP.md   EXTRACT_INFRA.md
 └── README.md                         # ← you are here
 ```
 
@@ -48,7 +49,7 @@ cd reelmart/apps/buyer-app && npm install && npx expo start
 
 The web app normally talks to the **deployed** API (`api-dev.reelmart.in`) — its `apps/web/.env.local` mostly comes from Vercel. Supabase is hosted (project `nysgwdpmpxqmfwelfaxo`); no local Supabase needed.
 
-**Deploy:** push to `main` → `.github/workflows/deploy.yml` builds each service image → ECR → `ecs update-service` on Fargate, deploys web to Vercel, and runs `supabase db push`. Infra changes go through Terraform in `infra/terraform/`.
+**Deploy:** push to `main` → `.github/workflows/deploy.yml` builds each service image → ECR → `ecs update-service` on Fargate, deploys web to Vercel, and runs `supabase db push`. Infra changes go through Terraform in `reelmart-infra/infra/terraform/`.
 
 ---
 

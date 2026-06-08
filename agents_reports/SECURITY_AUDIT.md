@@ -43,7 +43,7 @@
 ## CRITICAL
 
 ### CRIT-1 — `ALLOWED_ORIGINS="*"` wildcard CORS on all 10 services
-**Location:** `infra/terraform/environments/dev/services/main.tf:52` (`base_env`).
+**Location:** `reelmart-infra/infra/terraform/environments/dev/services/main.tf:52` (`base_env`).
 Each service does `cors({ origin: allowedOrigins.includes('*') ? true : allowedOrigins })`; with `"*"` it reflects any `Origin` with `Access-Control-Allow-Credentials: true`.
 **Impact:** any web page can make credentialed cross-origin calls to every endpoint. *Nuance:* these APIs authenticate via **Bearer tokens (Authorization header), not cookies**, so the cross-site-credential/CSRF risk is materially lower than a cookie-auth app — but it should still be locked down.
 **Fix:** set `ALLOWED_ORIGINS` to `https://dev.reelmart.in,https://reelmart.in` in Terraform (mirror `AUTH_BRIDGE_ALLOWED_ORIGINS`); redeploy. **Owner:** infra-engineer (+ MED-3 code fallback).
@@ -54,7 +54,7 @@ The dev branch renders the full admin dashboard without the `getUser()` / `is_ad
 **Impact:** not exploitable on Vercel prod (NODE_ENV=production), but full admin exposure on local/preview and one env-var away from prod. **Fix:** remove the bypass; use the (scoped) test-login for a real dev admin session. **Owner:** ui-engineer.
 
 ### CRIT-3 — `test-login` active on the live dev API (mints admin sessions)
-**Location:** `reelmart/services/admin-service/src/routes/auth.ts:204–208` + `infra/terraform/.../services/main.tf:151–153` (`ALLOW_TEST_LOGIN=true`).
+**Location:** `reelmart/services/admin-service/src/routes/auth.ts:204–208` + `reelmart-infra/infra/terraform/.../services/main.tf:151–153` (`ALLOW_TEST_LOGIN=true`).
 Enabled by `ALLOW_TEST_LOGIN=true` **and** by `SITE_URL` containing `dev.reelmart.in`; the `requireAllowedOrigin` guard only checks the `Origin` header (spoofable via curl).
 **Impact:** anyone who can reach `api-dev.reelmart.in` can mint a full **admin** Supabase session (test account `+919999900003`) with no OTP.
 **Fix options:** (a) **harden** — require a shared secret header, not just Origin; remove the `SITE_URL` enable path; (b) leave as-is (accept dev risk); (c) remove test-login. **Decision pending (product/owner call).** **Owner:** backend-engineer + infra-engineer.
@@ -125,7 +125,7 @@ All 10 `index.ts`: `!allowedOrigins ? true …`. **Fix:** deny-all fallback: `or
 `payout-service/src/routes/bankAccounts.ts:9–12`. **Fix:** drop the `sellerId` query param; always use `req.user.id`. **Owner:** backend-engineer.
 
 ### MED-9 — operator IP committed in bootstrap tfvars
-`infra/terraform/bootstrap/terraform.tfvars:3` (`operator_ip_cidr`). **Verify** whether it's git-tracked; if so, scrub history, use a `.example`, gitignore `terraform.tfvars`. **Owner:** infra-security-engineer.
+`reelmart-infra/infra/terraform/bootstrap/terraform.tfvars:3` (`operator_ip_cidr`). **Verify** whether it's git-tracked; if so, scrub history, use a `.example`, gitignore `terraform.tfvars`. **Owner:** infra-security-engineer.
 
 ---
 

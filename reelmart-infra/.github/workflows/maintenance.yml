@@ -1,0 +1,43 @@
+# NOTE: activates only when reelmart-infra is its own repo. While nested in the
+# shopidea monorepo, Terraform drift runs from the monorepo's root maintenance
+# workflow (which points at reelmart-infra/infra/terraform/...).
+name: Maintenance
+
+on:
+  schedule:
+    - cron: '30 19 * * *'   # ~01:00 IST daily — Terraform drift
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  tf-drift:
+    name: Terraform drift (${{ matrix.layer }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        layer: [network, cluster, services]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-south-1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: terraform plan (detailed exit code)
+        working-directory: infra/terraform/environments/dev/${{ matrix.layer }}
+        run: |
+          terraform init -input=false
+          set +e
+          terraform plan -no-color -input=false -detailed-exitcode
+          code=$?
+          if [ $code -eq 2 ]; then
+            echo "::warning title=Terraform drift::Layer '${{ matrix.layer }}' has drift. Run /tf-drift and reconcile."
+            exit 1
+          fi
+          exit $code
