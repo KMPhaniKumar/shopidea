@@ -3,7 +3,7 @@
 Social commerce platform for Indian micro-sellers — sell on WhatsApp / Instagram with a real storefront, order management, payments, and delivery.
 
 > **Status (2026-05):** feature-complete platform live on AWS. Backend = 10 microservices on **ECS Fargate** (`api-dev.reelmart.in`), web on **Vercel** (`dev.reelmart.in`), DB on **Supabase**, infra in **Terraform**.
-> **👉 Read [`agents/AUDIT_gaps.md`](agents/AUDIT_gaps.md) first** — it's the canonical current status (real architecture, what's built, what's pending, test accounts).
+> **👉 Read [`agents_reports/AUDIT_gaps.md`](agents_reports/AUDIT_gaps.md) first** — it's the canonical current status (real architecture, what's built, what's pending, test accounts).
 
 ---
 
@@ -25,7 +25,7 @@ shopidea/
 │   └── shared/                       # cross-package TypeScript types
 │
 ├── infra/terraform/                  # IaC: VPC/ALB/ECS-Fargate/ECR/IAM (layers: network, cluster, services)
-├── agents/                           # status + implementation guides — AUDIT_gaps.md is canonical
+├── agents_reports/                   # project status & reports — AUDIT_gaps.md is canonical, SECURITY_AUDIT.md
 ├── .github/workflows/deploy.yml      # CI: build→ECR→ECS update + Vercel + supabase db push
 ├── TRACKER.md   FLOWS.md   DEPLOYMENT_PLAN.md   DLT_SETUP.md
 └── README.md                         # ← you are here
@@ -94,7 +94,7 @@ Every screen's full data flow is documented in [`FLOWS.md`](FLOWS.md).
 ## Development conventions
 
 - Read [`.claude/CLAUDE.md`](.claude/CLAUDE.md) for coding standards (TypeScript, error handling, RLS, file naming, Indian-market specifics).
-- Read [`agents/AUDIT_gaps.md`](agents/AUDIT_gaps.md) before starting new work — it's the source of truth for what's done vs pending.
+- Read [`agents_reports/AUDIT_gaps.md`](agents_reports/AUDIT_gaps.md) before starting new work — it's the source of truth for what's done vs pending.
 - Update [`TRACKER.md`](TRACKER.md) at the end of every coding session (daily log + agent status).
 - Update [`FLOWS.md`](FLOWS.md) when adding a new screen or changing a user flow.
 
@@ -114,7 +114,7 @@ For real OTP testing the test phone number must be configured in **Supabase Dash
 
 ## Production blockers
 
-See [`agents/AUDIT_gaps.md`](agents/AUDIT_gaps.md) for the full list. Headlines:
+See [`agents_reports/AUDIT_gaps.md`](agents_reports/AUDIT_gaps.md) for the full list. Headlines:
 
 1. **DB migrations 014/015/019/020 not applied to the dev Supabase** — KYC/approval/pickup columns missing until applied (verify + `supabase db push`)
 2. **Razorpay web checkout** + **RazorpayX payouts** — PAUSED; not wired

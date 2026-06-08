@@ -25,10 +25,10 @@ description: Deep context + dev guide for ReelMart's payment-service — Razorpa
 
 ## Gotchas / risks
 - Column is `razorpay_payment_id` (not `payment_id`).
-- Legacy `/create-order` + `/verify` are the audit's payment-integrity hot spot — see `agents/SECURITY_AUDIT.md`.
+- Legacy `/create-order` + `/verify` are the audit's payment-integrity hot spot — see `agents_reports/SECURITY_AUDIT.md`.
 - RazorpayX payouts live in **payout-service**, not here.
 
 ## Dev workflow
 `npm run build` (tsc) before shipping. Deploy: `/deploy-service payment`. Env/secrets Terraform-managed.
 
-See `agents/SECURITY_AUDIT.md`, `order-service` & `payout-service` skills, `FLOWS.md` (checkout).
+See `agents_reports/SECURITY_AUDIT.md`, `order-service` & `payout-service` skills, `FLOWS.md` (checkout).

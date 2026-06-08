@@ -27,4 +27,4 @@ All `requireAuth`. **Ownership**: a buyer raises/views only returns on their own
 ## Dev workflow
 `npm run build` (tsc) before shipping. Deploy: `/deploy-service return`. Env/secrets Terraform-managed.
 
-See `agents/SECURITY_AUDIT.md` (returns ownership), `payment-service` skill, `FLOWS.md` (returns).
+See `agents_reports/SECURITY_AUDIT.md` (returns ownership), `payment-service` skill, `FLOWS.md` (returns).

@@ -2,13 +2,13 @@
 
 How this solo-maintained project stays healthy with Claude. The setup has four layers: **context** Claude reads automatically, **skills** you invoke, **agents** Claude delegates to, and **guardrails + automation** that run with little/no input.
 
-> Canonical project status is always [`agents/AUDIT_gaps.md`](agents/AUDIT_gaps.md). Coding conventions are in [`.claude/CLAUDE.md`](.claude/CLAUDE.md).
+> Canonical project status is always [`agents_reports/AUDIT_gaps.md`](agents_reports/AUDIT_gaps.md). Coding conventions are in [`.claude/CLAUDE.md`](.claude/CLAUDE.md).
 
 ---
 
 ## 1. Context (auto-loaded)
 - `.claude/CLAUDE.md` — root conventions + "start here" pointer.
-- `agents/AUDIT_gaps.md` — canonical current status (architecture, features, gaps, test accounts).
+- `agents_reports/AUDIT_gaps.md` — canonical current status (architecture, features, gaps, test accounts).
 - Nested `CLAUDE.md` files load when you work in that area:
   - `reelmart/services/CLAUDE.md` (backend microservices)
   - `infra/terraform/CLAUDE.md` (IaC rules)
@@ -24,7 +24,7 @@ How this solo-maintained project stays healthy with Claude. The setup has four l
 | `/tf-drift` | `terraform plan` all layers, summarize drift (read-only) |
 | `/triage` | Investigate a failing service (events + logs + target health) |
 | `/aws-session` | Check/refresh AWS SSO creds when commands expire |
-| `/refresh-status` | Regenerate `agents/AUDIT_gaps.md` from live reality |
+| `/refresh-status` | Regenerate `agents_reports/AUDIT_gaps.md` from live reality |
 
 **Per-service knowledge skills** (one per backend service — deep context: endpoints, owned tables, integrations, auth/ownership, gotchas). The `backend-engineer` invokes the matching one before working on a service:
 `/admin-service` · `/analytics-service` · `/catalog-service` · `/delivery-service` · `/notification-service` · `/order-service` · `/payment-service` · `/payout-service` · `/return-service` · `/whatsapp-service`

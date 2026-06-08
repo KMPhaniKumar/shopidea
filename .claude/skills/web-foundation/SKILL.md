@@ -28,4 +28,4 @@ Login = **MSG91 OTP widget** (`lib/msg91-otp.ts`) → admin-service auth bridge 
 ## Conventions & deploy
 TypeScript, App Router, Tailwind, Zustand, mobile-first (most buyers on Android). Ship by **git push to `main` → Vercel auto-deploys** (NOT ECS). Keep changes backward-compatible with the deployed backend.
 
-See `reelmart/apps/web/CLAUDE.md`, `agents/SECURITY_AUDIT.md` (client secret leakage).
+See `reelmart/apps/web/CLAUDE.md`, `agents_reports/SECURITY_AUDIT.md` (client secret leakage).

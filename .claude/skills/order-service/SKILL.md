@@ -18,11 +18,11 @@ All endpoints `requireAuth`. **Ownership is critical**: a buyer sees only their 
 
 ## Gotchas / risks
 - **Online (Razorpay) orders are created by payment-service `/confirm` only after the signature is verified — NOT here.** `POST /` here is for COD / verified flows. Don't recreate online orders pre-payment (that caused the duplicate/ghost-order bug).
-- **IDOR risk** on `GET/PUT/cancel /:id` and `cart/:userId` (don't trust `:userId` from the path — bind to `req.user.id`). See `agents/SECURITY_AUDIT.md`.
+- **IDOR risk** on `GET/PUT/cancel /:id` and `cart/:userId` (don't trust `:userId` from the path — bind to `req.user.id`). See `agents_reports/SECURITY_AUDIT.md`.
 - Status transitions should be validated (enum + allowed transitions).
 - Cancel should respect payment/refund + stock implications.
 
 ## Dev workflow
 `npm run build` (tsc) before shipping. Deploy: `/deploy-service order`. Env/secrets Terraform-managed.
 
-See `agents/SECURITY_AUDIT.md`, `FLOWS.md` (checkout/orders), `payment-service` skill.
+See `agents_reports/SECURITY_AUDIT.md`, `FLOWS.md` (checkout/orders), `payment-service` skill.

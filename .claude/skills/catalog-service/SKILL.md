@@ -18,7 +18,7 @@ description: Deep context + dev guide for ReelMart's catalog-service — product
 Public reads: marketplace/storefront `GET` endpoints (no auth). Mutations (`POST/PUT/DELETE /products`, `PUT /stores/:id`) MUST `requireAuth` **and verify the caller owns the store/product** — service-role bypasses RLS.
 
 ## Gotchas / risks
-- **IDOR risk** on product/store mutations — confirm ownership (`store.user_id === req.user.id`); see `agents/SECURITY_AUDIT.md`.
+- **IDOR risk** on product/store mutations — confirm ownership (`store.user_id === req.user.id`); see `agents_reports/SECURITY_AUDIT.md`.
 - **Public store endpoints must NOT leak KYC/PII columns** (no `select('*')` on stores/users — pick explicit public columns). HIGH finding in the audit.
 - `:slug` (public) vs `:id` (internal) — keep them distinct.
 - Reviews should be tied to a real purchase where required.
@@ -26,4 +26,4 @@ Public reads: marketplace/storefront `GET` endpoints (no auth). Mutations (`POST
 ## Dev workflow
 `npm run build` (tsc) before shipping. Deploy: `/deploy-service catalog`. Env/secrets Terraform-managed.
 
-See `agents/SECURITY_AUDIT.md`, `FLOWS.md` (storefront/product), `reelmart/services/CLAUDE.md`.
+See `agents_reports/SECURITY_AUDIT.md`, `FLOWS.md` (storefront/product), `reelmart/services/CLAUDE.md`.

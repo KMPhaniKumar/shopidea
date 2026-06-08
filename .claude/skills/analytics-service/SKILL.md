@@ -25,4 +25,4 @@ All `requireAuth`. **`/platform` is admin-only.** `/store*` must scope to the ca
 ## Dev workflow
 `npm run build` (tsc) before shipping. Deploy: `/deploy-service analytics`. Env/secrets Terraform-managed.
 
-See `agents/SECURITY_AUDIT.md`, `reelmart/services/CLAUDE.md`.
+See `agents_reports/SECURITY_AUDIT.md`, `reelmart/services/CLAUDE.md`.

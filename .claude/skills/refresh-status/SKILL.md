@@ -1,10 +1,10 @@
 ---
 name: refresh-status
-description: Regenerate agents/AUDIT_gaps.md so the canonical project status matches live reality. Use weekly, or after notable feature/infra changes, or when the Stop-hook reminds you.
+description: Regenerate agents_reports/AUDIT_gaps.md so the canonical project status matches live reality. Use weekly, or after notable feature/infra changes, or when the Stop-hook reminds you.
 allowed-tools: Bash, Read, Edit, Grep, Glob
 ---
 
-# Refresh the canonical status doc (`agents/AUDIT_gaps.md`)
+# Refresh the canonical status doc (`agents_reports/AUDIT_gaps.md`)
 
 Re-derive the truth from reality, then edit the doc — **verify every claim, don't carry stale text forward.**
 
@@ -19,4 +19,4 @@ Re-derive the truth from reality, then edit the doc — **verify every claim, do
    - Buyer-app `EXPO_PUBLIC_RAZORPAY_KEY_ID` / `EXPO_PUBLIC_GOOGLE_MAPS_KEY` present?
 
 ## Update
-Edit `agents/AUDIT_gaps.md`: bump **Last reviewed** to today, move completed items out of gaps, add new gaps, correct the architecture section if anything changed. Keep it concise. Also append a dated entry to `TRACKER.md`. Don't invent — every line must reflect something you verified.
+Edit `agents_reports/AUDIT_gaps.md`: bump **Last reviewed** to today, move completed items out of gaps, add new gaps, correct the architecture section if anything changed. Keep it concise. Also append a dated entry to `TRACKER.md`. Don't invent — every line must reflect something you verified.

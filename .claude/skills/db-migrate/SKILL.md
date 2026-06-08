@@ -29,6 +29,6 @@ All ReelMart migrations are **additive & idempotent** (`ADD COLUMN IF NOT EXISTS
 1. **Supabase SQL editor** (most reliable): paste each pending file in order. Avoids CLI config issues.
 2. **CLI**: `cd reelmart && supabase db push`. Note: `supabase` CLI may fail on a `config.toml` `SMS_HOOK_SECRET` validation — set a dummy `SMS_HOOK_SECRET` env or fix config first.
 
-Then **re-run the probe** to confirm the columns now exist. Update `agents/AUDIT_gaps.md` if the migration-status section changes.
+Then **re-run the probe** to confirm the columns now exist. Update `agents_reports/AUDIT_gaps.md` if the migration-status section changes.
 
 **Never** run destructive SQL (DROP/reset) — the guard hook blocks `supabase db reset`.

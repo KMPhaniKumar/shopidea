@@ -2,7 +2,7 @@
 ### Social Commerce Platform for Indian Micro-Sellers
 ### Last Updated: 2026-05-23
 
-> **Canonical status is [`agents/AUDIT_gaps.md`](agents/AUDIT_gaps.md)** (architecture, features, gaps, test accounts). This file is just the daily log.
+> **Canonical status is [`agents_reports/AUDIT_gaps.md`](agents_reports/AUDIT_gaps.md)** (architecture, features, gaps, test accounts). This file is just the daily log.
 
 ---
 
@@ -26,7 +26,7 @@ Pending:           0
 Progress: ████████████████████ 100%
 ```
 
-**Production-blockers remaining (see [`agents/AUDIT_gaps.md`](agents/AUDIT_gaps.md) for the full list):**
+**Production-blockers remaining (see [`agents_reports/AUDIT_gaps.md`](agents_reports/AUDIT_gaps.md) for the full list):**
 - Razorpay web checkout SDK wiring (~30 min)
 - DLT/SMS provider for production OTP delivery to +91 numbers
 - App store submission (Play Store + App Store)

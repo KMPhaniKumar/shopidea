@@ -30,4 +30,4 @@ description: Deep context + dev guide for ReelMart's notification-service — or
 ## Dev workflow
 `npm run build` (tsc) before shipping. Deploy: `/deploy-service notification`. Env/secrets Terraform-managed.
 
-See `agents/SECURITY_AUDIT.md` (HIGH-9), `reelmart/services/CLAUDE.md`, `whatsapp-service` skill.
+See `agents_reports/SECURITY_AUDIT.md` (HIGH-9), `reelmart/services/CLAUDE.md`, `whatsapp-service` skill.

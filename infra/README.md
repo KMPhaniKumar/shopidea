@@ -10,7 +10,7 @@ Terraform + AWS infra for the ReelMart platform. Two environments: `dev` and `pr
 infra/
 ├── README.md                  ← you are here
 ├── DIAGRAM.md                 ← full architecture diagram
-│   (historical build playbooks archived → agents/archive/infra-build-guides/)
+│   (historical build playbooks removed — see git history if needed)
 ├── terraform/                 ← CURRENT source of truth (see terraform/CLAUDE.md)
 │   ├── bootstrap/             ← state bucket + lock table + OIDC provider (run ONCE, manually)
 │   ├── modules/               ← reusable modules
@@ -38,7 +38,7 @@ infra/
 
 ## Current state
 
-Infra is **built and live** (ECS Fargate, ap-south-1) and managed by Terraform in `terraform/`. Read [`terraform/CLAUDE.md`](terraform/CLAUDE.md) for the rules (3 layers: network/cluster/services; change here, apply via TF, never raw CLI). The original phase-by-phase bring-up playbooks are archived at [`../agents/archive/infra-build-guides/`](../agents/archive/infra-build-guides/) (historical — stale in places).
+Infra is **built and live** (ECS Fargate, ap-south-1) and managed by Terraform in `terraform/`. Read [`terraform/CLAUDE.md`](terraform/CLAUDE.md) for the rules (3 layers: network/cluster/services; change here, apply via TF, never raw CLI). The original phase-by-phase bring-up playbooks have been removed (they were stale); retrieve them from git history if ever needed.
 
 ## Local prerequisites
 
