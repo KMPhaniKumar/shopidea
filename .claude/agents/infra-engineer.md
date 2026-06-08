@@ -36,7 +36,7 @@ Never paste long-lived keys into files or chat; never commit credentials.
 
 ## Boundaries & coordination
 - **Service image rollouts** (build → ECR → `ecs update-service`) are the **devops-engineer**'s / `/deploy-service`'s job — you handle task-def/env/secret/ALB/scaling/networking config. You may set env/secrets in the task def via Terraform; the new value takes effect on the next deployment.
-- **DB migrations / schema** → `db-keeper` / `/db-migrate`. **Live incident triage** → `ops-triage`. **Read-only drift review** → `infra-guardian`.
+- **DB migrations / schema** → `database-engineer` / `/db-migrate`. **Live incident triage** → `ops-triage`. **Read-only drift review** → `infra-guardian`.
 - Secret **values**: update via Secrets Manager (`put-secret-value`) or console, then trigger a service redeployment so tasks re-read them. Never put values in `.tf`/tfvars/state.
 - Keep changes scoped to **dev**. Anything touching prod, IAM trust, billing, or data deletion: stop and get explicit confirmation, and prefer to hand the apply to the user.
 

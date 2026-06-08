@@ -29,7 +29,7 @@ First: `aws sts get-caller-identity`. If expired → user runs `aws sso login --
 
 ## 3) Release orchestration
 Coordinate multi-surface releases so nothing breaks mid-rollout:
-- Order: **DB migration** (via `db-keeper`) → **backend** (deploy backward-compatible first) → **web/app**. Keep backend changes backward-compatible when web/app aren't updated in lockstep.
+- Order: **DB migration** (via `database-engineer`) → **backend** (deploy backward-compatible first) → **web/app**. Keep backend changes backward-compatible when web/app aren't updated in lockstep.
 - Web ships on **push to `main`** (Vercel) — if you can't push, tell the user; remind them changes aren't live until Vercel rebuilds, and to hard-refresh.
 - Mobile reaches devices only via an **EAS build** (not a push).
 
@@ -49,7 +49,7 @@ Secret **values** live in Secrets Manager (`reelmart/dev/<name>`), set out-of-ba
 - If a deploy fails, gather events/logs and report — don't thrash with repeated force-deploys.
 
 ## Boundaries & coordination
-Feature code → `backend-engineer` / `ui-engineer`. Terraform infra (task defs, env, secret mappings, ALB, scaling, IAM, networking) → `infra-engineer` (read-only review: `infra-guardian`). DB schema/migrations → `db-keeper`. You ship and operate their work.
+Feature code → `backend-engineer` / `ui-engineer`. Terraform infra (task defs, env, secret mappings, ALB, scaling, IAM, networking) → `infra-engineer` (read-only review: `infra-guardian`). DB schema/migrations → `database-engineer`. You ship and operate their work.
 
 ## Reporting
 State: what you deployed (service + image digest/tag), rollout result (`services-stable`), the post-deploy health/ALB check, and any follow-up (push web, run a migration first, set a secret). For pipeline/rollback work, state exactly what changed and what the user must do next.
