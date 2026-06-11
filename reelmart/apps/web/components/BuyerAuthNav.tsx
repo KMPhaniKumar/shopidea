@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Toaster } from 'react-hot-toast'
-import { User, LogOut, Package, ChevronDown } from 'lucide-react'
+import { User, LogOut, Package, MapPin, ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import BuyerLoginModal from './BuyerLoginModal'
 
@@ -72,7 +72,14 @@ export default function BuyerAuthNav() {
             <ChevronDown size={14} />
           </button>
           {menuOpen && (
-            <div className="absolute right-0 mt-2 w-44 bg-white border border-border rounded-card shadow-hover py-1 z-50">
+            <div className="absolute right-0 mt-2 w-48 bg-white border border-border rounded-card shadow-hover py-1 z-50">
+              <Link
+                href="/profile"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm text-text hover:bg-surface"
+              >
+                <User size={15} /> View Profile
+              </Link>
               <Link
                 href="/orders"
                 onClick={() => setMenuOpen(false)}
@@ -80,6 +87,14 @@ export default function BuyerAuthNav() {
               >
                 <Package size={15} /> My Orders
               </Link>
+              <Link
+                href="/addresses"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm text-text hover:bg-surface"
+              >
+                <MapPin size={15} /> Saved Addresses
+              </Link>
+              <hr className="border-border mx-2 my-1" />
               <button
                 onClick={logout}
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-error hover:bg-surface"

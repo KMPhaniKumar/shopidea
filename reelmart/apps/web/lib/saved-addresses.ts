@@ -103,6 +103,15 @@ export async function setDefaultAddress(
     .eq('id', addressId).eq('user_id', userId)
 }
 
+export async function deleteAddress(
+  supabase: SupabaseClient, userId: string, addressId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('addresses').delete()
+    .eq('id', addressId).eq('user_id', userId)
+  if (error) throw error
+}
+
 // ─── Google Places autocomplete helpers ───────────────────────────────────
 
 const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? ''

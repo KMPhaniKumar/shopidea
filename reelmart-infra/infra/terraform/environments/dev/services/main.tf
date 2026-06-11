@@ -47,9 +47,11 @@ locals {
 
   # Common env vars across services
   base_env = {
-    NODE_ENV                 = "production"
-    PORT                     = tostring(var.container_port)
-    ALLOWED_ORIGINS          = "*"
+    NODE_ENV = "production"
+    PORT     = tostring(var.container_port)
+    # Explicit browser-origin allow-list (NOT "*", which reflects any Origin with
+    # Access-Control-Allow-Credentials). Mirrors AUTH_BRIDGE_ALLOWED_ORIGINS.
+    ALLOWED_ORIGINS          = "http://localhost:3000,https://dev.reelmart.in,https://reelmart.in,https://shopidea.vercel.app"
     PAYMENT_SERVICE_URL      = "${local.base_url}/api/payments"
     NOTIFICATION_SERVICE_URL = "${local.base_url}/api/notifications"
   }

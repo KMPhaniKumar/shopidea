@@ -5,10 +5,29 @@ import { requireAuth } from '../middleware/auth'
 
 export const productsRouter = Router()
 
+// Returns true iff the given user is the seller who owns `storeId`.
+async function userOwnsStore(storeId: string, userId: string): Promise<boolean> {
+  const { data } = await supabaseAdmin
+    .from('stores').select('seller_id').eq('id', storeId).single()
+  return !!data && (data as any).seller_id === userId
+}
+
+// Returns true iff the given user owns the store the product belongs to.
+async function userOwnsProduct(productId: string, userId: string): Promise<boolean> {
+  const { data } = await supabaseAdmin
+    .from('products').select('stores!store_id(seller_id)').eq('id', productId).single()
+  return !!data && (data as any).stores?.seller_id === userId
+}
+
 // GET /api/catalog/products?storeId= — auth, seller lists own products
 productsRouter.get('/products', requireAuth, async (req, res) => {
   const { storeId } = req.query
   if (!storeId) return res.status(400).json({ success: false, error: 'storeId required' })
+
+  // Ownership: only the store's seller may list its (incl. unavailable) products.
+  if (!(await userOwnsStore(storeId as string, (req as any).user.id))) {
+    return res.status(403).json({ success: false, error: 'Forbidden' })
+  }
 
   const { data } = await supabaseAdmin
     .from('products')
@@ -53,14 +72,8 @@ productsRouter.post('/products', requireAuth, async (req, res) => {
 
 // PUT /api/catalog/products/:id — auth, update product
 productsRouter.put('/products/:id', requireAuth, async (req, res) => {
-  const sellerId = (req as any).user.id
   // Verify seller owns the product's store
-  const { data: product } = await supabaseAdmin
-    .from('products')
-    .select('stores!store_id(seller_id)')
-    .eq('id', req.params.id)
-    .single()
-  if (!product || (product as any).stores?.seller_id !== sellerId) {
+  if (!(await userOwnsProduct(req.params.id, (req as any).user.id))) {
     return res.status(403).json({ success: false, error: 'Forbidden' })
   }
 
@@ -73,6 +86,9 @@ productsRouter.put('/products/:id', requireAuth, async (req, res) => {
 
 // DELETE /api/catalog/products/:id — auth, delete product
 productsRouter.delete('/products/:id', requireAuth, async (req, res) => {
+  if (!(await userOwnsProduct(req.params.id, (req as any).user.id))) {
+    return res.status(403).json({ success: false, error: 'Forbidden' })
+  }
   const { error } = await supabaseAdmin.from('products').delete().eq('id', req.params.id)
   if (error) return res.status(400).json({ success: false, error: error.message })
   res.json({ success: true, data: null })
@@ -80,6 +96,9 @@ productsRouter.delete('/products/:id', requireAuth, async (req, res) => {
 
 // PUT /api/catalog/products/:id/availability — auth, toggle availability
 productsRouter.put('/products/:id/availability', requireAuth, async (req, res) => {
+  if (!(await userOwnsProduct(req.params.id, (req as any).user.id))) {
+    return res.status(403).json({ success: false, error: 'Forbidden' })
+  }
   const { is_available } = req.body
   const { data, error } = await supabaseAdmin
     .from('products')
