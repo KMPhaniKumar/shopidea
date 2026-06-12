@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ChevronLeft, ShoppingBag, Plus, Minus, Share2, Store as StoreIcon, Download } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import { CartItem, loadCart, saveCart, cartTotal, cartCount } from '@/lib/cart'
+import DeliveryPincodeChecker from '@/components/DeliveryPincodeChecker'
 
 interface Store {
   id: string
@@ -14,6 +15,7 @@ interface Store {
   logo_url: string | null
   city: string
   area: string | null
+  pincode: string | null
   is_verified: boolean
   is_open: boolean
   rating_avg: number
@@ -213,6 +215,16 @@ export default function ProductClient({ product, storeSlug }: { product: Product
               <div className="bg-white mt-2 px-4 py-5 lg:rounded-2xl lg:border lg:border-gray-200">
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">About this product</h3>
                 <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{product.description}</p>
+              </div>
+            )}
+
+            {/* Delivery pincode checker */}
+            {store.pincode && (
+              <div className="mt-2">
+                <DeliveryPincodeChecker
+                  pickupPincode={store.pincode}
+                  orderAmount={product.price}
+                />
               </div>
             )}
 

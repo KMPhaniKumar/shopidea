@@ -5,19 +5,20 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, BarChart2, Store, Users, ShoppingBag,
-  RotateCcw, Wallet, CreditCard, Settings,
+  RotateCcw, Wallet, CreditCard, Settings, MapPin,
 } from 'lucide-react'
 
 const items = [
-  { icon: LayoutDashboard, label: 'Dashboard',  href: '/admin/dashboard', exact: true },
-  { icon: BarChart2,       label: 'Analytics',  href: '/admin/analytics' },
-  { icon: Store,           label: 'Sellers',    href: '/admin/sellers'   },
-  { icon: Users,           label: 'Buyers',     href: '/admin/buyers'    },
-  { icon: ShoppingBag,     label: 'Orders',     href: '/admin/orders'    },
-  { icon: CreditCard,      label: 'Payments',   href: '/admin/payments'  },
-  { icon: RotateCcw,       label: 'Returns',    href: '/admin/returns'   },
-  { icon: Wallet,          label: 'Payouts',    href: '/admin/payouts'   },
-  { icon: Settings,        label: 'Settings',   href: '/admin/settings'  },
+  { icon: LayoutDashboard, label: 'Dashboard',       href: '/admin/dashboard',        exact: true },
+  { icon: BarChart2,       label: 'Analytics',       href: '/admin/analytics'         },
+  { icon: Store,           label: 'Sellers',         href: '/admin/sellers'           },
+  { icon: MapPin,          label: 'Address Changes', href: '/admin/address-changes'   },
+  { icon: Users,           label: 'Buyers',          href: '/admin/buyers'            },
+  { icon: ShoppingBag,     label: 'Orders',          href: '/admin/orders'            },
+  { icon: CreditCard,      label: 'Payments',        href: '/admin/payments'          },
+  { icon: RotateCcw,       label: 'Returns',         href: '/admin/returns'           },
+  { icon: Wallet,          label: 'Payouts',         href: '/admin/payouts'           },
+  { icon: Settings,        label: 'Settings',        href: '/admin/settings'          },
 ]
 
 export default function AdminNav({ adminName }: { adminName: string }) {

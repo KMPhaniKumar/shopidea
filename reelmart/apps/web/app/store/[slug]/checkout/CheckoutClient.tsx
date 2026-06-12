@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
 import { ArrowLeft, MapPin, ChevronRight, Plus, Minus, Trash2, Loader2, Search } from 'lucide-react'
+import { formatDeliveryDate } from '@/lib/delivery-date'
 import { CartItem, loadCart, saveCart, clearCart, cartTotal } from '@/lib/cart'
 import { saveAddress, searchPlaces, fetchPlaceDetails, type PlacePrediction } from '@/lib/saved-addresses'
 import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, preloadOtpWidget, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
@@ -822,12 +823,6 @@ function loadRazorpayScript(): Promise<void> {
     script.onerror = () => reject(new Error('Failed to load payment gateway'))
     document.body.appendChild(script)
   })
-}
-
-function formatDeliveryDate(daysFromNow: number) {
-  const d = new Date()
-  d.setDate(d.getDate() + Math.max(1, Math.round(daysFromNow)))
-  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 function EmptyCart({ store, onBack }: { store: Store; onBack: () => void }) {

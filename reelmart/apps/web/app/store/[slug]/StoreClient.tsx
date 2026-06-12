@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Search, ShoppingBag, Plus, Minus, Download, Star, MapPin } from 'lucide-react'
 import { CartItem, loadCart, saveCart, cartTotal, cartCount } from '@/lib/cart'
+import DeliveryPincodeChecker from '@/components/DeliveryPincodeChecker'
 
 interface Store {
   id: string
@@ -13,6 +14,7 @@ interface Store {
   logo_url: string | null
   city: string
   area: string | null
+  pincode: string | null
   whatsapp_number: string | null
   is_verified: boolean
   is_open: boolean
@@ -145,6 +147,13 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
           </div>
           {store.description && (
             <p className="-mt-1 pb-5 text-sm text-gray-600 leading-relaxed max-w-3xl">{store.description}</p>
+          )}
+
+          {/* Delivery pincode checker — compact placement in store header */}
+          {store.pincode && (
+            <div className="pb-5 max-w-sm">
+              <DeliveryPincodeChecker pickupPincode={store.pincode} />
+            </div>
           )}
         </div>
       </div>

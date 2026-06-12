@@ -131,3 +131,158 @@ notificationsRouter.post('/order-update', requireInternalKey, async (req, res) =
 
   res.json({ success: true })
 })
+
+// ---------------------------------------------------------------------------
+// Seller pickup-address change notifications — called by the web admin route
+// after it approves or rejects a store_address_changes request.
+// Auth: x-internal-key (same as all service-to-service triggers).
+// ---------------------------------------------------------------------------
+
+const ADDRESS_CHANGE_MESSAGES = {
+  approved: {
+    push: {
+      title: 'Pickup address approved',
+      body: 'Your updated pickup address has been approved and is now active with our courier partner.',
+    },
+    whatsapp:
+      '*ReelMart* — Your updated pickup address has been approved and is now active with our courier partner.',
+  },
+  rejected: (reason?: string) => ({
+    push: {
+      title: 'Pickup address change not approved',
+      body: reason
+        ? `Your pickup address change was not approved: ${reason}. Please review and resubmit.`
+        : 'Your pickup address change was not approved. Please review and resubmit.',
+    },
+    whatsapp: reason
+      ? `*ReelMart* — Your pickup address change was not approved: ${reason}. Please review and resubmit.`
+      : '*ReelMart* — Your pickup address change was not approved. Please review and resubmit.',
+  }),
+}
+
+// POST /api/notifications/address-change-approved
+// Body: { storeId: uuid }
+notificationsRouter.post('/address-change-approved', requireInternalKey, async (req, res) => {
+  const schema = z.object({ storeId: z.string().uuid() })
+  const parsed = schema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, error: parsed.error.message })
+  }
+
+  const { storeId } = parsed.data
+
+  // Resolve seller user_id and phone from stores → users join.
+  const { data: store, error: storeErr } = await supabaseAdmin
+    .from('stores')
+    .select('seller_id, store_name, users:seller_id(phone)')
+    .eq('id', storeId)
+    .single()
+
+  if (storeErr || !store) {
+    return res.status(404).json({ success: false, error: 'Store not found' })
+  }
+
+  const sellerId = (store as any).seller_id as string | null
+  const sellerPhone = (store as any).users?.phone as string | undefined
+  const msgs = ADDRESS_CHANGE_MESSAGES.approved
+
+  const sends: PromiseLike<unknown>[] = []
+
+  if (sellerPhone) {
+    sends.push(sendWhatsApp(sellerPhone, msgs.whatsapp))
+  }
+
+  if (sellerId) {
+    sends.push(
+      supabaseAdmin
+        .from('fcm_tokens')
+        .select('token')
+        .eq('user_id', sellerId)
+        .then(({ data: tokens }) =>
+          Promise.allSettled(
+            (tokens ?? []).map(t =>
+              sendPush(t.token, msgs.push.title, msgs.push.body, { type: 'address_change_approved', storeId })
+            )
+          )
+        )
+    )
+  }
+
+  const results = await Promise.allSettled(sends)
+
+  return res.json({
+    success: true,
+    data: {
+      channels: results.map(r => r.status),
+      whatsappSent: !!sellerPhone,
+      pushSent: !!sellerId,
+    },
+  })
+})
+
+// POST /api/notifications/address-change-rejected
+// Body: { storeId: uuid, rejectReason?: string }
+notificationsRouter.post('/address-change-rejected', requireInternalKey, async (req, res) => {
+  const schema = z.object({
+    storeId: z.string().uuid(),
+    rejectReason: z.string().trim().max(500).optional(),
+  })
+  const parsed = schema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, error: parsed.error.message })
+  }
+
+  const { storeId, rejectReason } = parsed.data
+
+  // Resolve seller user_id and phone from stores → users join.
+  const { data: store, error: storeErr } = await supabaseAdmin
+    .from('stores')
+    .select('seller_id, store_name, users:seller_id(phone)')
+    .eq('id', storeId)
+    .single()
+
+  if (storeErr || !store) {
+    return res.status(404).json({ success: false, error: 'Store not found' })
+  }
+
+  const sellerId = (store as any).seller_id as string | null
+  const sellerPhone = (store as any).users?.phone as string | undefined
+  const msgs = ADDRESS_CHANGE_MESSAGES.rejected(rejectReason)
+
+  const sends: PromiseLike<unknown>[] = []
+
+  if (sellerPhone) {
+    sends.push(sendWhatsApp(sellerPhone, msgs.whatsapp))
+  }
+
+  if (sellerId) {
+    sends.push(
+      supabaseAdmin
+        .from('fcm_tokens')
+        .select('token')
+        .eq('user_id', sellerId)
+        .then(({ data: tokens }) =>
+          Promise.allSettled(
+            (tokens ?? []).map(t =>
+              sendPush(t.token, msgs.push.title, msgs.push.body, {
+                type: 'address_change_rejected',
+                storeId,
+                ...(rejectReason ? { rejectReason } : {}),
+              })
+            )
+          )
+        )
+    )
+  }
+
+  const results = await Promise.allSettled(sends)
+
+  return res.json({
+    success: true,
+    data: {
+      channels: results.map(r => r.status),
+      whatsappSent: !!sellerPhone,
+      pushSent: !!sellerId,
+    },
+  })
+})
