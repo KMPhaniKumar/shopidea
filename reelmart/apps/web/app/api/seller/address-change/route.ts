@@ -97,6 +97,10 @@ export async function POST(req: NextRequest) {
     if (setErr) {
       return NextResponse.json({ success: false, error: setErr.message }, { status: 400 })
     }
+    // NOTE: pickup registration with NimbusPost is intentionally NOT done here.
+    // It fires only when the admin approves the seller (see
+    // app/api/admin/stores/[id]/route.ts → registerStorePickup on 'approve').
+    // Until then the pickup stays "pending", which is the expected state.
     return NextResponse.json({ success: true, data: { applied: true, pending: false } })
   }
 
