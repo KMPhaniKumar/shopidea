@@ -2,24 +2,31 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { X } from 'lucide-react'
+import { X, Lock } from 'lucide-react'
 import {
   LayoutDashboard, Package, ShoppingBag, BarChart2,
   Users, Wallet, Megaphone, Settings,
 } from 'lucide-react'
 
-const items = [
-  { icon: LayoutDashboard, label: 'Dashboard',  href: '/seller/dashboard' },
-  { icon: Package,         label: 'Products',   href: '/seller/products'  },
-  { icon: ShoppingBag,     label: 'Orders',     href: '/seller/orders'    },
-  { icon: BarChart2,       label: 'Analytics',  href: '/seller/analytics' },
-  { icon: Users,           label: 'Customers',  href: '/seller/customers' },
-  { icon: Wallet,          label: 'Payouts',    href: '/seller/payouts'   },
-  { icon: Megaphone,       label: 'Marketing',  href: '/seller/marketing' },
-  { icon: Settings,        label: 'Settings',   href: '/seller/settings'  },
+const ALL_ITEMS = [
+  { icon: LayoutDashboard, label: 'Dashboard',  href: '/seller/dashboard', gated: false },
+  { icon: Package,         label: 'Products',   href: '/seller/products',  gated: true  },
+  { icon: ShoppingBag,     label: 'Orders',     href: '/seller/orders',    gated: true  },
+  { icon: BarChart2,       label: 'Analytics',  href: '/seller/analytics', gated: true  },
+  { icon: Users,           label: 'Customers',  href: '/seller/customers', gated: true  },
+  { icon: Wallet,          label: 'Payouts',    href: '/seller/payouts',   gated: true  },
+  { icon: Megaphone,       label: 'Marketing',  href: '/seller/marketing', gated: true  },
+  { icon: Settings,        label: 'Settings',   href: '/seller/settings',  gated: false },
 ]
 
-export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+interface SidebarProps {
+  open: boolean
+  onClose: () => void
+  /** When false, gated nav items are shown dimmed with a lock icon */
+  featuresUnlocked?: boolean
+}
+
+export function Sidebar({ open, onClose, featuresUnlocked = true }: SidebarProps) {
   const pathname = usePathname()
   return (
     <>
@@ -54,8 +61,22 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           </button>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {items.map(({ icon: Icon, label, href }) => {
+          {ALL_ITEMS.map(({ icon: Icon, label, href, gated }) => {
+            const locked = gated && !featuresUnlocked
             const active = pathname.startsWith(href)
+            if (locked) {
+              return (
+                <div
+                  key={href}
+                  title="Complete onboarding to unlock"
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-300 cursor-not-allowed select-none"
+                >
+                  <Icon size={18} />
+                  <span className="flex-1">{label}</span>
+                  <Lock size={13} className="text-gray-300 shrink-0" />
+                </div>
+              )
+            }
             return (
               <Link
                 key={href}

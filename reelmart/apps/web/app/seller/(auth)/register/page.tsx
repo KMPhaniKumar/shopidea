@@ -4,28 +4,11 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
-import { Upload, CheckCircle, Clock } from 'lucide-react'
+import { Eye, EyeOff, CheckCircle, Clock } from 'lucide-react'
 import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, preloadOtpWidget, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
-import { uploadKycFile, isValidPan, isValidGst } from '@/lib/kyc'
-import { AddressSearch } from '@/components/AddressSearch'
+import { isValidPan, isValidGst } from '@/lib/kyc'
 
-const CATEGORIES = [
-  { id: 'food', label: 'Food & Beverages', icon: '🍱' },
-  { id: 'jewellery', label: 'Jewellery', icon: '💍' },
-  { id: 'clothing', label: 'Clothing & Fashion', icon: '👗' },
-  { id: 'electronics', label: 'Electronics', icon: '📱' },
-  { id: 'home', label: 'Home & Decor', icon: '🏡' },
-  { id: 'beauty', label: 'Beauty & Wellness', icon: '💄' },
-  { id: 'other', label: 'Other', icon: '🛍️' },
-]
-
-const CITIES = ['Mumbai', 'Delhi', 'Bangalore', 'Chennai', 'Hyderabad', 'Pune', 'Kolkata', 'Ahmedabad', 'Jaipur', 'Surat']
-
-type Step = 'phone' | 'otp' | 'profile' | 'store' | 'pending'
-
-function slugify(text: string) {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-}
+type Step = 'phone' | 'otp' | 'profile' | 'pending'
 
 export default function SellerRegister() {
   const router = useRouter()
@@ -35,36 +18,20 @@ export default function SellerRegister() {
   const [loading, setLoading] = useState(false)
   const [countdown, setCountdown] = useState(0)
 
+  // Phone / OTP
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
-  const [name, setName] = useState('')
 
-  const [storeName, setStoreName] = useState('')
-  const [storeSlug, setStoreSlug] = useState('')
-  const [slugManual, setSlugManual] = useState(false)
-  const [category, setCategory] = useState('')
-  const [city, setCity] = useState('')
-  const [area, setArea] = useState('')
-  const [address, setAddress] = useState('')
-  const [stateName, setStateName] = useState('')
-  const [pincode, setPincode] = useState('')
-  const [whatsapp, setWhatsapp] = useState('')
-  const [description, setDescription] = useState('')
-
-  // KYC
+  // Profile (new "Your details" fields)
+  const [fullName, setFullName] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const [panNumber, setPanNumber] = useState('')
   const [gstNumber, setGstNumber] = useState('')
-  const [panFile, setPanFile] = useState<File | null>(null)
-  const [selfieFile, setSelfieFile] = useState<File | null>(null)
-  const [selfiePreview, setSelfiePreview] = useState<string | null>(null)
-
-  // Logo
-  const [logoFile, setLogoFile] = useState<File | null>(null)
-  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   // Pre-init the MSG91 widget while the phone box is shown so its captcha
-  // renders upfront — otherwise the first "Send OTP" click fails with
-  // "invalid captcha" before the captcha has appeared.
+  // renders upfront — otherwise the first "Send OTP" click fails.
   useEffect(() => {
     if (step !== 'phone') return
     preloadOtpWidget().catch(() => {})
@@ -99,6 +66,7 @@ export default function SellerRegister() {
       const { accessToken } = await msg91Verify(otp)
       const { userId } = await exchangeForSupabaseSession(accessToken, 'seller')
 
+      // Check if this seller already has a store (returning user)
       const { data: existingStore } = await supabase
         .from('stores')
         .select('id, approval_status')
@@ -123,132 +91,43 @@ export default function SellerRegister() {
     }
   }
 
-  async function saveProfile() {
-    if (!name.trim()) { toast.error('Enter your name'); return }
-    setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { toast.error('Session expired'); setLoading(false); return }
-    // The auth bridge already created this users row (id, phone, role='seller')
-    // via the service role during OTP exchange, so we only set the display name.
-    // UPDATE — not upsert — because `users` has no INSERT RLS policy; the own-row
-    // "Users can update own profile" policy covers this. (An upsert is an INSERT
-    // under the hood and RLS rejects it: "new row violates row-level security".)
-    const { error } = await supabase.from('users')
-      .update({ name: name.trim() })
-      .eq('id', user.id)
-    if (error) { toast.error(error.message); setLoading(false); return }
-    setStep('store')
-    setLoading(false)
+  function profileReady() {
+    return (
+      fullName.trim().length >= 2 &&
+      displayName.trim().length >= 2 &&
+      isValidPan(panNumber) &&
+      password.length >= 8 &&
+      (gstNumber.trim() === '' || isValidGst(gstNumber))
+    )
   }
 
-  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 2 * 1024 * 1024) { toast.error('Logo must be under 2MB'); return }
-    setLogoFile(file)
-    setLogoPreview(URL.createObjectURL(file))
-  }
-
-  function handlePanChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 5 * 1024 * 1024) { toast.error('PAN card must be under 5MB'); return }
-    setPanFile(file)
-  }
-
-  function handleSelfieChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 5 * 1024 * 1024) { toast.error('Selfie must be under 5MB'); return }
-    setSelfieFile(file)
-    setSelfiePreview(URL.createObjectURL(file))
-  }
-
-  async function uploadLogo(storeId: string): Promise<string | null> {
-    if (!logoFile) return null
-    const ext = logoFile.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-    const path = `${storeId}/logo.${ext}`
-    const { error } = await supabase.storage.from('store-logos').upload(path, logoFile, {
-      upsert: true,
-      contentType: logoFile.type,
-    })
-    if (error) { toast.error(`Logo upload failed: ${error.message}`); return null }
-    const { data } = supabase.storage.from('store-logos').getPublicUrl(path)
-    return data.publicUrl
-  }
-
-  async function createStore() {
-    if (!storeName.trim()) { toast.error('Enter store name'); return }
-    if (!storeSlug.trim()) { toast.error('Enter store URL'); return }
-    if (!category) { toast.error('Select a category'); return }
-    if (!city) { toast.error('Select your city'); return }
-    if (!address.trim()) { toast.error('Enter your pickup address'); return }
-    if (!stateName.trim()) { toast.error('Enter your state'); return }
-    if (!/^\d{6}$/.test(pincode)) { toast.error('Enter a valid 6-digit pincode'); return }
+  async function submitProfile() {
+    if (!profileReady()) return
     if (!isValidPan(panNumber)) { toast.error('Enter a valid PAN (e.g. ABCDE1234F)'); return }
-    if (!panFile) { toast.error('Upload a photo of your PAN card'); return }
-    if (!selfieFile) { toast.error('Upload a selfie in front of your shop'); return }
-    if (gstNumber.trim() && !isValidGst(gstNumber)) { toast.error('Enter a valid 15-character GSTIN, or leave it blank'); return }
+    if (gstNumber.trim() && !isValidGst(gstNumber)) { toast.error('Enter a valid 15-character GSTIN, or leave blank'); return }
 
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { toast.error('Session expired'); setLoading(false); return }
-
-    const { data: existing } = await supabase
-      .from('stores')
-      .select('id')
-      .eq('store_slug', storeSlug.trim())
-      .maybeSingle()
-
-    if (existing) {
-      toast.error('This store URL is already taken. Try another.')
-      setLoading(false)
-      return
-    }
-
-    const { data: newStore, error } = await supabase.from('stores').insert({
-      seller_id: user.id,
-      store_name: storeName.trim(),
-      store_slug: storeSlug.trim(),
-      description: description.trim() || null,
-      category,
-      city,
-      area: area.trim() || null,
-      address: address.trim(),
-      state: stateName.trim(),
-      pincode,
-      pan_number: panNumber.trim().toUpperCase(),
-      gst_number: gstNumber.trim() ? gstNumber.trim().toUpperCase() : null,
-      whatsapp_number: whatsapp ? `+91${whatsapp.replace(/\D/g, '')}` : null,
-      is_active: false,
-      is_open: false,
-      approval_status: 'pending',
-    }).select('id').single()
-
-    if (error) { toast.error(error.message); setLoading(false); return }
-
-    // Upload logo (public bucket) + KYC documents (private bucket, keyed by
-    // user id), then persist their paths onto the store.
-    const updates: Record<string, unknown> = {}
-    if (logoFile && newStore?.id) {
-      const logoUrl = await uploadLogo(newStore.id)
-      if (logoUrl) updates.logo_url = logoUrl
-    }
     try {
-      updates.pan_doc_path = await uploadKycFile(user.id, 'pan', panFile)
-      updates.selfie_path = await uploadKycFile(user.id, 'selfie', selfieFile)
-      updates.kyc_submitted_at = new Date().toISOString()
+      const res = await fetch('/api/seller/onboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: fullName.trim(),
+          display_name: displayName.trim(),
+          pan_number: panNumber.trim().toUpperCase(),
+          gst_number: gstNumber.trim() ? gstNumber.trim().toUpperCase() : undefined,
+          password,
+        }),
+      })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error ?? 'Registration failed')
+      toast.success('Account created! Setting up your dashboard...')
+      router.push('/seller/dashboard')
     } catch (err: any) {
-      toast.error(`Document upload failed: ${err.message}`)
+      toast.error(err?.message ?? 'Registration failed')
+    } finally {
       setLoading(false)
-      return
     }
-    if (newStore?.id) {
-      await supabase.from('stores').update(updates).eq('id', newStore.id)
-    }
-
-    setStep('pending')
-    setLoading(false)
   }
 
   return (
@@ -265,7 +144,7 @@ export default function SellerRegister() {
           <p className="text-[#888888] text-sm leading-relaxed">Join sellers growing their business with ReelMart.</p>
         </div>
 
-        {/* Pending approval screen */}
+        {/* Pending screen */}
         {step === 'pending' && (
           <div className="w-full bg-white border border-[#E5E5E5] rounded-2xl shadow-lg px-8 py-10 text-center">
             <div className="flex justify-center mb-4">
@@ -326,7 +205,7 @@ export default function SellerRegister() {
                   {process.env.NODE_ENV === 'development' && (
                     <button type="button" onClick={() => setPhone('9999999999')}
                       className="w-full bg-[#FEF3C7] border-l-4 border-[#F59E0B] rounded-lg px-3 py-2 text-xs font-semibold text-[#92400E] text-left hover:bg-[#FDE68A] transition-colors">
-                      🛠 DEV — Click to use 9999999999 (OTP: 123456)
+                      DEV — Click to use 9999999999 (OTP: 123456)
                     </button>
                   )}
                   <div id={CAPTCHA_CONTAINER_ID} className="empty:hidden" />
@@ -351,7 +230,7 @@ export default function SellerRegister() {
                   {process.env.NODE_ENV === 'development' && (
                     <button type="button" onClick={() => setOtp('123456')}
                       className="w-full bg-[#FEF3C7] border-l-4 border-[#F59E0B] rounded-lg px-3 py-2 text-xs font-semibold text-[#92400E] text-left hover:bg-[#FDE68A] transition-colors mt-3">
-                      🛠 DEV — Click to fill OTP 123456
+                      DEV — Click to fill OTP 123456
                     </button>
                   )}
                 </div>
@@ -381,234 +260,117 @@ export default function SellerRegister() {
               </div>
             )}
 
-            {/* Profile */}
+            {/* Profile — "Your details" redesign */}
             {step === 'profile' && (
               <div>
                 <div className="mb-6">
                   <h1 className="text-xl font-bold text-[#1A1A1A] mb-1">Your details</h1>
-                  <p className="text-[#888888] text-sm">Tell us your name to personalise your account</p>
-                </div>
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-2">Full Name *</label>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                      placeholder="Rahul Sharma"
-                      className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3.5 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A]"
-                      autoFocus
-                    />
-                  </div>
-                  <button onClick={saveProfile} disabled={!name.trim() || loading}
-                    className="w-full bg-[#FF6B2B] text-white py-3.5 rounded-xl font-semibold text-sm disabled:opacity-40 hover:bg-[#e55a1f] transition-colors shadow-sm">
-                    {loading ? 'Saving...' : 'Continue →'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Store */}
-            {step === 'store' && (
-              <div>
-                <div className="mb-6">
-                  <h1 className="text-xl font-bold text-[#1A1A1A] mb-1">Create your store</h1>
-                  <p className="text-[#888888] text-sm">Set up your ReelMart storefront</p>
+                  <p className="text-[#888888] text-sm">Set up your seller profile in one step</p>
                 </div>
                 <div className="space-y-4">
 
-                  {/* Logo upload */}
+                  {/* Full name */}
                   <div>
-                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Store Logo</label>
-                    <label className="flex items-center gap-4 cursor-pointer">
-                      <div className="w-16 h-16 rounded-xl border-2 border-dashed border-[#E5E5E5] flex items-center justify-center overflow-hidden hover:border-[#FF6B2B] transition-colors shrink-0">
-                        {logoPreview ? (
-                          <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
-                        ) : (
-                          <Upload size={20} className="text-[#AAAAAA]" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-sm text-[#555555] font-medium">{logoPreview ? 'Change logo' : 'Upload logo'}</p>
-                        <p className="text-xs text-[#AAAAAA]">JPG, PNG or WebP · max 2MB</p>
-                      </div>
-                      <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleLogoChange} />
+                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">
+                      Full name (as per PAN) <span className="text-[#E23744]">*</span>
                     </label>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Store Name *</label>
-                    <input type="text" value={storeName}
-                      onChange={e => { setStoreName(e.target.value); if (!slugManual) setStoreSlug(slugify(e.target.value)) }}
-                      placeholder="Rahul's Fashion"
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={e => setFullName(e.target.value)}
+                      placeholder="Rahul Sharma"
                       className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A]"
                       autoFocus
                     />
+                    <p className="text-xs text-[#AAAAAA] mt-1">Must match your PAN card exactly</p>
                   </div>
 
+                  {/* Display name */}
                   <div>
-                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Store URL *</label>
-                    <div className="flex rounded-xl overflow-hidden border border-[#E5E5E5] focus-within:border-[#FF6B2B] transition-colors">
-                      <span className="inline-flex items-center px-3 bg-[#F9F9F9] text-[#999999] text-xs border-r border-[#E5E5E5] whitespace-nowrap">reelmart.in/</span>
-                      <input type="text" value={storeSlug}
-                        onChange={e => { setStoreSlug(slugify(e.target.value)); setSlugManual(true) }}
-                        placeholder="rahuls-fashion"
-                        className="flex-1 px-3 py-3 text-sm outline-none bg-white text-[#1A1A1A] placeholder:text-[#BBBBBB]"
-                      />
-                    </div>
-                    <p className="text-xs text-[#AAAAAA] mt-1">Your shareable store link</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Category *</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {CATEGORIES.map(cat => (
-                        <button key={cat.id} type="button" onClick={() => setCategory(cat.id)}
-                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all text-left ${
-                            category === cat.id
-                              ? 'border-[#FF6B2B] bg-orange-50 text-[#FF6B2B]'
-                              : 'border-[#E5E5E5] text-[#555555] hover:border-[#FF6B2B]/50'
-                          }`}>
-                          <span className="text-base">{cat.icon}</span>
-                          <span className="truncate text-xs">{cat.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">City *</label>
-                    <select value={city} onChange={e => setCity(e.target.value)}
-                      className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A] bg-white">
-                      <option value="">Select your city</option>
-                      {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Area / Locality</label>
-                    <input type="text" value={area} onChange={e => setArea(e.target.value)}
-                      placeholder="Koramangala, Banjara Hills..."
+                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">
+                      Display / Store name <span className="text-[#E23744]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={e => setDisplayName(e.target.value)}
+                      placeholder="Rahul's Fashion"
                       className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A]"
                     />
+                    <p className="text-xs text-[#AAAAAA] mt-1">This is what buyers will see</p>
                   </div>
 
+                  {/* PAN number */}
                   <div>
-                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Find your shop on the map</label>
-                    <AddressSearch onPick={d => {
-                      if (d.area) setArea(d.area)
-                      if (d.state) setStateName(d.state)
-                      if (d.pincode) setPincode(d.pincode)
-                      const match = CITIES.find(c => c.toLowerCase() === d.city.toLowerCase())
-                      if (match) setCity(match)
-                    }} />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Pickup Address *</label>
-                    <textarea value={address} onChange={e => setAddress(e.target.value)}
-                      placeholder="Shop #12, Main Market, Near..."
-                      rows={2}
-                      className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A] resize-none"
+                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">
+                      PAN number <span className="text-[#E23744]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={panNumber}
+                      onChange={e => setPanNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+                      placeholder="ABCDE1234F"
+                      className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A] tracking-wider font-mono"
                     />
-                    <p className="text-xs text-[#AAAAAA] mt-1">Where couriers will collect your orders</p>
+                    {panNumber.length === 10 && !isValidPan(panNumber) && (
+                      <p className="text-xs text-[#E23744] mt-1">Invalid PAN format (e.g. ABCDE1234F)</p>
+                    )}
+                    {panNumber.length === 10 && isValidPan(panNumber) && (
+                      <p className="text-xs text-[#25D366] mt-1">Valid PAN format</p>
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">State *</label>
-                      <input type="text" value={stateName} onChange={e => setStateName(e.target.value)}
-                        placeholder="Karnataka"
-                        className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Pincode *</label>
-                      <input type="tel" value={pincode}
-                        onChange={e => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        placeholder="560034"
-                        className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A]"
-                      />
-                    </div>
-                  </div>
-
+                  {/* GST number (optional) */}
                   <div>
-                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">WhatsApp Number</label>
+                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">
+                      GST number <span className="text-[#AAAAAA] font-normal text-xs">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={gstNumber}
+                      onChange={e => setGstNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15))}
+                      placeholder="22ABCDE1234F1Z5"
+                      className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A] tracking-wider font-mono"
+                    />
+                    {gstNumber.length === 15 && !isValidGst(gstNumber) && (
+                      <p className="text-xs text-[#E23744] mt-1">Invalid GSTIN format</p>
+                    )}
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">
+                      Password <span className="text-[#E23744]">*</span>
+                    </label>
                     <div className="flex rounded-xl overflow-hidden border border-[#E5E5E5] focus-within:border-[#FF6B2B] transition-colors">
-                      <span className="inline-flex items-center px-4 bg-[#F9F9F9] text-[#666666] text-sm border-r border-[#E5E5E5]">+91</span>
-                      <input type="tel" value={whatsapp}
-                        onChange={e => setWhatsapp(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                        placeholder="9876543210"
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        placeholder="Min. 8 characters"
                         className="flex-1 px-4 py-3 text-sm outline-none bg-white text-[#1A1A1A] placeholder:text-[#BBBBBB]"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(p => !p)}
+                        className="px-3 text-[#AAAAAA] hover:text-[#555555] bg-white border-l border-[#E5E5E5]"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                     </div>
+                    {password.length > 0 && password.length < 8 && (
+                      <p className="text-xs text-[#E23744] mt-1">Must be at least 8 characters</p>
+                    )}
+                    <p className="text-xs text-[#AAAAAA] mt-1">Used for future password login</p>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Store Description</label>
-                    <textarea value={description} onChange={e => setDescription(e.target.value)}
-                      placeholder="Tell buyers what you sell..."
-                      rows={2} maxLength={300}
-                      className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A] resize-none"
-                    />
-                  </div>
-
-                  {/* KYC / verification */}
-                  <div className="pt-2 border-t border-[#F0F0F0]">
-                    <p className="text-sm font-bold text-[#1A1A1A] mb-1">Verify your business</p>
-                    <p className="text-xs text-[#AAAAAA] mb-3">Required for admin approval. Your documents are stored privately and only seen by our review team.</p>
-
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">PAN Number *</label>
-                        <input type="text" value={panNumber}
-                          onChange={e => setPanNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
-                          placeholder="ABCDE1234F"
-                          className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A] tracking-wider"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">PAN Card Photo *</label>
-                        <label className="flex items-center gap-3 cursor-pointer border border-dashed border-[#E5E5E5] rounded-xl px-4 py-3 hover:border-[#FF6B2B] transition-colors">
-                          <Upload size={18} className="text-[#AAAAAA] shrink-0" />
-                          <span className="text-sm text-[#555555] truncate">{panFile ? panFile.name : 'Upload PAN card (JPG, PNG or PDF · max 5MB)'}</span>
-                          <input type="file" accept="image/jpeg,image/png,application/pdf" className="hidden" onChange={handlePanChange} />
-                        </label>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">Shop Selfie *</label>
-                        <label className="flex items-center gap-4 cursor-pointer">
-                          <div className="w-16 h-16 rounded-xl border-2 border-dashed border-[#E5E5E5] flex items-center justify-center overflow-hidden hover:border-[#FF6B2B] transition-colors shrink-0">
-                            {selfiePreview ? (
-                              <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover" />
-                            ) : (
-                              <Upload size={20} className="text-[#AAAAAA]" />
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm text-[#555555] font-medium">{selfiePreview ? 'Change selfie' : 'Take/upload a selfie'}</p>
-                            <p className="text-xs text-[#AAAAAA]">A photo of you in front of your shop</p>
-                          </div>
-                          <input type="file" accept="image/jpeg,image/png" capture="environment" className="hidden" onChange={handleSelfieChange} />
-                        </label>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-semibold text-[#1A1A1A] mb-1.5">GST Number <span className="text-[#AAAAAA] font-normal">(optional)</span></label>
-                        <input type="text" value={gstNumber}
-                          onChange={e => setGstNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15))}
-                          placeholder="22ABCDE1234F1Z5"
-                          className="w-full border border-[#E5E5E5] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#FF6B2B] transition-colors text-[#1A1A1A] tracking-wider"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <button onClick={createStore} disabled={!storeName || !storeSlug || !category || !city || !address.trim() || !stateName.trim() || pincode.length !== 6 || panNumber.length !== 10 || !panFile || !selfieFile || loading}
-                    className="w-full bg-[#FF6B2B] text-white py-3.5 rounded-xl font-bold text-sm disabled:opacity-40 hover:bg-[#e55a1f] transition-colors shadow-sm">
-                    {loading ? 'Submitting...' : '🚀 Submit for Approval'}
+                  <button
+                    onClick={submitProfile}
+                    disabled={!profileReady() || loading}
+                    className="w-full bg-[#FF6B2B] text-white py-3.5 rounded-xl font-bold text-sm disabled:opacity-40 hover:bg-[#e55a1f] transition-colors shadow-sm mt-2"
+                  >
+                    {loading ? 'Setting up account...' : 'Register & Continue →'}
                   </button>
                 </div>
               </div>

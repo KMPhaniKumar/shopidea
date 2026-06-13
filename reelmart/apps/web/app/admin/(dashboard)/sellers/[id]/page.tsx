@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import SellerActions from '../SellerActions'
+import PanVerifyButton from './PanVerifyButton'
 
 const supabaseAdmin = () => createSupabaseAdmin(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -35,17 +36,23 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 export default async function SellerDetailPage({ params }: { params: { id: string } }) {
   const { data: store } = await supabaseAdmin()
     .from('stores')
-    .select('*, users:seller_id(name, phone)')
+    .select('*, users:seller_id(name, full_name, phone)')
     .eq('id', params.id)
     .single()
 
   if (!store) notFound()
 
-  const owner = (store as any).users as { name?: string; phone?: string } | null
-  const [panUrl, selfieUrl] = await Promise.all([
+  const owner = (store as any).users as { name?: string; full_name?: string; phone?: string } | null
+  const ownerName = owner?.full_name || owner?.name
+
+  // Signature signed URL (from private bucket)
+  const [panUrl, selfieUrl, signatureUrl] = await Promise.all([
     signed(store.pan_doc_path),
     signed(store.selfie_path),
+    signed((store as any).signature_path ?? null),
   ])
+
+  const panVerified: boolean = (store as any).pan_verified ?? false
 
   return (
     <div className="max-w-3xl">
@@ -73,7 +80,7 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
       <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-4">
         <h2 className="font-bold text-gray-900 mb-4">Business details</h2>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Owner" value={owner?.name} />
+          <Field label="Owner (full name)" value={ownerName} />
           <Field label="Phone" value={owner?.phone} />
           <Field label="Category" value={store.category} />
           <Field label="WhatsApp" value={store.whatsapp_number} />
@@ -82,8 +89,28 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
         </div>
       </div>
 
+      {/* KYC + PAN verification */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-4">
-        <h2 className="font-bold text-gray-900 mb-4">KYC documents</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-bold text-gray-900">KYC documents</h2>
+          <div className="flex items-center gap-3">
+            {panVerified ? (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 px-3 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                PAN Verified
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-yellow-700 bg-yellow-50 px-3 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 inline-block" />
+                PAN Pending
+              </span>
+            )}
+            {!panVerified && (
+              <PanVerifyButton storeId={params.id} />
+            )}
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-4 mb-5">
           <Field label="PAN number" value={store.pan_number} />
           <Field label="GST number" value={store.gst_number} />
@@ -94,7 +121,7 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
             {panUrl ? (
               <a href={panUrl} target="_blank" rel="noreferrer" className="block border border-gray-100 rounded-xl overflow-hidden hover:border-orange-300">
                 <img src={panUrl} alt="PAN card" className="w-full h-44 object-contain bg-gray-50" />
-                <span className="block text-center text-xs text-orange-500 py-1.5">Open full size ↗</span>
+                <span className="block text-center text-xs text-orange-500 py-1.5">Open full size</span>
               </a>
             ) : (
               <div className="h-44 rounded-xl bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-sm">Not uploaded</div>
@@ -105,13 +132,23 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
             {selfieUrl ? (
               <a href={selfieUrl} target="_blank" rel="noreferrer" className="block border border-gray-100 rounded-xl overflow-hidden hover:border-orange-300">
                 <img src={selfieUrl} alt="Shop selfie" className="w-full h-44 object-cover bg-gray-50" />
-                <span className="block text-center text-xs text-orange-500 py-1.5">Open full size ↗</span>
+                <span className="block text-center text-xs text-orange-500 py-1.5">Open full size</span>
               </a>
             ) : (
               <div className="h-44 rounded-xl bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-sm">Not uploaded</div>
             )}
           </div>
         </div>
+
+        {/* Digital signature */}
+        {signatureUrl && (
+          <div className="mt-4">
+            <div className="text-xs text-gray-400 uppercase font-semibold mb-1.5">Digital signature</div>
+            <div className="border border-gray-100 rounded-xl overflow-hidden bg-gray-50 p-4 flex items-center justify-center">
+              <img src={signatureUrl} alt="Signature" className="max-h-24 object-contain" />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-5 flex items-center justify-between">

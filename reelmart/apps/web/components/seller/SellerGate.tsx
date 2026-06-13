@@ -1,43 +1,74 @@
 'use client'
 
-// Gates the seller dashboard by approval status. Until an admin approves the
-// store, the seller only sees a "waiting for approval" screen — not the real
-// dashboard. Lives client-side because the Next.js middleware is currently
-// disabled (Edge/SSR bundling issue); see middleware.ts.
+// Gates the seller dashboard on two layers:
+//   1. Store approval_status (admin must approve the store before the seller
+//      reaches the dashboard at all).
+//   2. seller_verification.features_unlocked (migration 025 view) — until
+//      mobile + PAN + pickup are all verified, the seller only sees the
+//      OnboardingStatus panel; products/orders/payouts/etc are hidden.
+//
+// Lives client-side because the Next.js middleware is currently disabled
+// (Edge/SSR bundling issue); see middleware.ts.
+
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Clock, CheckCircle, XCircle } from 'lucide-react'
+import { OnboardingStatus } from '@/components/seller/OnboardingStatus'
 
-type GateStatus = 'loading' | 'approved' | 'pending' | 'rejected'
+type GateStatus = 'loading' | 'approved' | 'onboarding' | 'pending' | 'rejected'
 
 export function SellerGate({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const router = useRouter()
   const [status, setStatus] = useState<GateStatus>('loading')
 
+  async function check() {
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      // Preserve the dev "skip login" affordance (no session in dev).
+      if (process.env.NODE_ENV === 'development') { setStatus('approved'); return }
+      router.replace('/seller/login')
+      return
+    }
+
+    const { data: store } = await supabase
+      .from('stores')
+      .select('approval_status')
+      .eq('seller_id', user.id)
+      .maybeSingle()
+
+    // No store yet — application not filled. Send them to complete it.
+    if (!store) { router.replace('/seller/register'); return }
+
+    if (store.approval_status === 'rejected') { setStatus('rejected'); return }
+    if (store.approval_status !== 'approved') { setStatus('pending'); return }
+
+    // Store is approved — check onboarding verification
+    const { data: verRow } = await supabase
+      .from('seller_verification')
+      .select('features_unlocked')
+      .eq('seller_id', user.id)
+      .maybeSingle()
+
+    // If the view doesn't exist yet (schema not deployed) fall back to approved
+    if (!verRow) { setStatus('approved'); return }
+
+    if (verRow.features_unlocked) {
+      setStatus('approved')
+    } else {
+      setStatus('onboarding')
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
-    async function check() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        // Preserve the dev "skip login" affordance (no session in dev).
-        if (process.env.NODE_ENV === 'development') { if (!cancelled) setStatus('approved'); return }
-        router.replace('/seller/login')
-        return
-      }
-      const { data: store } = await supabase
-        .from('stores').select('approval_status').eq('seller_id', user.id).maybeSingle()
-      if (cancelled) return
-      // No store yet → application not filled. Send them to complete it.
-      if (!store) { router.replace('/seller/register'); return }
-      if (store.approval_status === 'approved') setStatus('approved')
-      else if (store.approval_status === 'rejected') setStatus('rejected')
-      else setStatus('pending')
+    async function safeCheck() {
+      await check()
     }
-    check()
-    return () => { cancelled = true }
+    safeCheck()
   }, [])
 
   if (status === 'approved') return <>{children}</>
@@ -50,7 +81,21 @@ export function SellerGate({ children }: { children: React.ReactNode }) {
     )
   }
 
-  return <ApprovalScreen status={status} />
+  if (status === 'onboarding') {
+    return (
+      <div className="min-h-screen bg-[#F9F9F9] px-4 py-10">
+        <div className="max-w-lg mx-auto">
+          <div className="flex justify-center mb-6">
+            <Image src="/logo.png" alt="ReelMart" width={180} height={66} className="object-contain" />
+          </div>
+          <h1 className="text-xl font-bold text-[#1A1A1A] mb-5 text-center">Seller Onboarding</h1>
+          <OnboardingStatus onUnlocked={() => setStatus('approved')} />
+        </div>
+      </div>
+    )
+  }
+
+  return <ApprovalScreen status={status as 'pending' | 'rejected'} />
 }
 
 function ApprovalScreen({ status }: { status: 'pending' | 'rejected' }) {
