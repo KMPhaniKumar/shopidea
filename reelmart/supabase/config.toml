@@ -52,8 +52,13 @@ account_sid = ""
 message_service_sid = ""
 auth_token = ""
 
+# Disabled: real auth is the MSG91 OTP widget (admin-service bridge), NOT
+# Supabase Phone. This send_sms hook is the parked alternate path; leaving it
+# enabled with secrets=env(SMS_HOOK_SECRET) made `supabase db push` fail in CI
+# (unset env var), which silently stalled DB migrations at 013. Re-enable +
+# set SMS_HOOK_SECRET only if Supabase Phone auth is ever actually adopted.
 [auth.hook.send_sms]
-enabled = true
+enabled = false
 uri = "https://nysgwdpmpxqmfwelfaxo.functions.supabase.co/send-sms-msg91"
 secrets = "env(SMS_HOOK_SECRET)"
 
