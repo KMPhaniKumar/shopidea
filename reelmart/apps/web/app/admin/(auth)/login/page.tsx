@@ -31,7 +31,7 @@ export default function AdminLoginPage() {
     }
 
     // Cookies are set; hard nav so the SSR admin layout sees the session.
-    window.location.assign('/admin')
+    window.location.assign('/admin/dashboard')
   }
 
   return (
