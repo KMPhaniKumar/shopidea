@@ -128,12 +128,14 @@ export default function SellerRegister() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { toast.error('Session expired'); setLoading(false); return }
-    const { error } = await supabase.from('users').upsert({
-      id: user.id,
-      phone: `+91${phone}`,
-      name: name.trim(),
-      role: 'seller',
-    })
+    // The auth bridge already created this users row (id, phone, role='seller')
+    // via the service role during OTP exchange, so we only set the display name.
+    // UPDATE — not upsert — because `users` has no INSERT RLS policy; the own-row
+    // "Users can update own profile" policy covers this. (An upsert is an INSERT
+    // under the hood and RLS rejects it: "new row violates row-level security".)
+    const { error } = await supabase.from('users')
+      .update({ name: name.trim() })
+      .eq('id', user.id)
     if (error) { toast.error(error.message); setLoading(false); return }
     setStep('store')
     setLoading(false)
