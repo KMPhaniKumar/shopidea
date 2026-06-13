@@ -76,18 +76,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 })
   }
 
-  // --- Guard: only post-approval stores need a change request ---
-  // For stores still in onboarding (pending/rejected), address is part of
-  // the initial registration data — no separate change request is needed.
+  // --- Onboarding stores (pending/rejected): write the address DIRECTLY ---
+  // The store has no approved address yet, so there's nothing to "change" —
+  // we just set the pickup address on the store row so the admin can see it
+  // and verify the pickup before approving. The address columns are revoked
+  // from the authenticated client (migration 024), so this must go through the
+  // service-role client here. (Pickup registration with NimbusPost happens when
+  // the admin approves the store.)
   if (store.approval_status !== 'approved') {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          'Address change requests are only available for approved stores. Your address will be reviewed as part of the store approval.',
-      },
-      { status: 422 }
-    )
+    const { error: setErr } = await supabaseAdmin()
+      .from('stores')
+      .update({
+        address: proposed.address,
+        area: proposed.area,
+        city: proposed.city,
+        state: proposed.state,
+        pincode: proposed.pincode,
+      })
+      .eq('id', storeId)
+    if (setErr) {
+      return NextResponse.json({ success: false, error: setErr.message }, { status: 400 })
+    }
+    return NextResponse.json({ success: true, data: { applied: true, pending: false } })
   }
 
   // --- Upsert via service-role client ---

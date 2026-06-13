@@ -247,13 +247,6 @@ export default function SettingsPage() {
   async function onSubmitAddress(data: any) {
     if (!store) return
 
-    // For non-approved stores (still in onboarding), the address is part of
-    // the store row and saved directly — warn the seller and skip the request flow.
-    if (store.approval_status !== 'approved') {
-      toast.error('Your store is not yet approved. Address changes are saved as part of onboarding.')
-      return
-    }
-
     // Compose line1 (flat/building) and line2 (landmark) into the address field.
     // The backend `proposed` schema only knows `address` — we prepend the manual
     // details so couriers get the full pickup address.
@@ -283,7 +276,11 @@ export default function SettingsPage() {
       toast.error(json.error ?? 'Failed to submit address change')
       return
     }
-    toast.success('Address change submitted — pending admin approval')
+    toast.success(
+      store.approval_status === 'approved'
+        ? 'Address change submitted — pending admin approval'
+        : 'Pickup address saved'
+    )
     load()
   }
 
@@ -582,9 +579,13 @@ export default function SettingsPage() {
                 : 'Submit address change for approval'}
             </button>
           ) : (
-            <p className="text-xs text-[#AAAAAA]">
-              Address will be saved as part of your store registration and reviewed during onboarding.
-            </p>
+            <button
+              type="submit"
+              disabled={savingAddress}
+              className="w-full border border-[#FF6B2B] text-[#FF6B2B] py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-[#FF6B2B]/5 transition-colors"
+            >
+              {savingAddress ? 'Saving...' : 'Save pickup address'}
+            </button>
           )}
         </form>
       </div>
