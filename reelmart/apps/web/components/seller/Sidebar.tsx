@@ -2,27 +2,33 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { X, Lock } from 'lucide-react'
+import { X } from 'lucide-react'
 import {
   LayoutDashboard, Package, ShoppingBag, BarChart2,
   Users, Wallet, Megaphone, Settings,
 } from 'lucide-react'
 
+// write-gated = the seller can VIEW the page but write actions (add product etc.)
+// are blocked inside those pages until features_unlocked.
+// We keep all items visible and clickable; a small orange dot signals "pending" state.
 const ALL_ITEMS = [
-  { icon: LayoutDashboard, label: 'Dashboard',  href: '/seller/dashboard', gated: false },
-  { icon: Package,         label: 'Products',   href: '/seller/products',  gated: true  },
-  { icon: ShoppingBag,     label: 'Orders',     href: '/seller/orders',    gated: true  },
-  { icon: BarChart2,       label: 'Analytics',  href: '/seller/analytics', gated: true  },
-  { icon: Users,           label: 'Customers',  href: '/seller/customers', gated: true  },
-  { icon: Wallet,          label: 'Payouts',    href: '/seller/payouts',   gated: true  },
-  { icon: Megaphone,       label: 'Marketing',  href: '/seller/marketing', gated: true  },
-  { icon: Settings,        label: 'Settings',   href: '/seller/settings',  gated: false },
+  { icon: LayoutDashboard, label: 'Dashboard',  href: '/seller/dashboard', writeGated: false },
+  { icon: Package,         label: 'Products',   href: '/seller/products',  writeGated: true  },
+  { icon: ShoppingBag,     label: 'Orders',     href: '/seller/orders',    writeGated: false },
+  { icon: BarChart2,       label: 'Analytics',  href: '/seller/analytics', writeGated: false },
+  { icon: Users,           label: 'Customers',  href: '/seller/customers', writeGated: false },
+  { icon: Wallet,          label: 'Payouts',    href: '/seller/payouts',   writeGated: false },
+  { icon: Megaphone,       label: 'Marketing',  href: '/seller/marketing', writeGated: false },
+  { icon: Settings,        label: 'Settings',   href: '/seller/settings',  writeGated: false },
 ]
 
 interface SidebarProps {
   open: boolean
   onClose: () => void
-  /** When false, gated nav items are shown dimmed with a lock icon */
+  /**
+   * When false, write-gated nav items show a small pending badge.
+   * All items remain clickable — write blocking happens inside the page.
+   */
   featuresUnlocked?: boolean
 }
 
@@ -60,23 +66,12 @@ export function Sidebar({ open, onClose, featuresUnlocked = true }: SidebarProps
             <X size={18} className="text-gray-500" />
           </button>
         </div>
+
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {ALL_ITEMS.map(({ icon: Icon, label, href, gated }) => {
-            const locked = gated && !featuresUnlocked
+          {ALL_ITEMS.map(({ icon: Icon, label, href, writeGated }) => {
             const active = pathname.startsWith(href)
-            if (locked) {
-              return (
-                <div
-                  key={href}
-                  title="Complete onboarding to unlock"
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-300 cursor-not-allowed select-none"
-                >
-                  <Icon size={18} />
-                  <span className="flex-1">{label}</span>
-                  <Lock size={13} className="text-gray-300 shrink-0" />
-                </div>
-              )
-            }
+            const showPending = writeGated && !featuresUnlocked
+
             return (
               <Link
                 key={href}
@@ -89,7 +84,13 @@ export function Sidebar({ open, onClose, featuresUnlocked = true }: SidebarProps
                 }`}
               >
                 <Icon size={18} />
-                {label}
+                <span className="flex-1">{label}</span>
+                {showPending && (
+                  <span
+                    title="Unlocks after store approval"
+                    className="w-2 h-2 rounded-full bg-primary shrink-0"
+                  />
+                )}
               </Link>
             )
           })}

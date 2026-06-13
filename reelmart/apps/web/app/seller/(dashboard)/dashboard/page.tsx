@@ -3,15 +3,19 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { TrendingUp, IndianRupee, ShoppingBag, Package } from 'lucide-react'
+import { TrendingUp, IndianRupee, ShoppingBag, Package, BadgeCheck } from 'lucide-react'
 import { format, subDays } from 'date-fns'
 import toast, { Toaster } from 'react-hot-toast'
 import { useSellerStore } from '@/store/sellerStore'
+import { useSellerVerification } from '@/components/seller/SellerGate'
+import { OnboardingStatus } from '@/components/seller/OnboardingStatus'
 
 export default function DashboardPage() {
   const supabase = createClient()
   const router = useRouter()
   const { setStore, setPendingOrderCount } = useSellerStore()
+  const { verification } = useSellerVerification()
+  const featuresUnlocked = verification?.features_unlocked ?? true
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<any>(null)
   const [revenueData, setRevenueData] = useState<any[]>([])
@@ -134,7 +138,26 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <Toaster />
-      <h1 className="text-xl font-bold text-[#1A1A1A]">Dashboard</h1>
+
+      {/* Page header — show verified badge when unlocked */}
+      <div className="flex items-center gap-2">
+        <h1 className="text-xl font-bold text-[#1A1A1A]">Dashboard</h1>
+        {featuresUnlocked && (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-success bg-green-50 border border-green-100 rounded-full px-2.5 py-0.5">
+            <BadgeCheck size={13} /> Verified seller
+          </span>
+        )}
+      </div>
+
+      {/* Onboarding card — visible until features_unlocked */}
+      {!featuresUnlocked && (
+        <div>
+          <p className="text-sm text-secondary mb-3">
+            Complete these steps to unlock selling — pending admin approval.
+          </p>
+          <OnboardingStatus />
+        </div>
+      )}
 
       {loading && (
         <div className="bg-white rounded-xl p-8 shadow-sm text-center">

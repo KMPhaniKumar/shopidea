@@ -6,8 +6,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useDropzone } from 'react-dropzone'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { X, Upload } from 'lucide-react'
+import { X, Upload, Lock } from 'lucide-react'
+import { useSellerVerification } from '@/components/seller/SellerGate'
 
 const BUSINESS_CATEGORIES: Record<string, string[]> = {
   'Food & Beverages': ['Cakes & Bakery', 'Tiffin & Meals', 'Sweets & Mithai', 'Beverages', 'Pickles & Snacks', 'Dry Fruits'],
@@ -38,6 +40,8 @@ type FormData = z.infer<typeof schema>
 export default function NewProductPage() {
   const supabase = createClient()
   const router = useRouter()
+  const { verification } = useSellerVerification()
+  const featuresUnlocked = verification?.features_unlocked ?? true
   const [storeId, setStoreId] = useState('')
   const [storeCategory, setStoreCategory] = useState('')
   const [images, setImages] = useState<string[]>([])
@@ -102,6 +106,10 @@ export default function NewProductPage() {
     : Object.values(BUSINESS_CATEGORIES).flat()
 
   async function onSubmit(data: FormData) {
+    if (!featuresUnlocked) {
+      toast.error('Adding products is locked until your store is verified and approved.')
+      return
+    }
     if (!storeId) { toast.error('Store not loaded'); return }
     setSaving(true)
     const { error } = await supabase.from('products').insert({
@@ -126,6 +134,24 @@ export default function NewProductPage() {
     <div className="max-w-2xl">
       <Toaster />
       <h1 className="text-xl font-bold text-[#1A1A1A] mb-6">Add Product</h1>
+
+      {/* Gate notice — shown until store is verified */}
+      {!featuresUnlocked && (
+        <div className="flex items-start gap-3 bg-orange-50 border border-[#FF6B2B]/20 rounded-xl px-4 py-4 mb-6">
+          <Lock size={18} className="text-[#FF6B2B] mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-[#FF6B2B] mb-0.5">Store not yet approved</p>
+            <p className="text-sm text-[#555555] leading-relaxed">
+              You can preview this form, but saving products is not available yet.
+              Complete your verification and wait for admin approval.
+            </p>
+            <Link href="/seller/dashboard" className="inline-block mt-2 text-xs font-medium text-[#FF6B2B] underline">
+              View verification status
+            </Link>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
 
         {/* Photos */}
@@ -226,8 +252,13 @@ export default function NewProductPage() {
 
         <div className="flex gap-3 pb-6">
           <button type="button" onClick={() => router.back()} className="flex-1 border border-[#EEEEEE] py-2.5 rounded-lg text-sm font-medium hover:bg-[#F9F9F9]">Cancel</button>
-          <button type="submit" disabled={saving} className="flex-1 bg-[#FF6B2B] text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50">
-            {saving ? 'Saving...' : 'Add Product'}
+          <button
+            type="submit"
+            disabled={saving || !featuresUnlocked}
+            title={!featuresUnlocked ? 'Available after your store is approved' : undefined}
+            className="flex-1 bg-[#FF6B2B] text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Saving...' : !featuresUnlocked ? 'Store not approved yet' : 'Add Product'}
           </button>
         </div>
       </form>

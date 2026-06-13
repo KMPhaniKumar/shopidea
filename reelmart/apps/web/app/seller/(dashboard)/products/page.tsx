@@ -1,11 +1,12 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Search, Download, Edit2, Trash2, Eye, EyeOff, Package, RefreshCw, Share2, MessageCircle } from 'lucide-react'
+import { Plus, Search, Download, Edit2, Trash2, Eye, EyeOff, Package, RefreshCw, Share2, MessageCircle, Lock } from 'lucide-react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import toast, { Toaster } from 'react-hot-toast'
 import { SITE_URL } from '@/lib/site-url'
+import { useSellerVerification } from '@/components/seller/SellerGate'
 import {
   useReactTable, getCoreRowModel, getSortedRowModel,
   getFilteredRowModel, flexRender, type ColumnDef,
@@ -13,6 +14,8 @@ import {
 
 export default function ProductsPage() {
   const supabase = createClient()
+  const { verification } = useSellerVerification()
+  const featuresUnlocked = verification?.features_unlocked ?? true
   const [products, setProducts] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -197,6 +200,22 @@ export default function ProductsPage() {
   return (
     <div className="space-y-4">
       <Toaster />
+
+      {/* Soft-gate notice */}
+      {!featuresUnlocked && (
+        <div className="flex items-start gap-3 bg-orange-50 border border-[#FF6B2B]/20 rounded-xl px-4 py-3">
+          <Lock size={16} className="text-[#FF6B2B] mt-0.5 shrink-0" />
+          <p className="text-sm text-[#1A1A1A]">
+            <span className="font-semibold text-[#FF6B2B]">Adding products is locked</span>
+            {' '}— available after your store is verified and approved.
+            Complete the onboarding steps on your{' '}
+            <Link href="/seller/dashboard" className="underline text-[#FF6B2B] font-medium">
+              Dashboard
+            </Link>.
+          </p>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-[#1A1A1A]">Products</h1>
         <div className="flex gap-2">
@@ -211,9 +230,21 @@ export default function ProductsPage() {
           <button onClick={exportExcel} className="px-3 py-2 border border-[#EEEEEE] text-sm rounded-lg flex items-center gap-2 hover:bg-[#F9F9F9]">
             <Download size={15} /> Export
           </button>
-          <Link href="/seller/products/new" className="px-4 py-2 bg-[#FF6B2B] text-white text-sm rounded-lg flex items-center gap-2 font-medium hover:bg-[#e55a1f]">
-            <Plus size={15} /> Add Product
-          </Link>
+          {featuresUnlocked ? (
+            <Link
+              href="/seller/products/new"
+              className="px-4 py-2 bg-[#FF6B2B] text-white text-sm rounded-lg flex items-center gap-2 font-medium hover:bg-[#e55a1f]"
+            >
+              <Plus size={15} /> Add Product
+            </Link>
+          ) : (
+            <div
+              title="Available after your store is approved"
+              className="px-4 py-2 bg-[#EEEEEE] text-[#AAAAAA] text-sm rounded-lg flex items-center gap-2 font-medium cursor-not-allowed select-none"
+            >
+              <Lock size={15} /> Add Product
+            </div>
+          )}
         </div>
       </div>
 

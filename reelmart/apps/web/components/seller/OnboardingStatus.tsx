@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { CheckCircle, Clock, Upload, PenLine, Mail, ShieldCheck, MapPin, Phone } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useSellerVerification } from '@/components/seller/SellerGate'
 
 // Shape returned by the seller_verification view (migration 025)
 interface SellerVerification {
@@ -16,7 +17,12 @@ interface SellerVerification {
 }
 
 interface OnboardingStatusProps {
-  /** Called after features_unlocked becomes true (forces a gate re-check) */
+  /**
+   * When provided, the component fetches its own data (standalone / gate mode).
+   * When omitted it reads from SellerVerificationContext (in-dashboard mode).
+   */
+  standalone?: boolean
+  /** Called after features_unlocked becomes true — only used in standalone mode */
   onUnlocked?: () => void
 }
 
@@ -30,21 +36,21 @@ function StatusRow({
   children?: React.ReactNode
 }) {
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-[#F0F0F0] last:border-0">
+    <div className="flex items-start gap-3 py-3 border-b border-border last:border-0">
       {done ? (
-        <CheckCircle size={20} className="text-[#25D366] mt-0.5 shrink-0" />
+        <CheckCircle size={20} className="text-success mt-0.5 shrink-0" />
       ) : (
-        <Clock size={20} className="text-[#FF6B2B] mt-0.5 shrink-0" />
+        <Clock size={20} className="text-primary mt-0.5 shrink-0" />
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-[#1A1A1A]">{label}</span>
+          <span className="text-sm font-semibold text-text">{label}</span>
           {done ? (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-[#25D366]">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-success">
               Verified
             </span>
           ) : (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-[#FF6B2B]">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-primary">
               Pending
             </span>
           )}
@@ -84,40 +90,51 @@ function generateSignatureBlob(fullName: string): Promise<Blob> {
   })
 }
 
-export function OnboardingStatus({ onUnlocked }: OnboardingStatusProps) {
-  const supabase = createClient()
+// ---------------------------------------------------------------------------
+// Inner content — receives resolved verification data
+// ---------------------------------------------------------------------------
 
-  const [v, setV] = useState<SellerVerification | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [fullName, setFullName] = useState<string>('')
+function OnboardingContent({
+  v,
+  onSignatureUploaded,
+}: {
+  v: SellerVerification
+  onSignatureUploaded: () => void
+}) {
+  const supabase = createClient()
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [emailSaving, setEmailSaving] = useState(false)
   const [sigGenerating, setSigGenerating] = useState(false)
   const [sigUploading, setSigUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [localSigDone, setLocalSigDone] = useState(v.signature_present)
+
+  // All 5 checks for the percentage bar
+  const allSteps = [
+    { label: 'Mobile', done: v.phone_verified },
+    { label: 'Email', done: v.email_verified },
+    { label: 'PAN', done: v.pan_verified },
+    { label: 'Pickup address', done: v.pickup_verified },
+    { label: 'Digital signature', done: localSigDone },
+  ]
+  const completedCount = allSteps.filter(s => s.done).length
+  const pct = Math.round((completedCount / allSteps.length) * 100)
 
   useEffect(() => {
-    let cancelled = false
-    async function load() {
+    async function loadUser() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const [verRow, userRow] = await Promise.all([
-        supabase.from('seller_verification').select('*').eq('seller_id', user.id).maybeSingle(),
-        supabase.from('users').select('full_name, email').eq('id', user.id).maybeSingle(),
-      ])
-      if (cancelled) return
-      if (verRow.data) setV(verRow.data as SellerVerification)
-      if (userRow.data?.full_name) setFullName(userRow.data.full_name)
-      if (userRow.data?.email) setEmail(userRow.data.email)
-      setLoading(false)
+      const { data } = await supabase
+        .from('users')
+        .select('full_name, email')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (data?.full_name) setFullName(data.full_name)
+      if (data?.email) setEmail(data.email)
     }
-    load()
-    return () => { cancelled = true }
+    loadUser()
   }, [])
-
-  useEffect(() => {
-    if (v?.features_unlocked) onUnlocked?.()
-  }, [v?.features_unlocked])
 
   async function saveEmail() {
     if (!email.includes('@')) { toast.error('Enter a valid email address'); return }
@@ -138,7 +155,8 @@ export function OnboardingStatus({ onUnlocked }: OnboardingStatusProps) {
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
       toast.success('Signature saved')
-      setV(prev => prev ? { ...prev, signature_present: true } : prev)
+      setLocalSigDone(true)
+      onSignatureUploaded()
     } catch (err: any) {
       toast.error(err?.message ?? 'Upload failed')
     } finally {
@@ -166,6 +184,176 @@ export function OnboardingStatus({ onUnlocked }: OnboardingStatusProps) {
     }
   }
 
+  return (
+    <div className="bg-white rounded-card border border-border shadow-card overflow-hidden">
+      {/* Percentage header */}
+      <div className="px-5 pt-5 pb-4 border-b border-border">
+        <div className="flex items-center justify-between mb-1.5">
+          <h2 className="text-sm font-bold text-text">Store verification</h2>
+          <span className="text-sm font-bold text-primary">{pct}%</span>
+        </div>
+        {/* Overall progress bar */}
+        <div className="h-2 w-full bg-border rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary rounded-full transition-all duration-500"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <p className="text-xs text-secondary mt-2">
+          {completedCount} of {allSteps.length} steps complete.
+          {!v.features_unlocked && ' Complete Mobile, PAN, and Pickup address to unlock selling.'}
+        </p>
+
+        {/* Per-step segment dots */}
+        <div className="flex gap-1.5 mt-3">
+          {allSteps.map(s => (
+            <div
+              key={s.label}
+              title={s.label}
+              className={`h-1.5 flex-1 rounded-full transition-colors ${s.done ? 'bg-success' : 'bg-border'}`}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Check rows */}
+      <div className="px-5 divide-y divide-border">
+        {/* Mobile */}
+        <StatusRow label="Mobile number" done={v.phone_verified} />
+
+        {/* Email */}
+        <StatusRow label="Email address" done={v.email_verified}>
+          {!v.email_verified && (
+            <>
+              <div className="flex gap-2 mt-1">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="flex-1 border border-border rounded-btn px-3 py-2 text-sm outline-none focus:border-primary transition-colors text-text"
+                />
+                <button
+                  onClick={saveEmail}
+                  disabled={emailSaving || !email.includes('@')}
+                  className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-btn disabled:opacity-40 hover:bg-[#e55a1f] transition-colors"
+                >
+                  {emailSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+              {email && (
+                <p className="text-xs text-muted mt-1.5">
+                  Email verification will be available in the next update.
+                </p>
+              )}
+            </>
+          )}
+        </StatusRow>
+
+        {/* PAN */}
+        <StatusRow label="PAN number" done={v.pan_verified}>
+          {!v.pan_verified && (
+            <p className="text-xs text-secondary mt-1">
+              Our team reviews your PAN during KYC. You will be notified once verified.
+            </p>
+          )}
+        </StatusRow>
+
+        {/* Pickup */}
+        <StatusRow label="Pickup address" done={v.pickup_verified}>
+          {!v.pickup_verified && (
+            <p className="text-xs text-secondary mt-1">
+              Register a pickup address in{' '}
+              <a href="/seller/settings" className="text-primary hover:underline font-medium">
+                Settings
+              </a>{' '}
+              and it will be verified by our courier partner.
+            </p>
+          )}
+        </StatusRow>
+
+        {/* Signature */}
+        <StatusRow label="Digital signature" done={localSigDone}>
+          {!localSigDone && (
+            <>
+              <div className="flex flex-wrap gap-2 mt-1">
+                <button
+                  onClick={handleAutoGenerate}
+                  disabled={sigGenerating || sigUploading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-primary text-xs font-semibold rounded-btn border border-primary/30 hover:bg-orange-100 transition-colors disabled:opacity-40"
+                >
+                  <PenLine size={13} />
+                  {sigGenerating ? 'Generating...' : 'Auto-generate'}
+                </button>
+                <label className={`flex items-center gap-1.5 px-3 py-1.5 bg-surface text-secondary text-xs font-semibold rounded-btn border border-border hover:border-primary transition-colors cursor-pointer ${sigUploading ? 'opacity-40 pointer-events-none' : ''}`}>
+                  <Upload size={13} />
+                  {sigUploading ? 'Uploading...' : 'Upload image'}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-muted mt-1.5">
+                Non-blocking — you can complete this anytime.
+              </p>
+            </>
+          )}
+        </StatusRow>
+      </div>
+
+      {/* Locked-features notice at bottom when not unlocked */}
+      {!v.features_unlocked && (
+        <div className="mx-5 mb-5 mt-4 bg-orange-50 border border-primary/20 rounded-card px-4 py-3">
+          <p className="text-xs font-semibold text-primary mb-0.5">Selling features locked</p>
+          <p className="text-xs text-secondary leading-relaxed">
+            Adding products will unlock once Mobile, PAN, and Pickup address are verified
+            and admin approval is complete.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// OnboardingStatus — context-aware wrapper
+// ---------------------------------------------------------------------------
+
+export function OnboardingStatus({ standalone = false, onUnlocked }: OnboardingStatusProps) {
+  const ctx = useSellerVerification()
+  const supabase = createClient()
+
+  // Standalone mode: fetch own data (used in dev/testing or gate-level use)
+  const [standaloneV, setStandaloneV] = useState<SellerVerification | null>(null)
+  const [standaloneLoading, setStandaloneLoading] = useState(true)
+
+  useEffect(() => {
+    if (!standalone) return
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setStandaloneLoading(false); return }
+      const { data } = await supabase
+        .from('seller_verification')
+        .select('*')
+        .eq('seller_id', user.id)
+        .maybeSingle()
+      setStandaloneV(data as SellerVerification | null)
+      setStandaloneLoading(false)
+    }
+    load()
+  }, [standalone])
+
+  const v = standalone ? standaloneV : ctx.verification
+  const loading = standalone ? standaloneLoading : ctx.verificationLoading
+
+  useEffect(() => {
+    if (standalone && v?.features_unlocked) onUnlocked?.()
+  }, [standalone, v?.features_unlocked])
+
   if (loading) {
     return (
       <div className="bg-white rounded-card border border-border p-6 shadow-card text-center">
@@ -182,137 +370,10 @@ export function OnboardingStatus({ onUnlocked }: OnboardingStatusProps) {
     )
   }
 
-  const steps = [
-    { key: 'phone', label: 'Mobile number', icon: Phone, done: v.phone_verified },
-    { key: 'email', label: 'Email address', icon: Mail, done: v.email_verified },
-    { key: 'pan', label: 'PAN number', icon: ShieldCheck, done: v.pan_verified },
-    { key: 'pickup', label: 'Pickup address', icon: MapPin, done: v.pickup_verified },
-    { key: 'signature', label: 'Digital signature', icon: PenLine, done: v.signature_present },
-  ]
-
-  const gatingSteps = [
-    { label: 'Mobile number', done: v.phone_verified },
-    { label: 'PAN number', done: v.pan_verified },
-    { label: 'Pickup address', done: v.pickup_verified },
-  ]
-
   return (
-    <div className="space-y-4">
-      {/* Progress header */}
-      <div className="bg-white rounded-card border border-border p-5 shadow-card">
-        <h2 className="text-base font-bold text-[#1A1A1A] mb-1">Complete your verification</h2>
-        <p className="text-sm text-secondary mb-4">
-          Complete Mobile, PAN, and Pickup address to unlock your full seller dashboard.
-        </p>
-
-        {/* Gating progress bar */}
-        <div className="flex gap-2 mb-4">
-          {gatingSteps.map(s => (
-            <div
-              key={s.label}
-              className={`h-1.5 flex-1 rounded-full transition-colors ${s.done ? 'bg-[#25D366]' : 'bg-[#EEEEEE]'}`}
-              title={s.label}
-            />
-          ))}
-        </div>
-
-        <div className="divide-y divide-[#F0F0F0]">
-          {/* Mobile */}
-          <StatusRow label="Mobile number" done={v.phone_verified} />
-
-          {/* Email */}
-          <StatusRow label="Email address" done={v.email_verified}>
-            {!v.email_verified && (
-              <div className="flex gap-2 mt-1">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="flex-1 border border-border rounded-btn px-3 py-2 text-sm outline-none focus:border-primary transition-colors text-[#1A1A1A]"
-                />
-                <button
-                  onClick={saveEmail}
-                  disabled={emailSaving || !email.includes('@')}
-                  className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-btn disabled:opacity-40 hover:bg-[#e55a1f] transition-colors"
-                >
-                  {emailSaving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            )}
-            {!v.email_verified && email && (
-              <p className="text-xs text-muted mt-1.5">
-                Email verification will be available in the next update.
-              </p>
-            )}
-          </StatusRow>
-
-          {/* PAN */}
-          <StatusRow label="PAN number" done={v.pan_verified}>
-            {!v.pan_verified && (
-              <p className="text-xs text-secondary mt-1">
-                Our team reviews your PAN during KYC. You'll be notified once verified.
-              </p>
-            )}
-          </StatusRow>
-
-          {/* Pickup */}
-          <StatusRow label="Pickup address" done={v.pickup_verified}>
-            {!v.pickup_verified && (
-              <p className="text-xs text-secondary mt-1">
-                Register a pickup address in{' '}
-                <a href="/seller/settings" className="text-primary hover:underline font-medium">
-                  Settings
-                </a>{' '}
-                and it will be verified by our courier partner.
-              </p>
-            )}
-          </StatusRow>
-
-          {/* Signature */}
-          <StatusRow label="Digital signature" done={v.signature_present}>
-            {!v.signature_present && (
-              <div className="flex flex-wrap gap-2 mt-1">
-                <button
-                  onClick={handleAutoGenerate}
-                  disabled={sigGenerating || sigUploading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-primary text-xs font-semibold rounded-btn border border-primary/30 hover:bg-orange-100 transition-colors disabled:opacity-40"
-                >
-                  <PenLine size={13} />
-                  {sigGenerating ? 'Generating...' : 'Auto-generate'}
-                </button>
-                <label className={`flex items-center gap-1.5 px-3 py-1.5 bg-[#F9F9F9] text-secondary text-xs font-semibold rounded-btn border border-border hover:border-primary transition-colors cursor-pointer ${sigUploading ? 'opacity-40 pointer-events-none' : ''}`}>
-                  <Upload size={13} />
-                  {sigUploading ? 'Uploading...' : 'Upload image'}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                </label>
-              </div>
-            )}
-            {!v.signature_present && (
-              <p className="text-xs text-muted mt-1.5">
-                Non-blocking — you can complete this anytime.
-              </p>
-            )}
-          </StatusRow>
-        </div>
-      </div>
-
-      {/* Locked features notice */}
-      {!v.features_unlocked && (
-        <div className="bg-orange-50 border border-[#FF6B2B]/20 rounded-card px-5 py-4">
-          <p className="text-sm font-semibold text-[#FF6B2B] mb-1">Dashboard locked</p>
-          <p className="text-xs text-secondary leading-relaxed">
-            Products, orders, payouts and other features will unlock once your Mobile,
-            PAN, and Pickup address are verified.
-          </p>
-        </div>
-      )}
-    </div>
+    <OnboardingContent
+      v={v}
+      onSignatureUploaded={standalone ? () => onUnlocked?.() : ctx.refreshVerification}
+    />
   )
 }
