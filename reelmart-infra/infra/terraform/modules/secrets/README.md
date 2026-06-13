@@ -8,10 +8,10 @@ Filled in during **Phase 1**.
 - `reelmart/<env>/supabase`    — `{ url, anon_key, service_key }`
 - `reelmart/<env>/razorpay`    — `{ key_id, key_secret, webhook_secret }`
 - `reelmart/<env>/gupshup`     — `{ api_key, sender_number, app_name }`
-- `reelmart/<env>/twilio`      — `{ sid, token, phone_number }`
-- `reelmart/<env>/shiprocket`  — `{ email, password }`
+- `reelmart/<env>/nimbus`      — `{ email, password, auth_token }`  (NimbusPost courier; auth_token optional)
 - `reelmart/<env>/firebase`    — `{ service_account_json }`
 - `reelmart/<env>/jwt`         — `{ secret }`
+- `reelmart/<env>/msg91`       — `{ widget_authkey, auth_bridge_secret }`
 
 ## Inputs (planned)
 - `environment` (string)

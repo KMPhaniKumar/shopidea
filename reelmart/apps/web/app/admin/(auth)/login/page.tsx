@@ -2,14 +2,9 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import TestLoginButtons from '@/components/TestLoginButtons'
-
-const IS_DEV = process.env.NODE_ENV === 'development'
 
 export default function AdminLoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -46,10 +41,6 @@ export default function AdminLoginPage() {
     // auth cookies — so getUser() returns null and bounces back to login.
     // A full document request includes the cookies, so the server sees the session.
     window.location.assign('/admin')
-  }
-
-  function devLogin() {
-    router.push('/admin/dashboard')
   }
 
   return (
@@ -124,19 +115,7 @@ export default function AdminLoginPage() {
               {loading ? 'Signing in...' : 'Sign In →'}
             </button>
 
-            {IS_DEV && (
-              <button
-                type="button"
-                onClick={devLogin}
-                disabled={loading}
-                className="w-full border border-dashed border-[#FF6B2B] text-[#FF6B2B] py-3 rounded-xl font-semibold text-sm hover:bg-orange-50 transition-colors disabled:opacity-40"
-              >
-                Dev Login (skip auth)
-              </button>
-            )}
           </form>
-
-          <TestLoginButtons roles={['admin']} redirectTo={{ admin: '/admin' }} />
         </div>
 
         <p className="mt-8 text-xs text-[#CCCCCC] text-center">

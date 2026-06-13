@@ -24,14 +24,6 @@ const MSG91_VERIFY_URL = 'https://control.msg91.com/api/v5/widget/verifyAccessTo
 const MSG91_AUTHKEY = process.env.MSG91_WIDGET_AUTHKEY ?? ''
 const AUTH_BRIDGE_SECRET = process.env.AUTH_BRIDGE_SECRET ?? ''
 
-// Fixed test accounts for the OTP-less test login. Only reachable when
-// ALLOW_TEST_LOGIN === 'true' (set on the dev environment ONLY, never prod).
-const TEST_ACCOUNTS: Record<'buyer' | 'seller' | 'admin', string> = {
-  buyer: '+919999900001',
-  seller: '+919999900002',
-  admin: '+919999900003',
-}
-
 // Server-side origin allow-list — defence in depth on top of the Express
 // cors() middleware (which the browser enforces, but curl/Postman bypass).
 // MSG91 themselves don't whitelist by domain on this account, so this is
@@ -194,83 +186,5 @@ authRouter.post('/check-phone', requireAllowedOrigin, async (req, res) => {
   res.json({ success: true, data: { registered: Boolean(data) } })
 })
 
-// POST /api/admin/auth/test-login — OTP-LESS test login. DISABLED unless
-// ALLOW_TEST_LOGIN === 'true' (set only on dev). Mints a Supabase session for a
-// fixed, allow-listed test account per role — never an arbitrary phone — so even
-// with the flag on, the blast radius is three known throwaway accounts.
-// Body: { role: 'buyer' | 'seller' | 'admin' }
-authRouter.post('/test-login', requireAllowedOrigin, async (req, res) => {
-  // Enabled explicitly via ALLOW_TEST_LOGIN, or implicitly on the dev environment
-  // (SITE_URL points at dev/localhost). Production's SITE_URL is reelmart.in, so
-  // this stays off there.
-  const site = process.env.SITE_URL ?? ''
-  const testLoginEnabled =
-    process.env.ALLOW_TEST_LOGIN === 'true' ||
-    site.includes('dev.reelmart.in') ||
-    site.includes('localhost')
-  if (!testLoginEnabled) {
-    return res.status(403).json({ success: false, error: 'test-login-disabled' })
-  }
-
-  const schema = z.object({ role: z.enum(['buyer', 'seller', 'admin']) })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) {
-    return res.status(400).json({ success: false, error: parsed.error.message })
-  }
-
-  const role = parsed.data.role
-  const phone = TEST_ACCOUNTS[role]
-  const password = derivePassword(phone)
-  const email = syntheticEmail(phone)
-
-  try {
-    let { data: existing } = await supabaseAdmin
-      .from('users').select('id').eq('phone', phone).maybeSingle()
-
-    if (!existing) {
-      const { data, error } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        phone,
-        email_confirm: true,
-        phone_confirm: true,
-        user_metadata: { role, signup_via: 'test-login' },
-      })
-      if (error || !data.user) {
-        return res.status(500).json({ success: false, error: error?.message ?? 'auth-create-failed' })
-      }
-      existing = { id: data.user.id }
-    } else {
-      await supabaseAdmin.auth.admin.updateUserById(existing.id, { password })
-    }
-
-    // Guarantee the test account carries the right role (+ admin flag for admin).
-    await supabaseAdmin.from('users').upsert(
-      { id: existing.id, phone, role, is_admin: role === 'admin' },
-      { onConflict: 'id' },
-    )
-
-    const { data: signin, error: signinErr } = await supabaseAdmin.auth
-      .signInWithPassword({ email, password })
-    if (signinErr || !signin.session) {
-      return res.status(500).json({ success: false, error: signinErr?.message ?? 'session-mint-failed' })
-    }
-
-    res.json({
-      success: true,
-      data: {
-        userId: existing.id,
-        role,
-        session: {
-          access_token: signin.session.access_token,
-          refresh_token: signin.session.refresh_token,
-          expires_in: signin.session.expires_in,
-          expires_at: signin.session.expires_at,
-          token_type: signin.session.token_type,
-        },
-      },
-    })
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message ?? 'test-login-failed' })
-  }
-})
+// NOTE: the OTP-less /test-login route was removed (security: it could mint an
+// admin session to anyone reaching the dev API). Use real MSG91 OTP login.

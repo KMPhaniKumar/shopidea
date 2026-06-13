@@ -5,11 +5,6 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
 import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, checkPhoneRegistered, preloadOtpWidget, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
-import TestLoginButtons from '@/components/TestLoginButtons'
-
-const DEV_PHONE = '9999999999'
-const IS_DEV = process.env.NODE_ENV === 'development'
-
 export default function SellerLogin() {
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
@@ -72,10 +67,6 @@ export default function SellerLogin() {
     } finally {
       setLoading(false)
     }
-  }
-
-  function devSkipLogin() {
-    router.push('/seller/dashboard')
   }
 
 return (
@@ -146,16 +137,6 @@ return (
                 {loading ? 'Sending OTP...' : 'Send OTP →'}
               </button>
 
-              {IS_DEV && (
-                <button
-                  type="button"
-                  onClick={devSkipLogin}
-                  className="w-full border border-dashed border-[#FF6B2B] text-[#FF6B2B] py-3 rounded-xl font-semibold text-sm hover:bg-orange-50 transition-colors"
-                >
-                  🛠 Dev Login (skip OTP)
-                </button>
-              )}
-
               <p className="text-center text-xs text-[#AAAAAA] pt-2">
                 New seller?{' '}
                 <a href="/seller/register" className="text-[#FF6B2B] font-medium hover:underline">Register here</a>
@@ -166,15 +147,6 @@ return (
               <div>
                 <label className="block text-sm font-semibold text-[#1A1A1A] mb-2">Enter OTP</label>
                 <p className="text-xs text-[#888888] mb-3">Sent to +91 {phone}</p>
-                {IS_DEV && (
-                  <button
-                    type="button"
-                    onClick={() => setOtp('123456')}
-                    className="w-full bg-[#FEF3C7] border-l-4 border-[#F59E0B] rounded-lg px-3 py-2 text-xs font-semibold text-[#92400E] text-left hover:bg-[#FDE68A] transition-colors mb-3"
-                  >
-                    🛠 DEV — Click to fill OTP 123456
-                  </button>
-                )}
                 <input
                   type="text"
                   value={otp}
@@ -211,7 +183,6 @@ return (
             </div>
           )}
 
-          <TestLoginButtons roles={['seller']} redirectTo={{ seller: '/seller/dashboard' }} />
         </div>
 
         <p className="mt-8 text-xs text-[#CCCCCC] text-center">

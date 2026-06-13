@@ -72,21 +72,22 @@ locals {
     { name = "RAZORPAY_WEBHOOK_SECRET", valueFrom = "${local.secret_arns["razorpay"]}:webhook_secret::" },
   ]
 
-  shiprocket_secrets = [
-    { name = "SHIPROCKET_EMAIL", valueFrom = "${local.secret_arns["shiprocket"]}:email::" },
-    { name = "SHIPROCKET_PASSWORD", valueFrom = "${local.secret_arns["shiprocket"]}:password::" },
+  # NimbusPost is the courier (Shiprocket was never used). Login uses email +
+  # password (delivery-service exchanges them for a JWT); auth_token is an
+  # optional static-token override for testing. Values set out-of-band in
+  # Secrets Manager (reelmart/dev/nimbus) — keep the JSON keys present (even as
+  # empty strings) so ECS can resolve them; empty values keep the service in
+  # safe stub mode until real creds are added.
+  nimbus_secrets = [
+    { name = "NIMBUS_EMAIL", valueFrom = "${local.secret_arns["nimbus"]}:email::" },
+    { name = "NIMBUS_PASSWORD", valueFrom = "${local.secret_arns["nimbus"]}:password::" },
+    { name = "NIMBUS_AUTH_TOKEN", valueFrom = "${local.secret_arns["nimbus"]}:auth_token::" },
   ]
 
   gupshup_secrets = [
     { name = "GUPSHUP_API_KEY", valueFrom = "${local.secret_arns["gupshup"]}:api_key::" },
     { name = "GUPSHUP_SENDER_NUMBER", valueFrom = "${local.secret_arns["gupshup"]}:sender_number::" },
     { name = "GUPSHUP_APP_NAME", valueFrom = "${local.secret_arns["gupshup"]}:app_name::" },
-  ]
-
-  twilio_secrets = [
-    { name = "TWILIO_SID", valueFrom = "${local.secret_arns["twilio"]}:sid::" },
-    { name = "TWILIO_TOKEN", valueFrom = "${local.secret_arns["twilio"]}:token::" },
-    { name = "TWILIO_PHONE_NUMBER", valueFrom = "${local.secret_arns["twilio"]}:phone_number::" },
   ]
 
   firebase_secrets = [
@@ -116,17 +117,17 @@ locals {
     }
     delivery = {
       max_capacity  = 2
-      extra_secrets = local.shiprocket_secrets
-      extra_env     = {}
+      extra_secrets = local.nimbus_secrets
+      extra_env     = { NIMBUS_WAREHOUSE_NAME = "Primary" }
     }
     notification = {
       max_capacity  = 2
-      extra_secrets = concat(local.twilio_secrets, local.firebase_secrets)
+      extra_secrets = local.firebase_secrets
       extra_env     = {}
     }
     whatsapp = {
       max_capacity  = 2
-      extra_secrets = concat(local.gupshup_secrets, local.twilio_secrets)
+      extra_secrets = local.gupshup_secrets
       extra_env     = {}
     }
     payout = {
@@ -150,9 +151,6 @@ locals {
       extra_env = {
         AUTH_BRIDGE_ALLOWED_ORIGINS = "http://localhost:3000,https://dev.reelmart.in,https://reelmart.in,https://shopidea.vercel.app"
         SITE_URL                    = "https://dev.reelmart.in"
-        # DEV ONLY — enables the OTP-less /api/admin/auth/test-login endpoint.
-        # NEVER set this in a production environment.
-        ALLOW_TEST_LOGIN = "true"
       }
     }
   }
