@@ -8,7 +8,6 @@ import { Copy, Download, ExternalLink, Upload, Clock, XCircle } from 'lucide-rea
 import debounce from 'lodash/debounce'
 import { SITE_URL, SITE_HOST } from '@/lib/site-url'
 import { uploadKycFile, isValidPan, isValidGst } from '@/lib/kyc'
-import { AddressSearch } from '@/components/AddressSearch'
 
 // Safe (non-KYC) columns accessible to the authenticated role after migration
 // 024. KYC columns (pan_number, gst_number, pan_doc_path, selfie_path,
@@ -519,17 +518,8 @@ export default function SettingsPage() {
         )}
 
         <form onSubmit={handleSubmitAddr(onSubmitAddress)} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Find your shop on the map</label>
-            <AddressSearch onPick={d => {
-              if (d.area) setAddrValue('area', d.area)
-              if (d.city) setAddrValue('city', d.city)
-              if (d.state) setAddrValue('state', d.state)
-              if (d.pincode) setAddrValue('pincode', d.pincode)
-            }} />
-          </div>
-
-          {/* Manual address details — entered alongside the map search */}
+          {/* Manual address entry. (Map search is added back once the Google
+              Maps key is configured.) */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Flat / House / Building No. <span className="text-[#AAAAAA] font-normal">(optional)</span>
@@ -553,11 +543,11 @@ export default function SettingsPage() {
 
           <div>
             <label className="block text-sm font-medium mb-1">
-              Full Address <span className="text-[#AAAAAA] font-normal">(auto-filled or type manually)</span>
+              Street / Road Address
             </label>
-            <textarea {...registerAddr('address')} rows={2} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] resize-none" placeholder="Shop #12, Main Market, Near..." />
+            <textarea {...registerAddr('address')} rows={2} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] resize-none" placeholder="Main Market Road, Sector 5" />
             <p className="text-xs text-[#AAAAAA] mt-0.5">
-              Your flat/building and landmark above will be prepended to this when submitted.
+              Your flat/building and landmark above are added to this when submitted.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
