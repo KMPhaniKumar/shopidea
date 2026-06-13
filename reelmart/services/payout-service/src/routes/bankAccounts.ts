@@ -5,9 +5,9 @@ import { requireAuth } from '../middleware/auth'
 
 export const bankAccountsRouter = Router()
 
-// GET /api/payouts/bank-account?sellerId=
+// GET /api/payouts/bank-account — returns the authenticated seller's bank account only
 bankAccountsRouter.get('/bank-account', requireAuth, async (req, res) => {
-  const sellerId = (req.query.sellerId as string) ?? (req as any).user.id
+  const sellerId = (req as any).user.id
   const { data } = await supabaseAdmin.from('bank_accounts').select('*').eq('seller_id', sellerId).maybeSingle()
   res.json({ success: true, data })
 })

@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { supabaseAdmin } from '../lib/supabase'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, AuthRequest } from '../middleware/auth'
 
 export const returnsRouter = Router()
 
@@ -50,19 +50,59 @@ returnsRouter.post('/', requireAuth, async (req, res) => {
   res.status(201).json({ success: true, data })
 })
 
+// GET /api/returns — list returns
+// MED-4 fix: scope list to the calling user — buyers see only their own returns;
+// sellers may filter by storeId but only for a store they own.
 returnsRouter.get('/', requireAuth, async (req, res) => {
-  const { storeId, buyerId, status } = req.query
-  let query = supabaseAdmin.from('returns').select('*, orders(order_number, total_amount)').order('created_at', { ascending: false }).limit(50)
-  if (storeId) query = query.eq('store_id', storeId as string)
-  if (buyerId) query = query.eq('buyer_id', buyerId as string)
+  const authReq = req as AuthRequest
+  const userId = authReq.user!.id
+  const { storeId, status } = req.query
+
+  let query = supabaseAdmin
+    .from('returns')
+    .select('*, orders(order_number, total_amount)')
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (storeId) {
+    // Seller path — verify they own the store before filtering by it
+    const { data: store } = await supabaseAdmin
+      .from('stores')
+      .select('id')
+      .eq('id', storeId as string)
+      .eq('seller_id', userId)
+      .single()
+    if (!store) return res.status(403).json({ success: false, error: 'Forbidden' })
+    query = query.eq('store_id', storeId as string)
+  } else {
+    // Default: buyer view — only their returns
+    query = query.eq('buyer_id', userId)
+  }
+
   if (status) query = query.eq('status', status as string)
-  const { data } = await query
+
+  const { data, error } = await query
+  if (error) return res.status(500).json({ success: false, error: error.message })
   res.json({ success: true, data: data ?? [] })
 })
 
+// GET /api/returns/:id — single return
+// MED-4 fix: post-fetch ownership check — caller must be the buyer OR own the store
 returnsRouter.get('/:id', requireAuth, async (req, res) => {
-  const { data } = await supabaseAdmin.from('returns').select('*, orders(order_number, total_amount, payment_id)').eq('id', req.params.id).single()
-  if (!data) return res.status(404).json({ success: false, error: 'Return not found' })
+  const authReq = req as AuthRequest
+  const userId = authReq.user!.id
+
+  const { data, error } = await supabaseAdmin
+    .from('returns')
+    .select('*, orders(order_number, total_amount, stores(seller_id))')
+    .eq('id', req.params.id)
+    .single()
+  if (error || !data) return res.status(404).json({ success: false, error: 'Return not found' })
+
+  const isBuyer = data.buyer_id === userId
+  const isSeller = (data as any).orders?.stores?.seller_id === userId
+  if (!isBuyer && !isSeller) return res.status(403).json({ success: false, error: 'Forbidden' })
+
   res.json({ success: true, data })
 })
 

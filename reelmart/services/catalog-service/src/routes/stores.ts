@@ -33,11 +33,14 @@ storesRouter.get('/stores', async (req, res) => {
   res.json({ success: true, data: data ?? [] })
 })
 
+// Safe public columns — never include KYC/PII fields (pan_number, aadhaar_url, gst_number, selfie_path, pan_doc_path, bank_*)
+const STORE_PUBLIC_COLUMNS = 'id, store_name, store_slug, category, logo_url, description, city, area, pincode, whatsapp_number, instagram_handle, rating_avg, total_reviews, total_orders, is_verified, is_active, created_at'
+
 // GET /api/catalog/stores/:slug — public
 storesRouter.get('/stores/:slug', async (req, res) => {
   const { data } = await supabaseAdmin
     .from('stores')
-    .select('*')
+    .select(STORE_PUBLIC_COLUMNS)
     .eq('store_slug', req.params.slug)
     .single()
   if (!data) return res.status(404).json({ success: false, error: 'Store not found' })

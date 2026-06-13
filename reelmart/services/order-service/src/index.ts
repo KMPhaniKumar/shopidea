@@ -10,7 +10,8 @@ const PORT = process.env.PORT || 3000
 
 app.use(helmet())
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean)
-app.use(cors({ origin: !allowedOrigins || allowedOrigins.includes('*') ? true : allowedOrigins }))
+// MED-3 fix: deny-by-default when ALLOWED_ORIGINS is unset; never allow-all wildcard
+app.use(cors({ origin: allowedOrigins?.length ? (allowedOrigins.includes('*') ? true : allowedOrigins) : false }))
 app.use(express.json())
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'order-service' }))

@@ -10,6 +10,16 @@ const PLATFORM_FEE_PCT = 0.05
 payoutsRouter.get('/', requireAuth, async (req, res) => {
   const { storeId } = req.query
   if (!storeId) return res.status(400).json({ success: false, error: 'storeId required' })
+
+  // Verify the caller owns this store
+  const { data: storeOwner } = await supabaseAdmin
+    .from('stores')
+    .select('id')
+    .eq('id', storeId as string)
+    .eq('seller_id', (req as any).user.id)
+    .single()
+  if (!storeOwner) return res.status(403).json({ success: false, error: 'Forbidden', code: 'STORE_OWNERSHIP_REQUIRED' })
+
   const { data } = await supabaseAdmin.from('payouts').select('*').eq('store_id', storeId as string).order('created_at', { ascending: false }).limit(20)
   res.json({ success: true, data: data ?? [] })
 })
@@ -18,6 +28,15 @@ payoutsRouter.get('/', requireAuth, async (req, res) => {
 payoutsRouter.get('/summary', requireAuth, async (req, res) => {
   const { storeId } = req.query
   if (!storeId) return res.status(400).json({ success: false, error: 'storeId required' })
+
+  // Verify the caller owns this store
+  const { data: storeOwner } = await supabaseAdmin
+    .from('stores')
+    .select('id')
+    .eq('id', storeId as string)
+    .eq('seller_id', (req as any).user.id)
+    .single()
+  if (!storeOwner) return res.status(403).json({ success: false, error: 'Forbidden', code: 'STORE_OWNERSHIP_REQUIRED' })
 
   const [ordersRes, payoutsRes] = await Promise.all([
     supabaseAdmin.from('orders').select('total_amount, delivery_fee').eq('store_id', storeId as string).eq('payment_status', 'paid'),

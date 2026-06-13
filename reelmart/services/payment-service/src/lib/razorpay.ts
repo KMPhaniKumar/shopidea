@@ -16,12 +16,18 @@ export async function createRazorpayOrder(amount: number, receipt: string): Prom
 
 export function verifySignature(orderId: string, paymentId: string, signature: string): boolean {
   const expected = crypto.createHmac('sha256', KEY_SECRET).update(`${orderId}|${paymentId}`).digest('hex')
-  return expected === signature
+  const expectedBuf = Buffer.from(expected, 'hex')
+  const actualBuf = Buffer.from(signature, 'hex')
+  if (expectedBuf.length !== actualBuf.length) return false
+  return crypto.timingSafeEqual(expectedBuf, actualBuf)
 }
 
 export function verifyWebhookSignature(rawBody: string, signature: string): boolean {
   const expected = crypto.createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET!).update(rawBody).digest('hex')
-  return expected === signature
+  const expectedBuf = Buffer.from(expected, 'hex')
+  const actualBuf = Buffer.from(signature, 'hex')
+  if (expectedBuf.length !== actualBuf.length) return false
+  return crypto.timingSafeEqual(expectedBuf, actualBuf)
 }
 
 export async function createRefund(paymentId: string, amountPaise: number): Promise<any> {

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { supabaseAdmin } from '../lib/supabase'
+import { requireAuth } from '../middleware/auth'
 import { sendPush } from '../lib/fcm'
 import { sendWhatsApp } from '../lib/gupshup'
 import { sendSMS } from '../lib/sms'
@@ -27,11 +28,16 @@ function requireInternalKey(req: any, res: any, next: any) {
   next()
 }
 
-// POST /api/notifications/register-token — called by mobile apps on login (public)
-notificationsRouter.post('/register-token', async (req, res) => {
+// POST /api/notifications/register-token — authenticated; caller may only register a token for themselves
+notificationsRouter.post('/register-token', requireAuth, async (req, res) => {
   const schema = z.object({ userId: z.string().uuid(), token: z.string(), platform: z.enum(['ios', 'android']) })
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message })
+
+  // Prevent registering a token for a different user
+  if (parsed.data.userId !== (req as any).user.id) {
+    return res.status(403).json({ success: false, error: 'Forbidden', code: 'USER_ID_MISMATCH' })
+  }
 
   await supabaseAdmin.from('fcm_tokens').upsert(
     { user_id: parsed.data.userId, token: parsed.data.token, platform: parsed.data.platform },

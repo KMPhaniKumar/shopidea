@@ -7,9 +7,29 @@ export const couponsRouter = Router()
 
 couponsRouter.get('/', requireAuth, async (req, res) => {
   const { storeId } = req.query
-  let query = supabaseAdmin.from('coupons').select('*').order('created_at', { ascending: false })
-  if (storeId) query = query.eq('store_id', storeId as string)
-  const { data } = await query
+
+  // storeId is required — scopes the response to a single store and allows an
+  // ownership check consistent with how POST / and DELETE /:id work.
+  if (!storeId || typeof storeId !== 'string') {
+    return res.status(400).json({ success: false, error: 'storeId query parameter is required', code: 'STORE_ID_REQUIRED' })
+  }
+
+  // Verify the caller owns this store (same pattern as POST /)
+  const { data: store } = await supabaseAdmin
+    .from('stores')
+    .select('id')
+    .eq('id', storeId)
+    .eq('seller_id', (req as any).user.id)
+    .single()
+  if (!store) return res.status(403).json({ success: false, error: 'Forbidden', code: 'STORE_OWNERSHIP_REQUIRED' })
+
+  const { data, error } = await supabaseAdmin
+    .from('coupons')
+    .select('*')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false })
+  if (error) return res.status(500).json({ success: false, error: error.message })
+
   res.json({ success: true, data: data ?? [] })
 })
 
@@ -52,6 +72,22 @@ couponsRouter.post('/validate', requireAuth, async (req, res) => {
 })
 
 couponsRouter.delete('/:id', requireAuth, async (req, res) => {
+  // Verify the coupon belongs to a store owned by the caller
+  const { data: coupon } = await supabaseAdmin
+    .from('coupons')
+    .select('store_id')
+    .eq('id', req.params.id)
+    .single()
+  if (!coupon) return res.status(404).json({ success: false, error: 'Coupon not found', code: 'COUPON_NOT_FOUND' })
+
+  const { data: store } = await supabaseAdmin
+    .from('stores')
+    .select('id')
+    .eq('id', coupon.store_id)
+    .eq('seller_id', (req as any).user.id)
+    .single()
+  if (!store) return res.status(403).json({ success: false, error: 'Forbidden', code: 'COUPON_OWNERSHIP_REQUIRED' })
+
   await supabaseAdmin.from('coupons').update({ is_active: false }).eq('id', req.params.id)
   res.json({ success: true, data: null })
 })

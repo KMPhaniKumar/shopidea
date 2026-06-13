@@ -1,10 +1,10 @@
 import { Router } from 'express'
 import { supabaseAdmin } from '../lib/supabase'
-import { requireAdmin } from '../middleware/auth'
+import { requireAdmin, requireAuth } from '../middleware/auth'
 
 export const settingsRouter = Router()
 
-settingsRouter.get('/', async (_req, res) => {
+settingsRouter.get('/', requireAuth, async (_req, res) => {
   const { data } = await supabaseAdmin.from('platform_settings').select('key, value')
   const settings = Object.fromEntries((data ?? []).map(s => [s.key, s.value]))
   res.json({ success: true, data: settings })

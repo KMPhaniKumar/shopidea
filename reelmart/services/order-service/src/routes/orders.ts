@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { supabaseAdmin } from '../lib/supabase'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, AuthRequest } from '../middleware/auth'
 import { notifyOrderUpdate } from '../lib/notify'
 
 export const ordersRouter = Router()
@@ -56,40 +56,81 @@ ordersRouter.post('/', requireAuth, async (req, res) => {
   res.status(201).json({ success: true, data })
 })
 
-// GET /api/orders?storeId=&buyerId=&status= — list orders
+// GET /api/orders?storeId=&status= — list orders
+// HIGH-4 fix: scope list to the calling user — buyers see only their own orders;
+// sellers may filter by storeId but only for a store they own.
 ordersRouter.get('/', requireAuth, async (req, res) => {
-  const { storeId, buyerId, status } = req.query
+  const authReq = req as AuthRequest
+  const userId = authReq.user!.id
+  const { storeId, status } = req.query
+
   let query = supabaseAdmin
     .from('orders')
     .select('*, stores(store_name, store_slug)')
     .order('created_at', { ascending: false })
     .limit(50)
 
-  if (storeId) query = query.eq('store_id', storeId as string)
-  if (buyerId) query = query.eq('buyer_id', buyerId as string)
+  if (storeId) {
+    // Caller wants orders for a store — verify they own it
+    const { data: store } = await supabaseAdmin
+      .from('stores')
+      .select('id')
+      .eq('id', storeId as string)
+      .eq('seller_id', userId)
+      .single()
+    if (!store) return res.status(403).json({ success: false, error: 'Forbidden' })
+    query = query.eq('store_id', storeId as string)
+  } else {
+    // Default: buyer view — only their orders
+    query = query.eq('buyer_id', userId)
+  }
+
   if (status) query = query.eq('status', status as string)
 
-  const { data } = await query
+  const { data, error } = await query
+  if (error) return res.status(500).json({ success: false, error: error.message })
   res.json({ success: true, data: data ?? [] })
 })
 
 // GET /api/orders/:id — get order detail
+// HIGH-4 fix: post-fetch ownership check — caller must be the buyer OR own the store
 ordersRouter.get('/:id', requireAuth, async (req, res) => {
-  const { data } = await supabaseAdmin
+  const authReq = req as AuthRequest
+  const userId = authReq.user!.id
+
+  const { data, error } = await supabaseAdmin
     .from('orders')
-    .select('*, stores(store_name, store_slug, whatsapp_number)')
+    .select('*, stores(store_name, store_slug, whatsapp_number, seller_id)')
     .eq('id', req.params.id)
     .single()
-  if (!data) return res.status(404).json({ success: false, error: 'Order not found' })
+  if (error || !data) return res.status(404).json({ success: false, error: 'Order not found' })
+
+  const isBuyer = data.buyer_id === userId
+  const isSeller = (data as any).stores?.seller_id === userId
+  if (!isBuyer && !isSeller) return res.status(403).json({ success: false, error: 'Forbidden' })
+
   res.json({ success: true, data })
 })
 
 // PUT /api/orders/:id/status — seller updates status
+// HIGH-5 fix: verify the order's store belongs to the calling user before update
 ordersRouter.put('/:id/status', requireAuth, async (req, res) => {
+  const authReq = req as AuthRequest
+  const userId = authReq.user!.id
+
   const { status, tracking_number, awb_code } = req.body
   if (!ORDER_STATUS_FLOW.includes(status) && !['rejected', 'cancelled'].includes(status)) {
     return res.status(400).json({ success: false, error: 'Invalid status' })
   }
+
+  // Verify the order exists and the caller owns the associated store
+  const { data: existing, error: fetchErr } = await supabaseAdmin
+    .from('orders')
+    .select('id, store_id, stores!inner(seller_id)')
+    .eq('id', req.params.id)
+    .single()
+  if (fetchErr || !existing) return res.status(404).json({ success: false, error: 'Order not found' })
+  if ((existing as any).stores?.seller_id !== userId) return res.status(403).json({ success: false, error: 'Forbidden' })
 
   const updates: any = { status }
   if (status === 'delivered') updates.delivered_at = new Date().toISOString()

@@ -9,6 +9,15 @@ analyticsRouter.get('/store', requireAuth, async (req, res) => {
   const { storeId, period = '30' } = req.query
   if (!storeId) return res.status(400).json({ success: false, error: 'storeId required' })
 
+  // Verify the caller owns this store (admin may use requireAdmin path separately)
+  const { data: storeOwner } = await supabaseAdmin
+    .from('stores')
+    .select('id')
+    .eq('id', storeId as string)
+    .eq('seller_id', (req as any).user.id)
+    .single()
+  if (!storeOwner) return res.status(403).json({ success: false, error: 'Forbidden', code: 'STORE_OWNERSHIP_REQUIRED' })
+
   const days = parseInt(period as string) || 30
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
 
@@ -55,6 +64,15 @@ analyticsRouter.get('/store', requireAuth, async (req, res) => {
 analyticsRouter.get('/store/top-products', requireAuth, async (req, res) => {
   const { storeId, limit = '5' } = req.query
   if (!storeId) return res.status(400).json({ success: false, error: 'storeId required' })
+
+  // Verify the caller owns this store
+  const { data: storeOwner } = await supabaseAdmin
+    .from('stores')
+    .select('id')
+    .eq('id', storeId as string)
+    .eq('seller_id', (req as any).user.id)
+    .single()
+  if (!storeOwner) return res.status(403).json({ success: false, error: 'Forbidden', code: 'STORE_OWNERSHIP_REQUIRED' })
 
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const { data: orders } = await supabaseAdmin.from('orders').select('items').eq('store_id', storeId as string).eq('payment_status', 'paid').gte('created_at', since)
