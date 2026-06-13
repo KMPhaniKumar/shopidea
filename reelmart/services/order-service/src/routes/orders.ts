@@ -34,6 +34,19 @@ ordersRouter.post('/', requireAuth, async (req, res) => {
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.message })
 
+  // Guard: reject order creation if the target store is suspended
+  const { data: storeCheck, error: storeCheckErr } = await supabaseAdmin
+    .from('stores')
+    .select('suspended')
+    .eq('id', parsed.data.store_id)
+    .single()
+  if (storeCheckErr || !storeCheck) {
+    return res.status(404).json({ success: false, error: 'Store not found' })
+  }
+  if (storeCheck.suspended) {
+    return res.status(403).json({ success: false, error: 'This store is currently unavailable', code: 'STORE_SUSPENDED' })
+  }
+
   const total = parsed.data.subtotal + parsed.data.delivery_fee - parsed.data.discount
   const orderNumber = `RM${Date.now().toString(36).toUpperCase()}`
 
@@ -126,11 +139,14 @@ ordersRouter.put('/:id/status', requireAuth, async (req, res) => {
   // Verify the order exists and the caller owns the associated store
   const { data: existing, error: fetchErr } = await supabaseAdmin
     .from('orders')
-    .select('id, store_id, stores!inner(seller_id)')
+    .select('id, store_id, stores!inner(seller_id, suspended)')
     .eq('id', req.params.id)
     .single()
   if (fetchErr || !existing) return res.status(404).json({ success: false, error: 'Order not found' })
   if ((existing as any).stores?.seller_id !== userId) return res.status(403).json({ success: false, error: 'Forbidden' })
+  if ((existing as any).stores?.suspended) {
+    return res.status(403).json({ success: false, error: 'This store is currently unavailable', code: 'STORE_SUSPENDED' })
+  }
 
   const updates: any = { status }
   if (status === 'delivered') updates.delivered_at = new Date().toISOString()

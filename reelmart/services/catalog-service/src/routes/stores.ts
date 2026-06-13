@@ -5,6 +5,13 @@ import { requireAuth } from '../middleware/auth'
 
 export const storesRouter = Router()
 
+// Moderation filters applied by all public store queries (supabaseAdmin bypasses RLS)
+const STORE_MODERATION_FILTERS = {
+  approval_status: 'approved',
+  is_active: true,
+  suspended: false,
+} as const
+
 // GET /api/catalog/stores?city=&category=&q= — public, discovery
 storesRouter.get('/stores', async (req, res) => {
   const { city, category, q } = req.query
@@ -13,7 +20,9 @@ storesRouter.get('/stores', async (req, res) => {
     const { data } = await supabaseAdmin
       .from('stores')
       .select('id, store_name, store_slug, category, logo_url, city, area, rating_avg, total_reviews, is_verified')
-      .eq('is_active', true)
+      .eq('approval_status', STORE_MODERATION_FILTERS.approval_status)
+      .eq('is_active', STORE_MODERATION_FILTERS.is_active)
+      .eq('suspended', STORE_MODERATION_FILTERS.suspended)
       .ilike('store_name', `%${q}%`)
       .limit(20)
     return res.json({ success: true, data: data ?? [] })
@@ -22,7 +31,9 @@ storesRouter.get('/stores', async (req, res) => {
   let query = supabaseAdmin
     .from('stores')
     .select('id, store_name, store_slug, category, logo_url, city, area, rating_avg, total_reviews, total_orders, is_verified')
-    .eq('is_active', true)
+    .eq('approval_status', STORE_MODERATION_FILTERS.approval_status)
+    .eq('is_active', STORE_MODERATION_FILTERS.is_active)
+    .eq('suspended', STORE_MODERATION_FILTERS.suspended)
     .order('rating_avg', { ascending: false })
     .limit(20)
 
@@ -42,6 +53,9 @@ storesRouter.get('/stores/:slug', async (req, res) => {
     .from('stores')
     .select(STORE_PUBLIC_COLUMNS)
     .eq('store_slug', req.params.slug)
+    .eq('approval_status', STORE_MODERATION_FILTERS.approval_status)
+    .eq('is_active', STORE_MODERATION_FILTERS.is_active)
+    .eq('suspended', STORE_MODERATION_FILTERS.suspended)
     .single()
   if (!data) return res.status(404).json({ success: false, error: 'Store not found' })
   res.json({ success: true, data })
@@ -49,6 +63,17 @@ storesRouter.get('/stores/:slug', async (req, res) => {
 
 // GET /api/catalog/stores/:id/products — public
 storesRouter.get('/stores/:id/products', async (req, res) => {
+  // Confirm the store is approved, active, and not suspended before exposing its products
+  const { data: store } = await supabaseAdmin
+    .from('stores')
+    .select('id')
+    .eq('id', req.params.id)
+    .eq('approval_status', STORE_MODERATION_FILTERS.approval_status)
+    .eq('is_active', STORE_MODERATION_FILTERS.is_active)
+    .eq('suspended', STORE_MODERATION_FILTERS.suspended)
+    .single()
+  if (!store) return res.status(404).json({ success: false, error: 'Store not found' })
+
   const { data } = await supabaseAdmin
     .from('products')
     .select('*')

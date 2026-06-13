@@ -67,8 +67,23 @@ payoutsRouter.post('/process', requireAdmin, async (req, res) => {
       byStore.set(order.store_id, e)
     }
 
-    let processed = 0, totalAmount = 0
+    // Fetch suspension status for all stores in one query; skip suspended sellers
+    const storeIds = Array.from(byStore.keys())
+    const { data: storeRows } = await supabaseAdmin
+      .from('stores')
+      .select('id, suspended')
+      .in('id', storeIds)
+    const suspendedSet = new Set(
+      (storeRows ?? []).filter(s => s.suspended).map(s => s.id)
+    )
+
+    let processed = 0, totalAmount = 0, skipped = 0
     for (const [storeId, { orderIds, gross }] of byStore) {
+      if (suspendedSet.has(storeId)) {
+        skipped++
+        console.info(`payout-service: skipping suspended store ${storeId} (${orderIds.length} orders)`)
+        continue
+      }
       const netAmount = gross * (1 - PLATFORM_FEE_PCT)
       const { data: payout } = await supabaseAdmin.from('payouts').insert({
         store_id: storeId, amount: netAmount, order_count: orderIds.length,
@@ -79,7 +94,7 @@ payoutsRouter.post('/process', requireAdmin, async (req, res) => {
       processed++; totalAmount += netAmount
     }
 
-    res.json({ success: true, data: { processed, totalAmount: Math.round(totalAmount) } })
+    res.json({ success: true, data: { processed, skipped, totalAmount: Math.round(totalAmount) } })
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message })
   }
