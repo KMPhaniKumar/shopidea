@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { createClient } from '@/lib/supabase/client'
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
@@ -15,31 +14,23 @@ export default function AdminLoginPage() {
     setError('')
     setLoading(true)
 
-    const supabase = createClient()
-    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    if (authError) {
-      setError(authError.message)
+    // Sign in via a Route Handler so the session cookies are written
+    // server-side (the app has no session-sync middleware; a client-side
+    // signInWithPassword wouldn't establish the SSR-readable cookies the admin
+    // layout checks, causing a bounce back to login).
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!json?.success) {
+      setError(json?.error ?? 'Login failed')
       setLoading(false)
       return
     }
 
-    const { data: user } = await supabase
-      .from('users')
-      .select('is_admin')
-      .eq('id', data.user.id)
-      .single()
-
-    if (!user?.is_admin) {
-      await supabase.auth.signOut()
-      setError('You do not have admin access.')
-      setLoading(false)
-      return
-    }
-
-    // Hard navigation (not router.push): the admin layout checks the session
-    // server-side, and a soft client transition doesn't carry the just-set
-    // auth cookies — so getUser() returns null and bounces back to login.
-    // A full document request includes the cookies, so the server sees the session.
+    // Cookies are set; hard nav so the SSR admin layout sees the session.
     window.location.assign('/admin')
   }
 
