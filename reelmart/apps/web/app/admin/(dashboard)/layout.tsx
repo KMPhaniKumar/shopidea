@@ -3,6 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import AdminNav from './AdminNav'
 import { AdminTopBar } from '@/components/admin/TopBar'
 
+// Admin dashboard is always rendered per-request (auth + service-role data);
+// never statically pre-rendered at build (which would instantiate a Supabase
+// client with no env and crash `next build`).
+export const dynamic = 'force-dynamic'
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
