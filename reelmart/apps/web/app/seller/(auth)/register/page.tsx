@@ -108,9 +108,15 @@ export default function SellerRegister() {
 
     setLoading(true)
     try {
+      // Pass the access token explicitly — the SSR auth cookie isn't reliably
+      // established yet right after setSession() (before any navigation).
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/seller/onboard', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           full_name: fullName.trim(),
           display_name: displayName.trim(),

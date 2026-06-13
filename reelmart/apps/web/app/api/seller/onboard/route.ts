@@ -42,7 +42,11 @@ const supabaseAdmin = () =>
   )
 
 export async function POST(req: NextRequest) {
-  // --- Resolve the caller from their SSR session cookie ---
+  // --- Resolve the caller ---
+  // Registration calls this immediately after a client-side setSession(), BEFORE
+  // any navigation, so the SSR auth cookies aren't reliably established yet.
+  // Prefer an explicit `Authorization: Bearer <access_token>` (validated directly
+  // against Supabase Auth); fall back to the SSR session cookie for other callers.
   const cookieStore = cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -50,9 +54,14 @@ export async function POST(req: NextRequest) {
     { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const authHeader = req.headers.get('authorization') ?? ''
+  const bearer = authHeader.toLowerCase().startsWith('bearer ')
+    ? authHeader.slice(7).trim()
+    : null
+
+  const { data: { user } } = bearer
+    ? await supabase.auth.getUser(bearer)
+    : await supabase.auth.getUser()
 
   if (!user) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
