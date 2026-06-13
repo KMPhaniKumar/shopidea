@@ -7,8 +7,47 @@ import QRCode from 'qrcode'
 import { Copy, Download, ExternalLink, Upload, Clock, XCircle } from 'lucide-react'
 import debounce from 'lodash/debounce'
 import { SITE_URL, SITE_HOST } from '@/lib/site-url'
-import { uploadKycFile, signedKycUrl, isValidPan, isValidGst } from '@/lib/kyc'
+import { uploadKycFile, isValidPan, isValidGst } from '@/lib/kyc'
 import { AddressSearch } from '@/components/AddressSearch'
+
+// Safe (non-KYC) columns accessible to the authenticated role after migration
+// 024. KYC columns (pan_number, gst_number, pan_doc_path, selfie_path,
+// kyc_submitted_at, aadhaar_url) are REVOKED from the authenticated role and
+// must be fetched via GET /api/seller/my-store (service_role, server-side).
+const SAFE_STORE_COLUMNS = [
+  'id',
+  'seller_id',
+  'store_name',
+  'store_slug',
+  'description',
+  'category',
+  'logo_url',
+  'city',
+  'area',
+  'pincode',
+  'whatsapp_number',
+  'instagram_handle',
+  'is_active',
+  'is_open',
+  'open_time',
+  'close_time',
+  'open_days',
+  'rating_avg',
+  'total_reviews',
+  'total_orders',
+  'is_verified',
+  'referral_installs',
+  'address',
+  'state',
+  'approval_status',
+  'pickup_id',
+  'pickup_warehouse_name',
+  'pickup_status',
+  'pickup_error',
+  'pickup_registered_at',
+  'created_at',
+  'updated_at',
+].join(',')
 
 const BUSINESS_TYPES = [
   'Food & Beverages',
@@ -39,17 +78,27 @@ interface AddressChangeRequest {
   requested_at: string
 }
 
+// KYC fields fetched from /api/seller/my-store (service_role, server-side).
+interface KycData {
+  pan_number: string | null
+  gst_number: string | null
+  pan_doc_path: string | null
+  selfie_path: string | null
+  kyc_submitted_at: string | null
+  pan_doc_url: string | null
+  selfie_url: string | null
+}
+
 export default function SettingsPage() {
   const supabase = createClient()
   const [store, setStore] = useState<any>(null)
+  const [kycData, setKycData] = useState<KycData | null>(null)
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null)
   const [saving, setSaving] = useState(false)
   const [savingAddress, setSavingAddress] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
   const [panFile, setPanFile] = useState<File | null>(null)
   const [selfieFile, setSelfieFile] = useState<File | null>(null)
-  const [panUrl, setPanUrl] = useState<string | null>(null)
-  const [selfieUrl, setSelfieUrl] = useState<string | null>(null)
   const [addressRequest, setAddressRequest] = useState<AddressChangeRequest | null>(null)
   const { register, handleSubmit, watch, reset } = useForm()
   const { register: registerAddr, handleSubmit: handleSubmitAddr, reset: resetAddr, setValue: setAddrValue } = useForm()
@@ -59,10 +108,18 @@ export default function SettingsPage() {
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
-    const storeQuery = user
-      ? supabase.from('stores').select('*').eq('seller_id', user.id).single()
-      : supabase.from('stores').select('*').limit(1).single()
-    const { data } = await storeQuery
+    if (!user) return
+
+    // Fetch the safe (non-KYC) store columns via the authenticated Supabase
+    // client.  select('*') would error after migration 024 because the
+    // authenticated role's table-level SELECT is revoked — only the explicit
+    // column list below remains accessible.
+    const { data } = await supabase
+      .from('stores')
+      .select(SAFE_STORE_COLUMNS)
+      .eq('seller_id', user.id)
+      .single()
+
     if (!data) return
     setStore(data)
     reset(data)
@@ -88,8 +145,22 @@ export default function SettingsPage() {
       pincode: data.pincode ?? '',
     })
 
-    setPanUrl(data.pan_doc_path ? await signedKycUrl(data.pan_doc_path) : null)
-    setSelfieUrl(data.selfie_path ? await signedKycUrl(data.selfie_path) : null)
+    // Fetch KYC fields + signed storage URLs via the server-side route, which
+    // uses the service_role key and is not subject to the column-level REVOKE
+    // on the authenticated role (migration 024).
+    const kycRes = await fetch('/api/seller/my-store')
+    if (kycRes.ok) {
+      const kycJson = await kycRes.json()
+      if (kycJson.success) {
+        setKycData(kycJson.data)
+        // Pre-fill the KYC form fields separately (they are not in `data`).
+        reset((prev: any) => ({
+          ...prev,
+          pan_number: kycJson.data.pan_number ?? '',
+          gst_number: kycJson.data.gst_number ?? '',
+        }))
+      }
+    }
   }
 
   const checkSlug = debounce(async (slug: string) => {
@@ -132,8 +203,10 @@ export default function SettingsPage() {
     setSaving(true)
 
     // Upload any newly-picked KYC documents to the private bucket first.
-    let panPath = store.pan_doc_path ?? null
-    let selfiePath = store.selfie_path ?? null
+    // pan_doc_path / selfie_path are not in the client-side `store` state after
+    // migration 024 — they come from the server-side kycData fetch.
+    let panPath = kycData?.pan_doc_path ?? null
+    let selfiePath = kycData?.selfie_path ?? null
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
@@ -344,12 +417,12 @@ export default function SettingsPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">PAN Card Photo</label>
-              {panUrl && !panFile && (
-                <a href={panUrl} target="_blank" rel="noreferrer" className="text-xs text-[#FF6B2B] hover:underline block mb-1.5">View current PAN document</a>
+              {kycData?.pan_doc_url && !panFile && (
+                <a href={kycData.pan_doc_url} target="_blank" rel="noreferrer" className="text-xs text-[#FF6B2B] hover:underline block mb-1.5">View current PAN document</a>
               )}
               <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-[#EEEEEE] rounded-lg text-sm cursor-pointer hover:bg-[#F9F9F9]">
                 <Upload size={14} />
-                <span className="truncate text-[#555555]">{panFile ? panFile.name : (panUrl ? 'Replace PAN card' : 'Upload PAN card')}</span>
+                <span className="truncate text-[#555555]">{panFile ? panFile.name : (kycData?.pan_doc_url ? 'Replace PAN card' : 'Upload PAN card')}</span>
                 <input type="file" accept="image/jpeg,image/png,application/pdf" className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) { if (f.size > 5*1024*1024) { toast.error('Max 5MB'); return } setPanFile(f) } }} />
               </label>
@@ -360,15 +433,15 @@ export default function SettingsPage() {
                 <div className="w-14 h-14 rounded-lg border border-[#EEEEEE] overflow-hidden bg-[#F9F9F9] flex items-center justify-center shrink-0">
                   {selfieFile ? (
                     <img src={URL.createObjectURL(selfieFile)} alt="Selfie" className="w-full h-full object-cover" />
-                  ) : selfieUrl ? (
-                    <img src={selfieUrl} alt="Selfie" className="w-full h-full object-cover" />
+                  ) : kycData?.selfie_url ? (
+                    <img src={kycData.selfie_url} alt="Selfie" className="w-full h-full object-cover" />
                   ) : (
                     <Upload size={16} className="text-[#AAAAAA]" />
                   )}
                 </div>
                 <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-[#EEEEEE] rounded-lg text-sm cursor-pointer hover:bg-[#F9F9F9]">
                   <Upload size={14} />
-                  <span className="text-[#555555]">{selfieFile || selfieUrl ? 'Replace' : 'Upload'}</span>
+                  <span className="text-[#555555]">{selfieFile || kycData?.selfie_url ? 'Replace' : 'Upload'}</span>
                   <input type="file" accept="image/jpeg,image/png" capture="environment" className="hidden"
                     onChange={e => { const f = e.target.files?.[0]; if (f) { if (f.size > 5*1024*1024) { toast.error('Max 5MB'); return } setSelfieFile(f) } }} />
                 </label>
