@@ -153,9 +153,17 @@ export async function search(query: string, city: string): Promise<{ stores: Sto
 }
 
 export async function getStoreBySlug(slug: string) {
+  // Explicit safe columns only — never select('*') here, which would expose
+  // seller KYC/PII (pan_number, aadhaar_url, gst_number, selfie_path, …) and
+  // the seller's personal phone. Buyer contact uses stores.whatsapp_number.
+  // seller_id is intentionally excluded from the public storefront response —
+  // it is a UUID that links the store to its seller's identity and is not
+  // needed by buyers.  The seller's display name is fetched via the
+  // public_user_names view so the underlying users table is never queried
+  // directly by the anon client.
   const { data } = await supabase
     .from('stores')
-    .select('*, users:seller_id(name, phone)')
+    .select('id, store_name, store_slug, category, logo_url, description, city, area, pincode, whatsapp_number, instagram_handle, rating_avg, total_reviews, total_orders, is_verified, is_active, created_at, public_user_names:seller_id(name)')
     .eq('store_slug', slug)
     .eq('is_active', true)
     .single()
