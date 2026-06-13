@@ -1,0 +1,134 @@
+name: Test
+
+# Runs on every PR and every push to main.
+# Gates merging: all jobs must pass (set as required checks in GitHub branch rules).
+# deploy.yml is the separate deploy pipeline; tests run before it via the GitHub
+# dependency check (deploy.yml does NOT need:test — it's enforced at the branch level).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── API tests (Vitest + Supertest) ─────────────────────────────────────────
+  api-tests:
+    name: API authz + unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            tests/package-lock.json
+            reelmart/services/payment-service/package-lock.json
+            reelmart/services/order-service/package-lock.json
+            reelmart/services/payout-service/package-lock.json
+
+      # Install test harness deps
+      - name: Install test harness
+        run: npm ci || npm install
+
+      # Install the three service packages needed for import in tests
+      - name: Install service deps (payment, order, payout)
+        run: |
+          (cd ../reelmart/services/payment-service && npm ci || npm install)
+          (cd ../reelmart/services/order-service && npm ci || npm install)
+          (cd ../reelmart/services/payout-service && npm ci || npm install)
+
+      - name: Run API tests
+        run: npx vitest run --reporter=verbose
+        env:
+          SUPABASE_URL: https://test.supabase.co
+          SUPABASE_SERVICE_KEY: test-service-key
+          RAZORPAY_KEY_ID: rzp_test_key
+          RAZORPAY_KEY_SECRET: test_razorpay_secret_16chr
+          RAZORPAY_WEBHOOK_SECRET: test_webhook_secret
+          ALLOWED_ORIGINS: https://dev.reelmart.in
+          INTERNAL_API_KEY: test-internal-key
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage
+          path: tests/coverage/
+          retention-days: 14
+
+  # ── TypeScript typecheck (backend services) ─────────────────────────────────
+  typecheck-services:
+    name: Typecheck backend services
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - payment-service
+          - order-service
+          - payout-service
+          - admin-service
+          - analytics-service
+          - catalog-service
+          - delivery-service
+          - notification-service
+          - return-service
+          - whatsapp-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Typecheck ${{ matrix.service }}
+        working-directory: reelmart/services/${{ matrix.service }}
+        run: npm ci || npm install && npm run build
+
+  # ── E2E / UI (placeholder — see work-breakdown) ────────────────────────────
+  # NOTE: Playwright e2e and k6 perf tests are not yet implemented.
+  # They slot in as additional jobs here once the specialists build them.
+  # Uncomment when ready:
+  #
+  # e2e-tests:
+  #   name: E2E (Playwright)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #     - run: npm ci
+  #       working-directory: tests
+  #     - run: npx playwright install --with-deps
+  #     - run: npx playwright test tests/e2e
+  #       working-directory: tests
+  #       env:
+  #         BASE_URL: https://dev.reelmart.in
+  #         TEST_PHONE: '9999999999'
+  #         TEST_OTP: '123456'
+
+  # ── Summary gate ────────────────────────────────────────────────────────────
+  # Add this job as the required check on the branch protection rule so a single
+  # job name covers both the matrix and the api tests.
+  all-tests-pass:
+    name: All tests pass
+    needs: [api-tests, typecheck-services]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          if [ "${{ needs.api-tests.result }}" != "success" ]; then
+            echo "api-tests failed"
+            exit 1
+          fi
+          if [ "${{ needs.typecheck-services.result }}" != "success" ]; then
+            echo "typecheck-services failed"
+            exit 1
+          fi
+          echo "All checks passed"
