@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 
 // Server-side admin login. The app has no session-sync middleware, so a
 // client-side signInWithPassword() never establishes the server-readable auth
@@ -48,13 +49,21 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { data: profile } = await supabase
+  // Check is_admin with the SERVICE ROLE, not the session: signInWithPassword
+  // just wrote the session to the *response* cookies, but this request's cookies
+  // (what a session-based query reads) don't have it yet — so a session query
+  // would run as anon and wrongly report "not admin".
+  const admin = createSupabaseAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  const { data: profile } = await admin
     .from('users')
-    .select('is_admin')
+    .select('is_admin, role')
     .eq('id', data.user.id)
     .single()
 
-  if (!profile?.is_admin) {
+  if (!(profile?.is_admin || profile?.role === 'admin')) {
     await supabase.auth.signOut()
     return NextResponse.json({ success: false, error: 'You do not have admin access.' }, { status: 403 })
   }
