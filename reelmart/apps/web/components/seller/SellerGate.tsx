@@ -17,12 +17,13 @@ import { createClient } from '@/lib/supabase/client'
 import { Clock, CheckCircle, XCircle } from 'lucide-react'
 import { OnboardingStatus } from '@/components/seller/OnboardingStatus'
 
-type GateStatus = 'loading' | 'approved' | 'onboarding' | 'pending' | 'rejected'
+type GateStatus = 'loading' | 'approved' | 'onboarding' | 'pending' | 'rejected' | 'suspended'
 
 export function SellerGate({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const router = useRouter()
   const [status, setStatus] = useState<GateStatus>('loading')
+  const [suspendedReason, setSuspendedReason] = useState<string | null>(null)
 
   async function check() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -36,7 +37,7 @@ export function SellerGate({ children }: { children: React.ReactNode }) {
 
     const { data: store } = await supabase
       .from('stores')
-      .select('approval_status')
+      .select('approval_status, suspended, suspended_reason')
       .eq('seller_id', user.id)
       .maybeSingle()
 
@@ -45,6 +46,13 @@ export function SellerGate({ children }: { children: React.ReactNode }) {
 
     if (store.approval_status === 'rejected') { setStatus('rejected'); return }
     if (store.approval_status !== 'approved') { setStatus('pending'); return }
+
+    // Check suspension before letting into the dashboard
+    if ((store as any).suspended) {
+      setSuspendedReason((store as any).suspended_reason ?? null)
+      setStatus('suspended')
+      return
+    }
 
     // Store is approved — check onboarding verification
     const { data: verRow } = await supabase
@@ -81,6 +89,10 @@ export function SellerGate({ children }: { children: React.ReactNode }) {
     )
   }
 
+  if (status === 'suspended') {
+    return <SuspendedScreen reason={suspendedReason} />
+  }
+
   if (status === 'onboarding') {
     return (
       <div className="min-h-screen bg-[#F9F9F9] px-4 py-10">
@@ -96,6 +108,40 @@ export function SellerGate({ children }: { children: React.ReactNode }) {
   }
 
   return <ApprovalScreen status={status as 'pending' | 'rejected'} />
+}
+
+function SuspendedScreen({ reason }: { reason: string | null }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-white px-6 py-12">
+      <div className="w-full max-w-sm">
+        <div className="flex justify-center mb-6">
+          <Image src="/logo.png" alt="ReelMart" width={220} height={80} className="object-contain" />
+        </div>
+        <div className="bg-white border border-[#E23744] rounded-2xl shadow-lg px-8 py-10 text-center">
+          <div className="flex justify-center mb-4">
+            <XCircle size={48} className="text-[#E23744]" />
+          </div>
+          <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">Your store has been suspended</h2>
+          {reason ? (
+            <div className="bg-red-50 border border-red-100 rounded-xl p-4 mb-5 text-left">
+              <div className="text-xs text-red-400 uppercase font-semibold mb-1">Reason</div>
+              <p className="text-sm text-red-700 leading-relaxed">{reason}</p>
+            </div>
+          ) : (
+            <p className="text-[#888888] text-sm leading-relaxed mb-5">
+              Your store has been suspended by the platform team.
+            </p>
+          )}
+          <p className="text-sm text-[#888888] leading-relaxed mb-4">
+            You cannot access your dashboard or receive new orders while your store is suspended.
+            Please contact support to resolve this.
+          </p>
+          <p className="text-xs text-[#AAAAAA]">Contact support at support@reelmart.in</p>
+          <a href="/seller/login" className="inline-block mt-4 text-sm text-[#FF6B2B] font-medium hover:underline">← Back to login</a>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function ApprovalScreen({ status }: { status: 'pending' | 'rejected' }) {
