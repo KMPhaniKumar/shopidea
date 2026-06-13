@@ -40,14 +40,16 @@ export default function DashboardPage() {
       const { data: store, error: storeError } = await storeQuery
 
       if (storeError) {
-        console.error('Store fetch error:', storeError)
-        toast.error('Failed to load store. ' + storeError.message)
+        // Fail quietly — RLS errors surface here when the view/policies are
+        // being updated; a red toast confuses sellers. Log for debugging only.
+        console.warn('Store fetch error (non-blocking):', storeError.message)
+        setLoading(false)
         return
       }
 
       if (!store) {
-        toast.error('No store found. Redirecting to registration...')
-        setTimeout(() => router.push('/seller/register'), 1500)
+        // No store row yet — redirect silently
+        router.push('/seller/register')
         return
       }
       

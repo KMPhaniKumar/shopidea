@@ -27,19 +27,37 @@ import { Clock, XCircle } from 'lucide-react'
 // ---------------------------------------------------------------------------
 
 export interface SellerVerification {
+  /** seller_id matches auth.uid() */
+  seller_id?: string
+  /** OTP verified at signup */
   phone_verified: boolean
-  email_verified: boolean
-  pan_verified: boolean
+  /** PAN number was supplied during KYC (not admin-verified) */
+  pan_provided: boolean
+  /** Seller submitted a GST number */
+  gst_provided: boolean
+  /** Admin manually verified the GST number */
+  gst_verified: boolean
+  /** NimbusPost confirmed the pickup address */
   pickup_verified: boolean
+  /** Legacy — kept for backward-compat in case old view rows arrive */
+  email_verified?: boolean
+  /** Signature image is stored in the bucket */
   signature_present: boolean
+  /** Mirrors stores.approval_status */
+  approval_status?: string
+  /** Mirrors stores.suspended */
+  suspended?: boolean
+  /** Product-add gate: admin approved = true */
   features_unlocked: boolean
 }
 
 const DEFAULT_VERIFICATION: SellerVerification = {
   phone_verified: false,
-  email_verified: false,
-  pan_verified: false,
+  pan_provided: false,
+  gst_provided: false,
+  gst_verified: false,
   pickup_verified: false,
+  email_verified: false,
   signature_present: false,
   features_unlocked: false,
 }

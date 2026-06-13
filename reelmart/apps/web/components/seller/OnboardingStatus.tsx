@@ -2,19 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CheckCircle, Clock, Upload, PenLine, Mail, ShieldCheck, MapPin, Phone } from 'lucide-react'
+import { CheckCircle, Clock, MinusCircle, Upload, PenLine } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useSellerVerification } from '@/components/seller/SellerGate'
-
-// Shape returned by the seller_verification view (migration 025)
-interface SellerVerification {
-  phone_verified: boolean
-  email_verified: boolean
-  pan_verified: boolean
-  pickup_verified: boolean
-  signature_present: boolean
-  features_unlocked: boolean
-}
+import type { SellerVerification } from '@/components/seller/SellerGate'
 
 interface OnboardingStatusProps {
   /**
@@ -26,34 +17,53 @@ interface OnboardingStatusProps {
   onUnlocked?: () => void
 }
 
+// ---------------------------------------------------------------------------
+// Status row variants
+// ---------------------------------------------------------------------------
+
+type RowVariant = 'done' | 'pending' | 'na'
+
 function StatusRow({
   label,
-  done,
+  variant,
+  badge,
   children,
 }: {
   label: string
-  done: boolean
+  variant: RowVariant
+  badge?: string
   children?: React.ReactNode
 }) {
+  const icon =
+    variant === 'done' ? (
+      <CheckCircle size={20} className="text-success mt-0.5 shrink-0" />
+    ) : variant === 'na' ? (
+      <MinusCircle size={20} className="text-muted mt-0.5 shrink-0" />
+    ) : (
+      <Clock size={20} className="text-primary mt-0.5 shrink-0" />
+    )
+
+  const badgeEl = badge ? (
+    <span
+      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+        variant === 'done'
+          ? 'bg-green-50 text-success'
+          : variant === 'na'
+          ? 'bg-gray-50 text-muted'
+          : 'bg-orange-50 text-primary'
+      }`}
+    >
+      {badge}
+    </span>
+  ) : null
+
   return (
     <div className="flex items-start gap-3 py-3 border-b border-border last:border-0">
-      {done ? (
-        <CheckCircle size={20} className="text-success mt-0.5 shrink-0" />
-      ) : (
-        <Clock size={20} className="text-primary mt-0.5 shrink-0" />
-      )}
+      {icon}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-text">{label}</span>
-          {done ? (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-success">
-              Verified
-            </span>
-          ) : (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-primary">
-              Pending
-            </span>
-          )}
+          {badgeEl}
         </div>
         {children && <div className="mt-2">{children}</div>}
       </div>
@@ -76,7 +86,6 @@ function generateSignatureBlob(fullName: string): Promise<Blob> {
     ctx.textBaseline = 'middle'
     ctx.textAlign = 'center'
     ctx.fillText(fullName, 300, 100)
-    // Underline
     ctx.beginPath()
     ctx.moveTo(40, 155)
     ctx.lineTo(560, 155)
@@ -103,23 +112,24 @@ function OnboardingContent({
 }) {
   const supabase = createClient()
   const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
-  const [emailSaving, setEmailSaving] = useState(false)
   const [sigGenerating, setSigGenerating] = useState(false)
   const [sigUploading, setSigUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [localSigDone, setLocalSigDone] = useState(v.signature_present)
 
-  // All 5 checks for the percentage bar
-  const allSteps = [
+  // ---------------------------------------------------------------------------
+  // Primary checks (4) — drive the percentage bar
+  // GST "Not provided" counts as satisfied/neutral (not penalised)
+  // ---------------------------------------------------------------------------
+  const gstSatisfied = !v.gst_provided || v.gst_verified // not provided OR verified = satisfied
+  const primarySteps = [
     { label: 'Mobile', done: v.phone_verified },
-    { label: 'Email', done: v.email_verified },
-    { label: 'PAN', done: v.pan_verified },
+    { label: 'PAN number', done: v.pan_provided },
+    { label: 'GST number', done: gstSatisfied },
     { label: 'Pickup address', done: v.pickup_verified },
-    { label: 'Digital signature', done: localSigDone },
   ]
-  const completedCount = allSteps.filter(s => s.done).length
-  const pct = Math.round((completedCount / allSteps.length) * 100)
+  const completedCount = primarySteps.filter(s => s.done).length
+  const pct = Math.round((completedCount / primarySteps.length) * 100)
 
   useEffect(() => {
     async function loadUser() {
@@ -127,24 +137,13 @@ function OnboardingContent({
       if (!user) return
       const { data } = await supabase
         .from('users')
-        .select('full_name, email')
+        .select('full_name')
         .eq('id', user.id)
         .maybeSingle()
       if (data?.full_name) setFullName(data.full_name)
-      if (data?.email) setEmail(data.email)
     }
     loadUser()
   }, [])
-
-  async function saveEmail() {
-    if (!email.includes('@')) { toast.error('Enter a valid email address'); return }
-    setEmailSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { toast.error('Session expired'); setEmailSaving(false); return }
-    const { error } = await supabase.from('users').update({ email: email.trim() }).eq('id', user.id)
-    if (error) { toast.error(error.message) } else { toast.success('Email saved') }
-    setEmailSaving(false)
-  }
 
   async function uploadSignatureBlob(blob: Blob) {
     setSigUploading(true)
@@ -157,8 +156,9 @@ function OnboardingContent({
       toast.success('Signature saved')
       setLocalSigDone(true)
       onSignatureUploaded()
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Upload failed')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed'
+      toast.error(msg)
     } finally {
       setSigUploading(false)
     }
@@ -177,12 +177,21 @@ function OnboardingContent({
     try {
       const blob = await generateSignatureBlob(fullName)
       await uploadSignatureBlob(blob)
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Generation failed')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Generation failed'
+      toast.error(msg)
     } finally {
       setSigGenerating(false)
     }
   }
+
+  // GST row variant + badge
+  function gstVariant(): { variant: RowVariant; badge: string } {
+    if (!v.gst_provided) return { variant: 'na', badge: 'Not provided' }
+    if (v.gst_verified) return { variant: 'done', badge: 'Verified' }
+    return { variant: 'pending', badge: 'Pending admin review' }
+  }
+  const { variant: gstV, badge: gstBadge } = gstVariant()
 
   return (
     <div className="bg-white rounded-card border border-border shadow-card overflow-hidden">
@@ -192,7 +201,6 @@ function OnboardingContent({
           <h2 className="text-sm font-bold text-text">Store verification</h2>
           <span className="text-sm font-bold text-primary">{pct}%</span>
         </div>
-        {/* Overall progress bar */}
         <div className="h-2 w-full bg-border rounded-full overflow-hidden">
           <div
             className="h-full bg-primary rounded-full transition-all duration-500"
@@ -200,13 +208,13 @@ function OnboardingContent({
           />
         </div>
         <p className="text-xs text-secondary mt-2">
-          {completedCount} of {allSteps.length} steps complete.
-          {!v.features_unlocked && ' Complete Mobile, PAN, and Pickup address to unlock selling.'}
+          {completedCount} of {primarySteps.length} steps complete.
+          {!v.features_unlocked && ' Approval unlocks selling features.'}
         </p>
 
         {/* Per-step segment dots */}
         <div className="flex gap-1.5 mt-3">
-          {allSteps.map(s => (
+          {primarySteps.map(s => (
             <div
               key={s.label}
               title={s.label}
@@ -218,49 +226,52 @@ function OnboardingContent({
 
       {/* Check rows */}
       <div className="px-5 divide-y divide-border">
-        {/* Mobile */}
-        <StatusRow label="Mobile number" done={v.phone_verified} />
 
-        {/* Email */}
-        <StatusRow label="Email address" done={v.email_verified}>
-          {!v.email_verified && (
-            <>
-              <div className="flex gap-2 mt-1">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="flex-1 border border-border rounded-btn px-3 py-2 text-sm outline-none focus:border-primary transition-colors text-text"
-                />
-                <button
-                  onClick={saveEmail}
-                  disabled={emailSaving || !email.includes('@')}
-                  className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-btn disabled:opacity-40 hover:bg-[#e55a1f] transition-colors"
-                >
-                  {emailSaving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-              {email && (
-                <p className="text-xs text-muted mt-1.5">
-                  Email verification will be available in the next update.
-                </p>
-              )}
-            </>
-          )}
-        </StatusRow>
+        {/* Mobile — verified by OTP at signup */}
+        <StatusRow
+          label="Mobile number"
+          variant={v.phone_verified ? 'done' : 'pending'}
+          badge={v.phone_verified ? 'Verified' : 'Pending'}
+        />
 
-        {/* PAN */}
-        <StatusRow label="PAN number" done={v.pan_verified}>
-          {!v.pan_verified && (
+        {/* PAN — satisfied when provided (no admin verification needed) */}
+        <StatusRow
+          label="PAN number"
+          variant={v.pan_provided ? 'done' : 'pending'}
+          badge={v.pan_provided ? 'Provided' : 'Pending'}
+        >
+          {!v.pan_provided && (
             <p className="text-xs text-secondary mt-1">
-              Our team reviews your PAN during KYC. You will be notified once verified.
+              PAN is verified when you provide it during KYC. You will be marked verified once our
+              team processes your registration.
             </p>
           )}
         </StatusRow>
 
-        {/* Pickup */}
-        <StatusRow label="Pickup address" done={v.pickup_verified}>
+        {/* GST — optional; if not provided → neutral; if provided → admin verifies */}
+        <StatusRow
+          label="GST number"
+          variant={gstV}
+          badge={gstBadge}
+        >
+          {v.gst_provided && !v.gst_verified && (
+            <p className="text-xs text-secondary mt-1">
+              Our team will verify your GSTIN shortly.
+            </p>
+          )}
+          {!v.gst_provided && (
+            <p className="text-xs text-muted mt-1">
+              GST registration is optional for sellers below the threshold.
+            </p>
+          )}
+        </StatusRow>
+
+        {/* Pickup address — NimbusPost/admin verifies */}
+        <StatusRow
+          label="Pickup address"
+          variant={v.pickup_verified ? 'done' : 'pending'}
+          badge={v.pickup_verified ? 'Verified' : 'Pending'}
+        >
           {!v.pickup_verified && (
             <p className="text-xs text-secondary mt-1">
               Register a pickup address in{' '}
@@ -272,8 +283,12 @@ function OnboardingContent({
           )}
         </StatusRow>
 
-        {/* Signature */}
-        <StatusRow label="Digital signature" done={localSigDone}>
+        {/* Digital signature — secondary / optional (non-blocking) */}
+        <StatusRow
+          label="Digital signature"
+          variant={localSigDone ? 'done' : 'pending'}
+          badge={localSigDone ? 'Uploaded' : 'Optional'}
+        >
           {!localSigDone && (
             <>
               <div className="flex flex-wrap gap-2 mt-1">
@@ -285,7 +300,9 @@ function OnboardingContent({
                   <PenLine size={13} />
                   {sigGenerating ? 'Generating...' : 'Auto-generate'}
                 </button>
-                <label className={`flex items-center gap-1.5 px-3 py-1.5 bg-surface text-secondary text-xs font-semibold rounded-btn border border-border hover:border-primary transition-colors cursor-pointer ${sigUploading ? 'opacity-40 pointer-events-none' : ''}`}>
+                <label
+                  className={`flex items-center gap-1.5 px-3 py-1.5 bg-surface text-secondary text-xs font-semibold rounded-btn border border-border hover:border-primary transition-colors cursor-pointer ${sigUploading ? 'opacity-40 pointer-events-none' : ''}`}
+                >
                   <Upload size={13} />
                   {sigUploading ? 'Uploading...' : 'Upload image'}
                   <input
@@ -310,8 +327,7 @@ function OnboardingContent({
         <div className="mx-5 mb-5 mt-4 bg-orange-50 border border-primary/20 rounded-card px-4 py-3">
           <p className="text-xs font-semibold text-primary mb-0.5">Selling features locked</p>
           <p className="text-xs text-secondary leading-relaxed">
-            Adding products will unlock once Mobile, PAN, and Pickup address are verified
-            and admin approval is complete.
+            Adding products unlocks once your store is reviewed and admin approval is complete.
           </p>
         </div>
       )}
@@ -327,22 +343,34 @@ export function OnboardingStatus({ standalone = false, onUnlocked }: OnboardingS
   const ctx = useSellerVerification()
   const supabase = createClient()
 
-  // Standalone mode: fetch own data (used in dev/testing or gate-level use)
   const [standaloneV, setStandaloneV] = useState<SellerVerification | null>(null)
   const [standaloneLoading, setStandaloneLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     if (!standalone) return
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setStandaloneLoading(false); return }
-      const { data } = await supabase
-        .from('seller_verification')
-        .select('*')
-        .eq('seller_id', user.id)
-        .maybeSingle()
-      setStandaloneV(data as SellerVerification | null)
-      setStandaloneLoading(false)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { setStandaloneLoading(false); return }
+        const { data, error } = await supabase
+          .from('seller_verification')
+          .select('*')
+          .eq('seller_id', user.id)
+          .maybeSingle()
+        if (error) {
+          // Fail quietly — view may not exist yet or RLS is being tuned
+          console.warn('[OnboardingStatus] could not load verification:', error.message)
+          setLoadError(true)
+        } else {
+          setStandaloneV(data as SellerVerification | null)
+        }
+      } catch (err) {
+        console.warn('[OnboardingStatus] unexpected error:', err)
+        setLoadError(true)
+      } finally {
+        setStandaloneLoading(false)
+      }
     }
     load()
   }, [standalone])
@@ -362,10 +390,18 @@ export function OnboardingStatus({ standalone = false, onUnlocked }: OnboardingS
     )
   }
 
-  if (!v) {
+  if (loadError || !v) {
     return (
-      <div className="bg-white rounded-card border border-border p-6 shadow-card text-center text-secondary text-sm">
-        Verification data unavailable. Please try refreshing.
+      <div className="bg-white rounded-card border border-border p-5 shadow-card">
+        <p className="text-sm text-secondary text-center">
+          Verification status unavailable.{' '}
+          <button
+            onClick={() => window.location.reload()}
+            className="text-primary underline underline-offset-2 hover:text-[#e55a1f]"
+          >
+            Retry
+          </button>
+        </p>
       </div>
     )
   }

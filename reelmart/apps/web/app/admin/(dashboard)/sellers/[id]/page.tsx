@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import SellerActions from '../SellerActions'
-import PanVerifyButton from './PanVerifyButton'
 import GstVerifyButton from './GstVerifyButton'
 import SuspendButton from './SuspendButton'
 
@@ -71,9 +70,11 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
     signed((store as any).signature_path ?? null),
   ])
 
-  const panVerified: boolean = (store as any).pan_verified ?? false
+  const panNumber: string | null = (store as any).pan_number ?? null
+  const panProvided: boolean = !!panNumber
   const gstVerified: boolean = (store as any).gst_verified ?? false
   const gstNumber: string | null = (store as any).gst_number ?? null
+  const pickupVerified: boolean = (store as any).pickup_verified ?? false
   const suspended: boolean = (store as any).suspended ?? false
   const suspendedReason: string | null = (store as any).suspended_reason ?? null
   const suspendedAt: string | null = (store as any).suspended_at ?? null
@@ -142,20 +143,19 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
         </div>
       </div>
 
-      {/* KYC + PAN verification */}
+      {/* KYC documents */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-gray-900">KYC documents</h2>
-          <div className="flex items-center gap-3">
-            <VerifiedBadge verified={panVerified} label="PAN" />
-            {!panVerified && (
-              <PanVerifyButton storeId={params.id} />
-            )}
-          </div>
+          {/* PAN is self-certified — no admin verification button */}
+          <span className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full ${panProvided ? 'text-green-700 bg-green-50' : 'text-yellow-700 bg-yellow-50'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full inline-block ${panProvided ? 'bg-green-500' : 'bg-yellow-500'}`} />
+            PAN {panProvided ? 'Provided' : 'Not provided'}
+          </span>
         </div>
 
         <div className="grid grid-cols-2 gap-4 mb-5">
-          <Field label="PAN number" value={store.pan_number} />
+          <Field label="PAN number" value={panNumber} />
           <Field label="GST number" value={gstNumber} />
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -199,7 +199,13 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-bold text-gray-900">GST verification</h2>
           <div className="flex items-center gap-3">
-            <VerifiedBadge verified={gstVerified} label="GST" />
+            {gstNumber ? (
+              <VerifiedBadge verified={gstVerified} label="GST" />
+            ) : (
+              <span className="text-xs font-semibold text-gray-400 bg-gray-50 px-3 py-1 rounded-full">
+                Not provided
+              </span>
+            )}
             {gstNumber && !gstVerified && (
               <GstVerifyButton storeId={params.id} />
             )}
@@ -210,6 +216,21 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
         ) : (
           <div className="text-sm text-gray-400">No GST number provided by seller.</div>
         )}
+      </div>
+
+      {/* Pickup address — verified automatically via NimbusPost (read-only) */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="font-bold text-gray-900">Pickup address</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Verified automatically by the courier partner (NimbusPost).</p>
+          </div>
+          <VerifiedBadge verified={pickupVerified} label="Pickup" />
+        </div>
+        <Field
+          label="Address"
+          value={[store.address, store.area, store.city, store.state, store.pincode].filter(Boolean).join(', ')}
+        />
       </div>
 
       {/* Suspension controls */}
