@@ -74,10 +74,12 @@ interface Msg91VerifyResponse {
 
 async function verifyWithMsg91(accessToken: string): Promise<string> {
   if (!MSG91_AUTHKEY) throw new Error('MSG91_WIDGET_AUTHKEY not configured')
+  // MSG91's verifyAccessToken expects the authkey in the BODY (not a header),
+  // per their docs. We also keep it in the header as a harmless fallback.
   const res = await fetch(MSG91_VERIFY_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', authkey: MSG91_AUTHKEY },
-    body: JSON.stringify({ 'access-token': accessToken }),
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', authkey: MSG91_AUTHKEY },
+    body: JSON.stringify({ authkey: MSG91_AUTHKEY, 'access-token': accessToken }),
   })
   const json = (await res.json()) as Msg91VerifyResponse
   if (json.type !== 'success' || !json.message) {

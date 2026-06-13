@@ -35,7 +35,13 @@ export default function BuyerAuthNav() {
     setReady(true)
   }
 
-  useEffect(() => { refresh() }, [])
+  useEffect(() => {
+    refresh()
+    // React to auth changes from anywhere (test-login skip, OTP login, logout
+    // in another tab) so the header reflects the session without a reload.
+    const { data: sub } = supabase.auth.onAuthStateChange(() => { refresh() })
+    return () => sub.subscription.unsubscribe()
+  }, [])
 
   // Close the account menu on an outside click.
   useEffect(() => {
