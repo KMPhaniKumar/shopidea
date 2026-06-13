@@ -197,15 +197,19 @@ authRouter.post('/msg91-exchange', requireAllowedOrigin, async (req, res) => {
         }
 
         // Re-mirror into public.users so it's no longer orphaned.
+        // phone_verified=true: MSG91 has already verified the phone before we
+        // reach this point; the service role bypasses the column-grant restriction.
         await supabaseAdmin.from('users').upsert({
-          id: orphanId, phone, role: parsed.data.role,
+          id: orphanId, phone, role: parsed.data.role, phone_verified: true,
         }, { onConflict: 'id' })
 
         existing = { id: orphanId }
       } else {
         // Happy path: new user created successfully.
+        // phone_verified=true: MSG91 has already verified the phone before we
+        // reach this point; the service role bypasses the column-grant restriction.
         await supabaseAdmin.from('users').upsert({
-          id: created.user.id, phone, role: parsed.data.role,
+          id: created.user.id, phone, role: parsed.data.role, phone_verified: true,
         }, { onConflict: 'id' })
         existing = { id: created.user.id }
       }
