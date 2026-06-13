@@ -113,8 +113,11 @@ export async function deleteAddress(
 }
 
 // ─── Google Places autocomplete helpers ───────────────────────────────────
-
-const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? ''
+//
+// NOTE: Google's Places REST API does not allow direct browser fetch (CORS).
+// These helpers call our own server-side proxy routes (/api/places/*) which
+// in turn call Google server-side. The key stays off the client bundle and
+// avoids CORS errors entirely.
 
 export interface PlacePrediction {
   place_id: string
@@ -123,44 +126,24 @@ export interface PlacePrediction {
 }
 
 export async function searchPlaces(query: string): Promise<PlacePrediction[]> {
-  if (!query.trim() || !MAPS_KEY) return []
-  const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json`
-    + `?input=${encodeURIComponent(query)}`
-    + `&key=${MAPS_KEY}&language=en&components=country:in&types=geocode`
+  if (!query.trim()) return []
   try {
-    const res = await fetch(url)
+    const res = await fetch(`/api/places/autocomplete?q=${encodeURIComponent(query)}`)
     const json = await res.json()
-    if (json.status !== 'OK') return []
-    return json.predictions.map((p: any) => ({
-      place_id: p.place_id,
-      main_text: p.structured_formatting?.main_text ?? p.description,
-      secondary_text: p.structured_formatting?.secondary_text ?? '',
-    }))
+    if (!json.success) return []
+    return json.data as PlacePrediction[]
   } catch { return [] }
 }
 
 export interface PlaceDetails { area: string; city: string; state: string; pincode: string }
 
 export async function fetchPlaceDetails(placeId: string): Promise<PlaceDetails> {
-  if (!MAPS_KEY) return { area: '', city: '', state: '', pincode: '' }
-  const url = `https://maps.googleapis.com/maps/api/place/details/json`
-    + `?place_id=${placeId}&key=${MAPS_KEY}&fields=address_components&language=en`
+  const empty: PlaceDetails = { area: '', city: '', state: '', pincode: '' }
+  if (!placeId) return empty
   try {
-    const res = await fetch(url)
+    const res = await fetch(`/api/places/details?place_id=${encodeURIComponent(placeId)}`)
     const json = await res.json()
-    const c = json.result?.address_components ?? []
-    const get = (...types: string[]) => {
-      for (const t of types) {
-        const m = c.find((x: any) => x.types.includes(t))
-        if (m?.long_name) return m.long_name
-      }
-      return ''
-    }
-    return {
-      area: get('sublocality_level_1', 'sublocality_level_2', 'sublocality', 'neighborhood', 'locality'),
-      city: get('administrative_area_level_2', 'locality', 'administrative_area_level_1'),
-      state: get('administrative_area_level_1'),
-      pincode: get('postal_code'),
-    }
-  } catch { return { area: '', city: '', state: '', pincode: '' } }
+    if (!json.success) return empty
+    return json.data as PlaceDetails
+  } catch { return empty }
 }

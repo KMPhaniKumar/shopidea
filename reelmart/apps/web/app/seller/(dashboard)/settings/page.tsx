@@ -137,7 +137,11 @@ export default function SettingsPage() {
     setAddressRequest(addrReq ?? null)
 
     // Pre-fill the address form with the current live store address.
+    // line1 / line2 are local-only fields that get composed into `address`
+    // before submitting (the backend schema only knows `address`).
     resetAddr({
+      line1: '',
+      line2: '',
       address: data.address ?? '',
       area: data.area ?? '',
       city: data.city ?? '',
@@ -251,6 +255,14 @@ export default function SettingsPage() {
       return
     }
 
+    // Compose line1 (flat/building) and line2 (landmark) into the address field.
+    // The backend `proposed` schema only knows `address` — we prepend the manual
+    // details so couriers get the full pickup address.
+    const line1 = (data.line1 ?? '').trim()
+    const line2 = (data.line2 ?? '').trim()
+    const base = (data.address ?? '').trim()
+    const composedAddress = [line1, line2, base].filter(Boolean).join(', ')
+
     setSavingAddress(true)
     const res = await fetch('/api/seller/address-change', {
       method: 'POST',
@@ -258,7 +270,7 @@ export default function SettingsPage() {
       body: JSON.stringify({
         storeId: store.id,
         proposed: {
-          address: data.address ?? '',
+          address: composedAddress || base,
           area: data.area ?? '',
           city: data.city ?? '',
           state: data.state ?? '',
@@ -297,7 +309,7 @@ export default function SettingsPage() {
   return (
     <div className="max-w-2xl space-y-6 pb-10">
       <Toaster />
-      <h1 className="text-xl font-bold text-[#1A1A1A]">Settings</h1>
+      <h1 className="text-xl font-bold text-[#1A1A1A]">Profile</h1>
 
       {/* Store Link */}
       {store && (
@@ -451,7 +463,7 @@ export default function SettingsPage() {
         </div>
 
         <button type="submit" disabled={saving || slugAvailable === false} className="w-full bg-[#FF6B2B] text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50">
-          {saving ? 'Saving...' : 'Save Settings'}
+          {saving ? 'Saving...' : 'Save Profile'}
         </button>
       </form>
 
@@ -516,9 +528,37 @@ export default function SettingsPage() {
               if (d.pincode) setAddrValue('pincode', d.pincode)
             }} />
           </div>
+
+          {/* Manual address details — entered alongside the map search */}
           <div>
-            <label className="block text-sm font-medium mb-1">Full Address</label>
+            <label className="block text-sm font-medium mb-1">
+              Flat / House / Building No. <span className="text-[#AAAAAA] font-normal">(optional)</span>
+            </label>
+            <input
+              {...registerAddr('line1')}
+              className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]"
+              placeholder="Shop 12, Ground Floor, ABC Complex"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Landmark / Additional details <span className="text-[#AAAAAA] font-normal">(optional)</span>
+            </label>
+            <input
+              {...registerAddr('line2')}
+              className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]"
+              placeholder="Near Main Market, Opp. Bus Stand"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Full Address <span className="text-[#AAAAAA] font-normal">(auto-filled or type manually)</span>
+            </label>
             <textarea {...registerAddr('address')} rows={2} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] resize-none" placeholder="Shop #12, Main Market, Near..." />
+            <p className="text-xs text-[#AAAAAA] mt-0.5">
+              Your flat/building and landmark above will be prepended to this when submitted.
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>

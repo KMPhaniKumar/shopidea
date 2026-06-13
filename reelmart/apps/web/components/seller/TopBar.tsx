@@ -14,6 +14,8 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
     router.push('/seller/login')
   }
 
+  const storeName = store?.store_name
+
   return (
     <header className="h-14 bg-white border-b border-[#EEEEEE] px-3 md:px-6 flex items-center justify-between shrink-0">
       <div className="flex items-center gap-2 min-w-0">
@@ -24,7 +26,14 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
         >
           <Menu size={20} className="text-[#666666]" />
         </button>
-        <span className="font-semibold text-[#1A1A1A] truncate">{store?.store_name ?? 'My Store'}</span>
+        {storeName ? (
+          <div className="flex items-baseline gap-1.5 min-w-0">
+            <span className="text-sm text-[#666666] shrink-0">Hi,</span>
+            <span className="font-semibold text-[#1A1A1A] truncate">{storeName} 👋</span>
+          </div>
+        ) : (
+          <span className="font-semibold text-[#1A1A1A] truncate">My Store</span>
+        )}
       </div>
       <div className="flex items-center gap-2 md:gap-4 shrink-0">
         <button className="relative p-2 rounded-lg hover:bg-[#F9F9F9]">

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { X } from 'lucide-react'
 import {
   LayoutDashboard, Package, ShoppingBag, BarChart2,
-  Users, Wallet, Megaphone, Settings,
+  Users, Wallet, Megaphone, UserCircle,
 } from 'lucide-react'
 
 // write-gated = the seller can VIEW the page but write actions (add product etc.)
@@ -19,7 +19,7 @@ const ALL_ITEMS = [
   { icon: Users,           label: 'Customers',  href: '/seller/customers', writeGated: false },
   { icon: Wallet,          label: 'Payouts',    href: '/seller/payouts',   writeGated: false },
   { icon: Megaphone,       label: 'Marketing',  href: '/seller/marketing', writeGated: false },
-  { icon: Settings,        label: 'Settings',   href: '/seller/settings',  writeGated: false },
+  { icon: UserCircle,      label: 'Profile',    href: '/seller/settings',  writeGated: false },
 ]
 
 interface SidebarProps {
