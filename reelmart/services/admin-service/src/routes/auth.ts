@@ -119,7 +119,8 @@ authRouter.post('/msg91-exchange', requireAllowedOrigin, async (req, res) => {
     }
 
     if (!existing) {
-      const { data, error } = await supabaseAdmin.auth.admin.createUser({
+      // Attempt to create a new auth.users record.
+      const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
         phone,
@@ -127,13 +128,87 @@ authRouter.post('/msg91-exchange', requireAllowedOrigin, async (req, res) => {
         phone_confirm: true,
         user_metadata: { role: parsed.data.role, signup_via: 'msg91-widget' },
       })
-      if (error || !data.user) {
-        return res.status(500).json({ success: false, error: error?.message ?? 'auth-create-failed' })
+
+      if (createError || !created.user) {
+        // Detect the split-brain case: public.users is empty but auth.users
+        // already has a row for this phone (e.g. after a public.users truncation).
+        // Supabase returns HTTP 422 with a message containing one of these strings.
+        const msg = (createError?.message ?? '').toLowerCase()
+        const isAlreadyExists =
+          msg.includes('phone_exists') ||
+          msg.includes('email_exists') ||
+          msg.includes('already been registered') ||
+          msg.includes('already registered') ||
+          msg.includes('already exists')
+
+        if (!isAlreadyExists) {
+          // Genuine creation failure — don't swallow it.
+          return res.status(500).json({ success: false, error: createError?.message ?? 'auth-create-failed' })
+        }
+
+        // --- Self-heal: find the orphan auth.users record by phone ---
+        // Supabase has no get-by-phone admin API, so we page through listUsers.
+        // Normalize to digits-only for a robust match (stored phone may be
+        // "+91XXXXXXXXXX", "91XXXXXXXXXX", or "XXXXXXXXXX").
+        const phoneDigits = phone.replace(/\D/g, '')
+
+        let orphanId: string | null = null
+        let page = 1
+        const perPage = 1000
+        while (orphanId === null) {
+          const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+            page,
+            perPage,
+          })
+          if (listError) {
+            return res.status(500).json({ success: false, error: 'auth-relink-list-failed' })
+          }
+          for (const u of listData.users) {
+            const storedDigits = (u.phone ?? '').replace(/\D/g, '')
+            // Match by phone digits (last-10 suffix covers +91 vs bare 10-digit).
+            if (
+              storedDigits === phoneDigits ||
+              storedDigits.endsWith(phoneDigits.slice(-10))
+            ) {
+              orphanId = u.id
+              break
+            }
+          }
+          // Stop if we've seen all users or found a match.
+          if (orphanId !== null || listData.users.length < perPage) break
+          page++
+        }
+
+        if (!orphanId) {
+          // Truly unresolvable — the error wasn't a simple phone collision.
+          return res.status(500).json({ success: false, error: 'auth-create-failed', code: 'AUTH_CONFLICT_UNRESOLVABLE' })
+        }
+
+        // Re-link: normalize the orphan's email + password so signInWithPassword
+        // will succeed. Also re-confirm both identifiers.
+        const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(orphanId, {
+          email,
+          password,
+          email_confirm: true,
+          phone_confirm: true,
+        })
+        if (updateError) {
+          return res.status(500).json({ success: false, error: 'auth-relink-update-failed' })
+        }
+
+        // Re-mirror into public.users so it's no longer orphaned.
+        await supabaseAdmin.from('users').upsert({
+          id: orphanId, phone, role: parsed.data.role,
+        }, { onConflict: 'id' })
+
+        existing = { id: orphanId }
+      } else {
+        // Happy path: new user created successfully.
+        await supabaseAdmin.from('users').upsert({
+          id: created.user.id, phone, role: parsed.data.role,
+        }, { onConflict: 'id' })
+        existing = { id: created.user.id }
       }
-      await supabaseAdmin.from('users').upsert({
-        id: data.user.id, phone, role: parsed.data.role,
-      }, { onConflict: 'id' })
-      existing = { id: data.user.id }
     } else {
       // Returning user — re-set the password in case AUTH_BRIDGE_SECRET rotated.
       await supabaseAdmin.auth.admin.updateUserById(existing.id, { password })
