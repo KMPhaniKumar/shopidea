@@ -20,11 +20,11 @@
 | HIGH-4 | High | `GET /orders` & `/orders/:id` — no ownership check (IDOR) | backend | Open |
 | HIGH-5 | High | `PUT /orders/:id/status` — no seller ownership check (IDOR) | backend | Open |
 | HIGH-6 | High | public store endpoints `select('*')` leak PAN/GST/Aadhaar | backend | Open |
-| HIGH-7 | High | Next.js 14.1.0 — multiple critical CVEs | ui/app-sec | Open |
+| HIGH-7 | High | Next.js 14.1.0 — multiple critical CVEs | ui/app-sec | Fixed (14.2.35) |
 | HIGH-8 | High | coupon delete — no ownership check (IDOR) | backend | Open |
 | HIGH-9 | High | `/notifications/register-token` unauthenticated | backend | Open |
-| MED-1 | Medium | `stores` RLS can't restrict PII columns (anon `select('*')`) | database | Open |
-| MED-2 | Medium | `users` "public names" policy exposes `phone` | database | Open |
+| MED-1 | Medium | `stores` RLS can't restrict PII columns (anon `select('*')`) | database | Fixed — migration 023 |
+| MED-2 | Medium | `users` "public names" policy exposes `phone` | database | Fixed — migration 023 |
 | MED-3 | Medium | CORS code fallback allows-all when unset | backend | Open |
 | MED-4 | Medium | returns get/list — no ownership check (IDOR) | backend | Open |
 | MED-5 | Medium | signature compare not timing-safe | backend | Open |
@@ -32,7 +32,7 @@
 | MED-7 | Medium | Fargate tasks have public IPs in public subnets | infra-sec | Open |
 | MED-8 | Medium | bank-account GET accepts arbitrary `sellerId` (IDOR) | backend | Open |
 | MED-9 | Medium | operator IP committed in bootstrap `terraform.tfvars` | infra-sec | Open (verify) |
-| LOW-1 | Low | `followed_stores` publicly enumerable (buyer_ids) | database | Open |
+| LOW-1 | Low | `followed_stores` publicly enumerable (buyer_ids) | database | Fixed — migration 023 |
 | LOW-2 | Low | admin settings GET is public | backend | Open |
 | LOW-3 | Low | whatsapp webhook has no Gupshup signature check | backend | Open |
 | LOW-4 | Low | stale Shiprocket secrets shipped to delivery-service | infra | Open |
