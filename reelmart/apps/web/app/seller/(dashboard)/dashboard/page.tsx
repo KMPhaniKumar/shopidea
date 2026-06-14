@@ -29,10 +29,17 @@ export default function DashboardPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
+      // Explicit non-KYC column list. `select('*')` 401s for the authenticated
+      // seller after migration 024 revoked SELECT on the KYC columns
+      // (aadhaar_url, pan_number, …) — Postgres denies the whole row when the
+      // role lacks privilege on any expanded column. KYC fields are read
+      // separately via /api/seller/my-store (service_role).
+      const STORE_COLS =
+        'id, store_name, store_slug, is_open, is_active, is_verified, approval_status, category, logo_url'
       const storeQuery = user
-        ? supabase.from('stores').select('*').eq('seller_id', user.id).maybeSingle()
+        ? supabase.from('stores').select(STORE_COLS).eq('seller_id', user.id).maybeSingle()
         : process.env.NODE_ENV === 'development'
-          ? supabase.from('stores').select('*').limit(1).maybeSingle()
+          ? supabase.from('stores').select(STORE_COLS).limit(1).maybeSingle()
           : null
 
       if (!storeQuery) { router.push('/seller/login'); return }

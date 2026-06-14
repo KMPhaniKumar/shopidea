@@ -20,6 +20,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
+import { useSellerStore } from '@/store/sellerStore'
 import { Clock, XCircle } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -98,6 +99,7 @@ export function SellerGate({ children }: { children: React.ReactNode }) {
   const [verification, setVerification] = useState<SellerVerification | null>(null)
   const [verificationLoading, setVerificationLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
+  const setStore = useSellerStore((s) => s.setStore)
 
   async function check() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -117,12 +119,17 @@ export function SellerGate({ children }: { children: React.ReactNode }) {
 
     const { data: store } = await supabase
       .from('stores')
-      .select('approval_status, suspended, suspended_reason')
+      .select('id, store_name, store_slug, is_open, approval_status, suspended, suspended_reason')
       .eq('seller_id', user.id)
       .maybeSingle()
 
     // No store yet — send to registration.
     if (!store) { router.replace('/seller/register'); return }
+
+    // Publish the store globally so the TopBar Open/Closed toggle is available
+    // on every dashboard page (not just the dashboard home, which was the only
+    // page that previously populated this store).
+    setStore(store)
 
     // Hard blocks
     if (store.approval_status === 'rejected') { setStatus('rejected'); return }

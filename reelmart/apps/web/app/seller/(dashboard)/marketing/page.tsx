@@ -39,9 +39,12 @@ export default function MarketingPage() {
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
+    // Explicit non-KYC columns — `select('*')` 401s under migration 024's
+    // column grants (KYC columns are not SELECTable by the authenticated role).
+    const STORE_COLS = 'id, store_name, store_slug, is_open, category, logo_url'
     const storeQuery = user
-      ? supabase.from('stores').select('*').eq('seller_id', user.id).single()
-      : supabase.from('stores').select('*').limit(1).single()
+      ? supabase.from('stores').select(STORE_COLS).eq('seller_id', user.id).single()
+      : supabase.from('stores').select(STORE_COLS).limit(1).single()
     const { data: storeData } = await storeQuery
     if (!storeData) return
     setStore(storeData)
