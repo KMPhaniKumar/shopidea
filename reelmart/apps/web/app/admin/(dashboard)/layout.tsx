@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import AdminNav from './AdminNav'
 import { AdminTopBar } from '@/components/admin/TopBar'
+import { AdminNotifier } from '@/components/admin/AdminNotifier'
 
 // Admin dashboard is always rendered per-request (auth + service-role data);
 // never statically pre-rendered at build (which would instantiate a Supabase
@@ -31,6 +32,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <AdminTopBar adminName={adminName} />
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
+      <AdminNotifier />
     </div>
   )
 }
