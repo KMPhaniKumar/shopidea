@@ -60,18 +60,30 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
       <div className="flex items-center gap-2 md:gap-4 shrink-0">
         {store && (
           <button
+            type="button"
+            role="switch"
+            aria-checked={isOpen}
             onClick={toggleOpen}
             disabled={toggling}
-            title={isOpen ? 'Tap to close your store' : 'Tap to open your store'}
+            title={isOpen ? 'Your store is Open — tap to close it' : 'Your store is Closed — tap to open it'}
             aria-label={isOpen ? 'Store is open — tap to close' : 'Store is closed — tap to open'}
-            className={`flex items-center gap-1.5 pl-2 pr-2.5 py-1.5 rounded-full text-xs font-semibold border transition disabled:opacity-50 ${
-              isOpen
-                ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
-                : 'bg-red-50 border-red-200 text-[#E23744] hover:bg-red-100'
-            }`}
+            className="flex items-center gap-2 pl-2.5 pr-1.5 py-1 rounded-full border border-[#EEEEEE] bg-white hover:bg-[#F9F9F9] transition disabled:opacity-50"
           >
-            <span className={`w-2 h-2 rounded-full ${isOpen ? 'bg-green-500' : 'bg-[#E23744]'}`} />
-            {isOpen ? 'Open' : 'Closed'}
+            <span className={`text-xs font-semibold ${isOpen ? 'text-green-700' : 'text-[#999999]'}`}>
+              {isOpen ? 'Open' : 'Closed'}
+            </span>
+            {/* Sliding toggle: track + knob that moves to signal on/off */}
+            <span
+              className={`relative inline-flex items-center w-9 h-5 rounded-full transition-colors ${
+                isOpen ? 'bg-green-500' : 'bg-[#D9D9D9]'
+              }`}
+            >
+              <span
+                className={`absolute w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                  isOpen ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </span>
           </button>
         )}
         <button className="relative p-2 rounded-lg hover:bg-[#F9F9F9]">
