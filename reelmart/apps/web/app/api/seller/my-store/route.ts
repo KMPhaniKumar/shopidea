@@ -50,7 +50,7 @@ export async function GET() {
   const { data: store, error } = await admin
     .from('stores')
     .select(
-      'id, seller_id, pan_number, gst_number, pan_doc_path, selfie_path, kyc_submitted_at'
+      'id, seller_id, pan_number, gst_number, pan_doc_path, selfie_path, kyc_submitted_at, pickup_contact_name, pickup_phone, pickup_email'
     )
     .eq('seller_id', user.id)
     .single()
@@ -93,6 +93,9 @@ export async function GET() {
       kyc_submitted_at: store.kyc_submitted_at ?? null,
       pan_doc_url: panDocUrl,
       selfie_url: selfieUrl,
+      pickup_contact_name: store.pickup_contact_name ?? null,
+      pickup_phone: store.pickup_phone ?? null,
+      pickup_email: store.pickup_email ?? null,
     },
   })
 }

@@ -162,6 +162,12 @@ export default function SettingsPage() {
           pan_number: kycJson.data.pan_number ?? '',
           gst_number: kycJson.data.gst_number ?? '',
         }))
+        // Pickup-contact fields live on the address form and also come from the
+        // service-role route (locked from the authenticated role by migration 024).
+        setAddrValue('contact_name', kycJson.data.pickup_contact_name ?? '')
+        setAddrValue('phone', kycJson.data.pickup_phone ?? '')
+        setAddrValue('email', kycJson.data.pickup_email ?? '')
+        setAddrValue('gst_number', kycJson.data.gst_number ?? '')
       }
     }
   }
@@ -267,6 +273,10 @@ export default function SettingsPage() {
           city: data.city ?? '',
           state: data.state ?? '',
           pincode: data.pincode ?? '',
+          contact_name: (data.contact_name ?? '').trim(),
+          phone: (data.phone ?? '').trim(),
+          email: (data.email ?? '').trim(),
+          gst_number: (data.gst_number ?? '').trim().toUpperCase(),
         },
       }),
     })
@@ -515,6 +525,29 @@ export default function SettingsPage() {
         )}
 
         <form onSubmit={handleSubmitAddr(onSubmitAddress)} className="space-y-4">
+          {/* Contact info — required by the courier (NimbusPost) for pickup.
+              The pickup address is sent to the courier with each order. */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Contact name <span className="text-[#E23744]">*</span></label>
+              <input {...registerAddr('contact_name')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="Person courier asks for at pickup" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Contact number <span className="text-[#E23744]">*</span></label>
+              <input {...registerAddr('phone')} maxLength={10} inputMode="numeric" className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="10-digit mobile" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Email <span className="text-[#AAAAAA] font-normal">(optional)</span></label>
+              <input {...registerAddr('email')} type="email" className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="pickup@store.com" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">GST <span className="text-[#AAAAAA] font-normal">(optional)</span></label>
+              <input {...registerAddr('gst_number')} maxLength={15} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] uppercase" placeholder="15-digit GSTIN" />
+            </div>
+          </div>
+
+          <div className="border-t border-[#F0F0F0] pt-3" />
+
           {/* Manual address entry. (Map search is added back once the Google
               Maps key is configured.) */}
           <div>

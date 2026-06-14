@@ -413,6 +413,13 @@ export interface StorePickupInput {
   state?: string | null
   pincode?: string | null
   whatsapp_number?: string | null
+  // Pickup-contact fields (NimbusPost's create-warehouse requires a contact
+  // name + a 10-digit phone; GST + email are optional). Collected on the
+  // seller's "Add Pickup Address" form.
+  pickup_contact_name?: string | null
+  pickup_phone?: string | null
+  pickup_email?: string | null
+  gst_number?: string | null
 }
 
 export interface PickupRegistration {
@@ -461,9 +468,36 @@ function extractPickupId(data: any, fallbackName: string): string | null {
   )?.toString() ?? null
 }
 
-// Register (or re-register) the store's address as a NimbusPost pickup
-// warehouse. Idempotent on warehouse_name: if NimbusPost reports the warehouse
-// already exists we treat that as success rather than an error.
+// ---- Pickup verification (serviceability) ------------------------------
+// NimbusPost's v1 (email/password) API has NO warehouse-registration endpoint —
+// the pickup address is sent INLINE on every Create Shipment request (see
+// buildPickup in the delivery route). So there is nothing to "register" up
+// front. Instead we "verify" a seller's pickup by confirming NimbusPost can
+// actually service that pincode as an origin — the same serviceability API the
+// rate check uses. This needs only the email/password JWT (no API key).
+
+// A fixed, widely-serviced probe destination. If at least one courier can carry
+// origin → probe, the origin pincode is pickup-serviceable. Use a non-metro-11x
+// probe so a Delhi-origin pincode isn't tested against itself.
+function probeDestinationFor(originPincode: string): string {
+  return originPincode.startsWith('11') ? '400001' : '110001'
+}
+
+/** True if NimbusPost can pick up from this origin pincode (any courier serves it). */
+export async function isPincodeServiceable(originPincode: string): Promise<boolean> {
+  const rates = await rateServiceability({
+    origin: originPincode,
+    destination: probeDestinationFor(originPincode),
+    payment_type: 'prepaid',
+    order_amount: 500,
+  })
+  return Array.isArray(rates) && rates.length > 0
+}
+
+// Verify a store's pickup. "Verified" = the pickup address is complete AND the
+// pincode is serviceable by NimbusPost. Keeps the PickupRegistration return
+// shape so the calling route/savePickup are unchanged. (warehouseName is kept
+// only as a stable per-store label used by the inline shipment pickup.)
 export async function registerPickupWarehouse(store: StorePickupInput): Promise<PickupRegistration> {
   const warehouseName = warehouseNameForStore(store.id)
 
@@ -474,46 +508,29 @@ export async function registerPickupWarehouse(store: StorePickupInput): Promise<
     return { pickupId: null, warehouseName, status: 'failed', error: 'Incomplete pickup address' }
   }
 
-  const address = [store.address, store.area].filter(Boolean).join(', ')
-  const phone = (store.whatsapp_number ?? '').replace(/^\+91/, '').replace(/\D/g, '')
-
-  let resp: any
-  try {
-    resp = await npRequest('POST', '/warehouse', {
-      warehouse_name: warehouseName,
-      name: store.store_name,
-      address,
-      city: store.city,
-      state: store.state,
-      pincode: store.pincode,
-      phone,
-    })
-  } catch (err: any) {
-    const alreadyExists = /already\s*exist/i.test(String(err?.message ?? ''))
-    if (!alreadyExists) {
-      return { pickupId: null, warehouseName, status: 'failed', error: err.message }
-    }
-    return { pickupId: null, warehouseName, status: 'verified' }
+  const phone = (store.pickup_phone ?? store.whatsapp_number ?? '')
+    .replace(/^\+?91/, '')
+    .replace(/\D/g, '')
+    .slice(-10)
+  if (phone.length !== 10) {
+    return { pickupId: null, warehouseName, status: 'failed', error: 'A valid 10-digit pickup contact phone is required' }
   }
 
-  const alreadyExists = /already\s*exist/i.test(String(resp?.message ?? ''))
-  return {
-    pickupId: extractPickupId(resp?.data, warehouseName),
-    warehouseName,
-    status: alreadyExists ? 'verified' : interpretStatus(resp?.data),
-    raw: resp,
+  try {
+    const serviceable = await isPincodeServiceable(store.pincode!.trim())
+    return serviceable
+      ? { pickupId: null, warehouseName, status: 'verified' }
+      : { pickupId: null, warehouseName, status: 'failed', error: 'Pickup pincode is not serviceable by NimbusPost' }
+  } catch (err: any) {
+    return { pickupId: null, warehouseName, status: 'failed', error: err.message }
   }
 }
 
-// Re-poll NimbusPost for a warehouse that was left 'pending'.
-export async function fetchPickupStatus(warehouseName: string): Promise<PickupStatus | null> {
-  if (!isConfigured()) return null
+// Re-check serviceability for a store whose pickup was left pending/failed.
+export async function fetchPickupStatus(pincode: string | null | undefined): Promise<PickupStatus | null> {
+  if (!isConfigured() || !pincode) return null
   try {
-    const resp = await npRequest('GET', '/warehouse')
-    const list: any[] = resp?.data ?? resp?.warehouses ?? []
-    const match = list.find((w) => (w?.warehouse_name ?? w?.name) === warehouseName)
-    if (!match) return null
-    return interpretStatus(match)
+    return (await isPincodeServiceable(pincode.trim())) ? 'verified' : 'failed'
   } catch {
     return null
   }

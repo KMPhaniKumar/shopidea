@@ -122,10 +122,14 @@ export async function PUT(
       city: string
       state: string
       pincode: string
+      contact_name?: string
+      phone?: string
+      email?: string
+      gst_number?: string
     }
 
-    // Apply the proposed address to the stores row (service role bypasses the
-    // column-level REVOKE on authenticated).
+    // Apply the proposed address + pickup-contact to the stores row (service
+    // role bypasses the column-level REVOKE on authenticated).
     const { error: storeUpdateErr } = await admin
       .from('stores')
       .update({
@@ -134,6 +138,10 @@ export async function PUT(
         city: proposed.city,
         state: proposed.state,
         pincode: proposed.pincode,
+        ...(proposed.contact_name ? { pickup_contact_name: proposed.contact_name } : {}),
+        ...(proposed.phone ? { pickup_phone: proposed.phone } : {}),
+        ...(proposed.email !== undefined ? { pickup_email: proposed.email || null } : {}),
+        ...(proposed.gst_number ? { gst_number: proposed.gst_number } : {}),
       })
       .eq('id', storeId)
 

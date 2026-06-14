@@ -14,11 +14,20 @@ import { z } from 'zod'
 const ProposedAddressSchema = z.object({
   storeId: z.string().uuid(),
   proposed: z.object({
+    // Address (NimbusPost pickup is sent inline per shipment from these).
     address: z.string().min(5, 'Address is too short').max(300, 'Address is too long'),
     area: z.string().min(2, 'Area is required').max(100, 'Area is too long'),
     city: z.string().min(2, 'City is required').max(100, 'City is too long'),
     state: z.string().min(2, 'State is required').max(100, 'State is too long'),
     pincode: z.string().regex(/^\d{6}$/, 'Pincode must be 6 digits'),
+    // Pickup contact — NimbusPost requires a contact name + 10-digit phone.
+    contact_name: z.string().min(2, 'Contact name is required').max(100, 'Contact name is too long'),
+    phone: z
+      .string()
+      .transform((v) => v.replace(/^\+?91/, '').replace(/\D/g, ''))
+      .refine((v) => /^\d{10}$/.test(v), 'Contact number must be 10 digits'),
+    email: z.string().email('Enter a valid email').max(150).optional().or(z.literal('')),
+    gst_number: z.string().max(15).optional().or(z.literal('')),
   }),
 })
 
@@ -92,6 +101,10 @@ export async function POST(req: NextRequest) {
         city: proposed.city,
         state: proposed.state,
         pincode: proposed.pincode,
+        pickup_contact_name: proposed.contact_name,
+        pickup_phone: proposed.phone,
+        pickup_email: proposed.email || null,
+        ...(proposed.gst_number ? { gst_number: proposed.gst_number } : {}),
       })
       .eq('id', storeId)
     if (setErr) {

@@ -15,6 +15,8 @@ import {
   ndrAction,
   registerPickupWarehouse,
   fetchPickupStatus,
+  warehouseNameForStore,
+  hasCompletePickupAddress,
   type StorePickupInput,
   type NdrActionItem,
 } from '../lib/nimbus'
@@ -22,7 +24,8 @@ import { estimateDeliveryDays } from '../lib/estimateDelivery'
 
 export const deliveryRouter = Router()
 
-const PICKUP_FIELDS = 'id, store_name, address, area, city, state, pincode, whatsapp_number, approval_status'
+const PICKUP_FIELDS =
+  'id, store_name, address, area, city, state, pincode, whatsapp_number, pickup_contact_name, pickup_phone, pickup_email, approval_status'
 
 // ---- Status mapping ----------------------------------------------------
 
@@ -261,15 +264,32 @@ deliveryRouter.post('/create-shipment', requireAuth, async (req: AuthRequest, re
   // Fetch store pickup info
   const { data: storeDetail } = await supabaseAdmin
     .from('stores')
-    .select('pickup_status, pickup_warehouse_name, address, area, city, state, pincode, whatsapp_number, store_name')
+    .select('id, pickup_status, address, area, city, state, pincode, whatsapp_number, pickup_contact_name, pickup_phone, store_name')
     .eq('id', order.store_id)
     .single()
 
-  const sellerPickupVerified =
-    storeDetail?.pickup_status === 'verified' && storeDetail?.pickup_warehouse_name
-  const warehouseName = sellerPickupVerified
-    ? storeDetail!.pickup_warehouse_name
-    : (process.env.NIMBUS_WAREHOUSE_NAME ?? 'Primary')
+  // NimbusPost v1 has no pre-registered warehouses: the pickup address is sent
+  // INLINE with the shipment. If the seller's pickup address is complete we ship
+  // from there; otherwise fall back to the platform's default warehouse (a
+  // dashboard-created warehouse referenced by name only).
+  const pickupPhone = String(storeDetail?.pickup_phone ?? storeDetail?.whatsapp_number ?? '')
+    .replace(/^\+?91/, '')
+    .replace(/\D/g, '')
+    .slice(-10)
+  const sellerPickupReady =
+    !!storeDetail && hasCompletePickupAddress(storeDetail as StorePickupInput) && pickupPhone.length === 10
+  const pickup = sellerPickupReady
+    ? {
+        warehouse_name: warehouseNameForStore(storeDetail!.id),
+        name: storeDetail!.pickup_contact_name || storeDetail!.store_name || '',
+        address: storeDetail!.address ?? '',
+        address_2: storeDetail!.area ?? '',
+        city: storeDetail!.city ?? '',
+        state: storeDetail!.state ?? '',
+        pincode: String(storeDetail!.pincode ?? ''),
+        phone: pickupPhone,
+      }
+    : { warehouse_name: process.env.NIMBUS_WAREHOUSE_NAME ?? 'Primary' }
 
   const addr = order.delivery_address as any
   const items = (order.items as any[]) ?? []
@@ -308,7 +328,7 @@ deliveryRouter.post('/create-shipment', requireAuth, async (req: AuthRequest, re
         pincode: String(addr?.pincode ?? ''),
         phone: consigneePhone,
       },
-      pickup: { warehouse_name: warehouseName },
+      pickup,
       order_items: items.map((it: any) => ({
         name: it.name ?? '',
         qty: String(it.qty ?? 1),
@@ -575,18 +595,19 @@ deliveryRouter.post('/pickup/register', requireInternalKey, async (req, res) => 
   }
 })
 
-// POST /api/delivery/pickup/refresh — internal. Re-polls NimbusPost for pending warehouses.
+// POST /api/delivery/pickup/refresh — internal. Re-checks NimbusPost pincode
+// serviceability for a store whose pickup was left pending/failed.
 deliveryRouter.post('/pickup/refresh', requireInternalKey, async (req, res) => {
   const { storeId } = req.body
   if (!storeId) return res.status(400).json({ success: false, error: 'storeId required', code: 'VALIDATION_ERROR' })
 
   const { data: store } = await supabaseAdmin
-    .from('stores').select('pickup_warehouse_name, pickup_status').eq('id', storeId).single()
-  if (!store?.pickup_warehouse_name) {
-    return res.status(404).json({ success: false, error: 'No pickup registered for this store', code: 'NOT_FOUND' })
+    .from('stores').select('pincode, pickup_status').eq('id', storeId).single()
+  if (!store?.pincode) {
+    return res.status(404).json({ success: false, error: 'Store has no pickup pincode', code: 'NOT_FOUND' })
   }
 
-  const status = await fetchPickupStatus(store.pickup_warehouse_name)
+  const status = await fetchPickupStatus(store.pincode)
   if (status && status !== store.pickup_status) {
     await supabaseAdmin.from('stores').update({ pickup_status: status }).eq('id', storeId)
   }
