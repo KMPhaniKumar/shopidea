@@ -100,7 +100,7 @@ export default function SettingsPage() {
   const [selfieFile, setSelfieFile] = useState<File | null>(null)
   const [addressRequest, setAddressRequest] = useState<AddressChangeRequest | null>(null)
   const { register, handleSubmit, watch, reset } = useForm()
-  const { register: registerAddr, handleSubmit: handleSubmitAddr, reset: resetAddr, setValue: setAddrValue } = useForm()
+  const { register: registerAddr, handleSubmit: handleSubmitAddr, reset: resetAddr, setValue: setAddrValue, formState: { errors: errorsAddr } } = useForm()
   const slugValue = watch('store_slug')
 
   useEffect(() => { load() }, [])
@@ -552,23 +552,25 @@ export default function SettingsPage() {
               Maps key is configured.) */}
           <div>
             <label className="block text-sm font-medium mb-1">
-              Flat / House / Building No. <span className="text-[#AAAAAA] font-normal">(optional)</span>
+              Flat / House / Building No. <span className="text-[#E23744]">*</span>
             </label>
             <input
-              {...registerAddr('line1')}
+              {...registerAddr('line1', { required: 'Flat / house / building no. is required' })}
               className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]"
               placeholder="Shop 12, Ground Floor, ABC Complex"
             />
+            {errorsAddr.line1 && <p className="text-xs text-[#E23744] mt-0.5">{String(errorsAddr.line1.message)}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
-              Landmark / Additional details <span className="text-[#AAAAAA] font-normal">(optional)</span>
+              Landmark / Additional details <span className="text-[#E23744]">*</span>
             </label>
             <input
-              {...registerAddr('line2')}
+              {...registerAddr('line2', { required: 'Landmark / additional details is required' })}
               className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]"
               placeholder="Near Main Market, Opp. Bus Stand"
             />
+            {errorsAddr.line2 && <p className="text-xs text-[#E23744] mt-0.5">{String(errorsAddr.line2.message)}</p>}
           </div>
 
           <div>

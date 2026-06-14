@@ -15,10 +15,11 @@ const STATUS_COLORS: Record<string, string> = {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: { status?: string; page?: string }
+  searchParams: { status?: string; page?: string; search?: string }
 }) {
   const supabase = createClient()
   const status = searchParams.status
+  const search = searchParams.search?.trim()
   const page = parseInt(searchParams.page ?? '1', 10)
   const pageSize = 50
   const offset = (page - 1) * pageSize
@@ -34,8 +35,20 @@ export default async function OrdersPage({
     .range(offset, offset + pageSize - 1)
 
   if (status) query = query.eq('status', status)
+  if (search) query = query.ilike('order_number', `%${search}%`)
 
   const { data: orders } = await query
+
+  // Build /admin/orders URLs that keep the active status + search filters.
+  const buildHref = (overrides: Record<string, string | number | undefined>) => {
+    const params = new URLSearchParams()
+    const merged: Record<string, string | number | undefined> = { status, search, ...overrides }
+    for (const [k, v] of Object.entries(merged)) {
+      if (v !== undefined && v !== '') params.set(k, String(v))
+    }
+    const qs = params.toString()
+    return qs ? `/admin/orders?${qs}` : '/admin/orders'
+  }
 
   const STATUSES = ['pending', 'accepted', 'packed', 'shipped', 'delivered', 'rejected']
 
@@ -43,10 +56,32 @@ export default async function OrdersPage({
     <div>
       <h1 className="text-2xl font-black text-gray-900 mb-6">Orders</h1>
 
+      {/* Search by order number */}
+      <form className="flex gap-3 mb-4">
+        {status && <input type="hidden" name="status" value={status} />}
+        <input
+          name="search"
+          defaultValue={search}
+          placeholder="Search order number (e.g. ORD-10042)…"
+          className="flex-1 border border-gray-200 rounded-xl px-4 h-10 text-sm focus:outline-none focus:border-orange-400"
+        />
+        <button type="submit" className="px-4 h-10 bg-orange-500 text-white text-sm font-semibold rounded-xl hover:bg-orange-600">
+          Search
+        </button>
+        {search && (
+          <a
+            href={buildHref({ search: undefined, page: undefined })}
+            className="px-4 h-10 flex items-center border border-gray-200 text-sm font-semibold text-gray-600 rounded-xl hover:bg-gray-50"
+          >
+            Clear
+          </a>
+        )}
+      </form>
+
       {/* Filter tabs */}
       <div className="flex gap-2 mb-4 flex-wrap">
         <a
-          href="/admin/orders"
+          href={buildHref({ status: undefined, page: undefined })}
           className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
             !status ? 'bg-orange-500 text-white border-orange-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
           }`}
@@ -56,7 +91,7 @@ export default async function OrdersPage({
         {STATUSES.map(s => (
           <a
             key={s}
-            href={`/admin/orders?status=${s}`}
+            href={buildHref({ status: s, page: undefined })}
             className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-colors capitalize ${
               status === s ? 'bg-orange-500 text-white border-orange-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
             }`}
@@ -118,13 +153,13 @@ export default async function OrdersPage({
       {/* Pagination */}
       <div className="flex gap-2 mt-4 justify-end">
         {page > 1 && (
-          <a href={`/admin/orders?${status ? `status=${status}&` : ''}page=${page - 1}`}
+          <a href={buildHref({ page: page - 1 })}
             className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">
             ← Prev
           </a>
         )}
         {orders && orders.length === pageSize && (
-          <a href={`/admin/orders?${status ? `status=${status}&` : ''}page=${page + 1}`}
+          <a href={buildHref({ page: page + 1 })}
             className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">
             Next →
           </a>
