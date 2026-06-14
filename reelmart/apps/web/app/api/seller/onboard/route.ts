@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     store_name: display_name.trim(),
     pan_number: pan_number.trim().toUpperCase(),
     is_active: false,
-    is_open: false,
+    is_open: true, // open by default; seller can toggle Open/Closed from the dashboard
     approval_status: 'pending',
   }
   if (gst_number && gst_number.trim() !== '') {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Toaster } from 'react-hot-toast'
 import { Sidebar } from '@/components/seller/Sidebar'
 import { TopBar } from '@/components/seller/TopBar'
 import { SellerGate, useSellerVerification } from '@/components/seller/SellerGate'
@@ -13,6 +14,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-surface">
+      <Toaster position="top-center" />
       <Sidebar
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
