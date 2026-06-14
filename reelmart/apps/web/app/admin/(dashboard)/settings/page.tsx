@@ -25,7 +25,14 @@ export default function SettingsPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`${API_URL}/api/admin/settings`)
+        // GET /api/admin/settings requires auth (requireAuth) — without the
+        // Bearer token the request 401s, the catch below swallows it, and the
+        // form silently falls back to its hardcoded defaults (e.g. delivery_fee
+        // snapping back to 60). Send the session token, same as the save does.
+        const { data: { session } } = await createClient().auth.getSession()
+        const res = await fetch(`${API_URL}/api/admin/settings`, {
+          headers: { Authorization: `Bearer ${session?.access_token}` },
+        })
         const json = await res.json()
         if (json.success && json.data) {
           setValues(prev => {
