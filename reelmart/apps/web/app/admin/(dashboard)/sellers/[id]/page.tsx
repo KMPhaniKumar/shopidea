@@ -64,11 +64,7 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
   const ownerName = owner?.full_name || owner?.name
 
   // Signature signed URL (from private bucket)
-  const [panUrl, selfieUrl, signatureUrl] = await Promise.all([
-    signed(store.pan_doc_path),
-    signed(store.selfie_path),
-    signed((store as any).signature_path ?? null),
-  ])
+  const signatureUrl = await signed((store as any).signature_path ?? null)
 
   const panNumber: string | null = (store as any).pan_number ?? null
   const panProvided: boolean = !!panNumber
@@ -157,30 +153,6 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
         <div className="grid grid-cols-2 gap-4 mb-5">
           <Field label="PAN number" value={panNumber} />
           <Field label="GST number" value={gstNumber} />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-xs text-gray-400 uppercase font-semibold mb-1.5">PAN card</div>
-            {panUrl ? (
-              <a href={panUrl} target="_blank" rel="noreferrer" className="block border border-gray-100 rounded-xl overflow-hidden hover:border-orange-300">
-                <img src={panUrl} alt="PAN card" className="w-full h-44 object-contain bg-gray-50" />
-                <span className="block text-center text-xs text-orange-500 py-1.5">Open full size</span>
-              </a>
-            ) : (
-              <div className="h-44 rounded-xl bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-sm">Not uploaded</div>
-            )}
-          </div>
-          <div>
-            <div className="text-xs text-gray-400 uppercase font-semibold mb-1.5">Shop selfie</div>
-            {selfieUrl ? (
-              <a href={selfieUrl} target="_blank" rel="noreferrer" className="block border border-gray-100 rounded-xl overflow-hidden hover:border-orange-300">
-                <img src={selfieUrl} alt="Shop selfie" className="w-full h-44 object-cover bg-gray-50" />
-                <span className="block text-center text-xs text-orange-500 py-1.5">Open full size</span>
-              </a>
-            ) : (
-              <div className="h-44 rounded-xl bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-sm">Not uploaded</div>
-            )}
-          </div>
         </div>
 
         {/* Digital signature */}

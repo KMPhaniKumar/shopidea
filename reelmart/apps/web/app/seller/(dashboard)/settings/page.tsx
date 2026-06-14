@@ -7,12 +7,12 @@ import QRCode from 'qrcode'
 import { Copy, Download, ExternalLink, Upload, Clock, XCircle, Pencil } from 'lucide-react'
 import debounce from 'lodash/debounce'
 import { SITE_URL, SITE_HOST } from '@/lib/site-url'
-import { uploadKycFile, isValidPan, isValidGst } from '@/lib/kyc'
+import { isValidPan, isValidGst } from '@/lib/kyc'
 
 // Safe (non-KYC) columns accessible to the authenticated role after migration
-// 024. KYC columns (pan_number, gst_number, pan_doc_path, selfie_path,
-// kyc_submitted_at, aadhaar_url) are REVOKED from the authenticated role and
-// must be fetched via GET /api/seller/my-store (service_role, server-side).
+// 024. KYC columns (pan_number, gst_number, kyc_submitted_at, aadhaar_url) are
+// REVOKED from the authenticated role and must be fetched via
+// GET /api/seller/my-store (service_role, server-side).
 const SAFE_STORE_COLUMNS = [
   'id',
   'seller_id',
@@ -81,11 +81,7 @@ interface AddressChangeRequest {
 interface KycData {
   pan_number: string | null
   gst_number: string | null
-  pan_doc_path: string | null
-  selfie_path: string | null
   kyc_submitted_at: string | null
-  pan_doc_url: string | null
-  selfie_url: string | null
 }
 
 export default function SettingsPage() {
@@ -96,8 +92,6 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [savingAddress, setSavingAddress] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
-  const [panFile, setPanFile] = useState<File | null>(null)
-  const [selfieFile, setSelfieFile] = useState<File | null>(null)
   const [addressRequest, setAddressRequest] = useState<AddressChangeRequest | null>(null)
   // Address card view state: when a pickup address already exists we show it
   // read-only with an "Edit address" button; editing an approved store's
@@ -216,21 +210,6 @@ export default function SettingsPage() {
 
     setSaving(true)
 
-    // Upload any newly-picked KYC documents to the private bucket first.
-    // pan_doc_path / selfie_path are not in the client-side `store` state after
-    // migration 024 — they come from the server-side kycData fetch.
-    let panPath = kycData?.pan_doc_path ?? null
-    let selfiePath = kycData?.selfie_path ?? null
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        if (panFile) panPath = await uploadKycFile(user.id, 'pan', panFile)
-        if (selfieFile) selfiePath = await uploadKycFile(user.id, 'selfie', selfieFile)
-      }
-    } catch (err: any) {
-      toast.error(`Document upload failed: ${err.message}`); setSaving(false); return
-    }
-
     // NOTE: address, area, city, state, pincode are intentionally excluded here.
     // Those columns are REVOKED from the authenticated role (migration 022) and
     // must go through /api/seller/address-change instead.
@@ -243,11 +222,8 @@ export default function SettingsPage() {
       instagram_handle: data.instagram_handle,
       pan_number: pan || null,
       gst_number: gst || null,
-      pan_doc_path: panPath,
-      selfie_path: selfiePath,
     }).eq('id', store.id)
     if (error) { toast.error(error.message); setSaving(false); return }
-    setPanFile(null); setSelfieFile(null)
     toast.success('Settings saved!')
     load()
     setSaving(false)
@@ -470,40 +446,6 @@ export default function SettingsPage() {
             <div>
               <label className="block text-sm font-medium mb-1">GST Number <span className="text-[#AAAAAA] font-normal">(optional)</span></label>
               <input {...register('gst_number')} maxLength={15} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] uppercase tracking-wider" placeholder="22ABCDE1234F1Z5" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">PAN Card Photo</label>
-              {kycData?.pan_doc_url && !panFile && (
-                <a href={kycData.pan_doc_url} target="_blank" rel="noreferrer" className="text-xs text-[#FF6B2B] hover:underline block mb-1.5">View current PAN document</a>
-              )}
-              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-[#EEEEEE] rounded-lg text-sm cursor-pointer hover:bg-[#F9F9F9]">
-                <Upload size={14} />
-                <span className="truncate text-[#555555]">{panFile ? panFile.name : (kycData?.pan_doc_url ? 'Replace PAN card' : 'Upload PAN card')}</span>
-                <input type="file" accept="image/jpeg,image/png,application/pdf" className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) { if (f.size > 5*1024*1024) { toast.error('Max 5MB'); return } setPanFile(f) } }} />
-              </label>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Shop Selfie</label>
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-lg border border-[#EEEEEE] overflow-hidden bg-[#F9F9F9] flex items-center justify-center shrink-0">
-                  {selfieFile ? (
-                    <img src={URL.createObjectURL(selfieFile)} alt="Selfie" className="w-full h-full object-cover" />
-                  ) : kycData?.selfie_url ? (
-                    <img src={kycData.selfie_url} alt="Selfie" className="w-full h-full object-cover" />
-                  ) : (
-                    <Upload size={16} className="text-[#AAAAAA]" />
-                  )}
-                </div>
-                <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-[#EEEEEE] rounded-lg text-sm cursor-pointer hover:bg-[#F9F9F9]">
-                  <Upload size={14} />
-                  <span className="text-[#555555]">{selfieFile || kycData?.selfie_url ? 'Replace' : 'Upload'}</span>
-                  <input type="file" accept="image/jpeg,image/png" capture="environment" className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) { if (f.size > 5*1024*1024) { toast.error('Max 5MB'); return } setSelfieFile(f) } }} />
-                </label>
-              </div>
             </div>
           </div>
         </div>

@@ -1041,7 +1041,6 @@ export type Database = {
           logo_url: string | null
           open_days: string[] | null
           open_time: string | null
-          pan_doc_path: string | null
           pan_number: string | null
           pickup_error: string | null
           pickup_id: string | null
@@ -1051,7 +1050,6 @@ export type Database = {
           pincode: string | null
           rating_avg: number | null
           referral_installs: number | null
-          selfie_path: string | null
           seller_id: string
           state: string | null
           store_name: string
@@ -1081,7 +1079,6 @@ export type Database = {
           logo_url?: string | null
           open_days?: string[] | null
           open_time?: string | null
-          pan_doc_path?: string | null
           pan_number?: string | null
           pickup_error?: string | null
           pickup_id?: string | null
@@ -1091,7 +1088,6 @@ export type Database = {
           pincode?: string | null
           rating_avg?: number | null
           referral_installs?: number | null
-          selfie_path?: string | null
           seller_id: string
           state?: string | null
           store_name: string
@@ -1121,7 +1117,6 @@ export type Database = {
           logo_url?: string | null
           open_days?: string[] | null
           open_time?: string | null
-          pan_doc_path?: string | null
           pan_number?: string | null
           pickup_error?: string | null
           pickup_id?: string | null
@@ -1131,7 +1126,6 @@ export type Database = {
           pincode?: string | null
           rating_avg?: number | null
           referral_installs?: number | null
-          selfie_path?: string | null
           seller_id?: string
           state?: string | null
           store_name?: string
