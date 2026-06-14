@@ -135,12 +135,13 @@ export default function SettingsPage() {
     setAddressRequest(addrReq ?? null)
 
     // Pre-fill the address form with the current live store address.
-    // line1 / line2 are local-only fields that get composed into `address`
-    // before submitting (the backend schema only knows `address`).
+    // line1 (Flat / House / Building) is the primary address line; line2
+    // (Landmark) is optional. They are composed into the backend `address`
+    // field on submit. On edit we put the saved address into line1 so the
+    // seller can see and edit it.
     resetAddr({
-      line1: '',
+      line1: data.address ?? '',
       line2: '',
-      address: data.address ?? '',
       area: data.area ?? '',
       city: data.city ?? '',
       state: data.state ?? '',
@@ -234,13 +235,11 @@ export default function SettingsPage() {
   async function onSubmitAddress(data: any) {
     if (!store) return
 
-    // Compose line1 (flat/building) and line2 (landmark) into the address field.
-    // The backend `proposed` schema only knows `address` — we prepend the manual
-    // details so couriers get the full pickup address.
+    // Compose line1 (flat / house / building — the primary address line) and
+    // line2 (landmark, optional) into the backend `address` field.
     const line1 = (data.line1 ?? '').trim()
     const line2 = (data.line2 ?? '').trim()
-    const base = (data.address ?? '').trim()
-    const composedAddress = [line1, line2, base].filter(Boolean).join(', ')
+    const composedAddress = [line1, line2].filter(Boolean).join(', ')
 
     setSavingAddress(true)
     const res = await fetch('/api/seller/address-change', {
@@ -249,7 +248,7 @@ export default function SettingsPage() {
       body: JSON.stringify({
         storeId: store.id,
         proposed: {
-          address: composedAddress || base,
+          address: composedAddress,
           area: data.area ?? '',
           city: data.city ?? '',
           state: data.state ?? '',
@@ -292,9 +291,8 @@ export default function SettingsPage() {
   function cancelEditAddress() {
     setAddressEditing(false)
     resetAddr({
-      line1: '',
+      line1: store?.address ?? '',
       line2: '',
-      address: store?.address ?? '',
       area: store?.area ?? '',
       city: store?.city ?? '',
       state: store?.state ?? '',
@@ -565,12 +563,12 @@ export default function SettingsPage() {
               Maps key is configured.) */}
           <div>
             <label className="block text-sm font-medium mb-1">
-              Flat / House / Building No. <span className="text-[#E23744]">*</span>
+              Flat / House / Building &amp; Street <span className="text-[#E23744]">*</span>
             </label>
             <input
-              {...registerAddr('line1', { required: 'Flat / house / building no. is required' })}
+              {...registerAddr('line1', { required: 'Address is required' })}
               className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]"
-              placeholder="Shop 12, Ground Floor, ABC Complex"
+              placeholder="B-403, Aparna Cyber Commune, Main Road"
             />
             {errorsAddr.line1 && <p className="text-xs text-[#E23744] mt-0.5">{String(errorsAddr.line1.message)}</p>}
           </div>
@@ -585,15 +583,6 @@ export default function SettingsPage() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Street / Road Address
-            </label>
-            <textarea {...registerAddr('address')} rows={2} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] resize-none" placeholder="Main Market Road, Sector 5" />
-            <p className="text-xs text-[#AAAAAA] mt-0.5">
-              Your flat/building and landmark above are added to this when submitted.
-            </p>
-          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Area / Locality</label>
