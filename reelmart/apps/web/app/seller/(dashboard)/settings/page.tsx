@@ -469,9 +469,6 @@ export default function SettingsPage() {
         {store?.pickup_status === 'verified' && (
           <div className="rounded-lg bg-[#25D366]/10 px-3 py-2 text-xs text-[#1A7F4B]">Pickup address verified with our courier partner</div>
         )}
-        {store?.pickup_status === 'pending' && (
-          <div className="rounded-lg bg-orange-50 px-3 py-2 text-xs text-[#92400E]">Your pickup address is being verified by our courier partner. Until then, orders ship from our central warehouse.</div>
-        )}
         {store?.pickup_status === 'failed' && (
           <div className="rounded-lg bg-[#E23744]/10 px-3 py-2 text-xs text-[#E23744]">We could not register your pickup address{store?.pickup_error ? `: ${store.pickup_error}` : ''}. Please check the details below and submit again.</div>
         )}
