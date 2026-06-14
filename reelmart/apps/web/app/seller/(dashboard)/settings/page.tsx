@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form'
 import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
 import QRCode from 'qrcode'
-import { Copy, Download, ExternalLink, Upload, Clock, XCircle } from 'lucide-react'
+import { Copy, Download, ExternalLink, Upload, Clock, XCircle, Pencil } from 'lucide-react'
 import debounce from 'lodash/debounce'
 import { SITE_URL, SITE_HOST } from '@/lib/site-url'
 import { uploadKycFile, isValidPan, isValidGst } from '@/lib/kyc'
@@ -99,6 +99,11 @@ export default function SettingsPage() {
   const [panFile, setPanFile] = useState<File | null>(null)
   const [selfieFile, setSelfieFile] = useState<File | null>(null)
   const [addressRequest, setAddressRequest] = useState<AddressChangeRequest | null>(null)
+  // Address card view state: when a pickup address already exists we show it
+  // read-only with an "Edit address" button; editing an approved store's
+  // address requires admin approval, so we confirm via a modal first.
+  const [addressEditing, setAddressEditing] = useState(false)
+  const [showApprovalModal, setShowApprovalModal] = useState(false)
   const { register, handleSubmit, watch, reset } = useForm()
   const { register: registerAddr, handleSubmit: handleSubmitAddr, reset: resetAddr, setValue: setAddrValue, formState: { errors: errorsAddr } } = useForm()
   const slugValue = watch('store_slug')
@@ -291,7 +296,38 @@ export default function SettingsPage() {
         ? 'Address change submitted — pending admin approval'
         : 'Pickup address saved'
     )
+    setAddressEditing(false)
     load()
+  }
+
+  // "Edit address" on an existing address. For an approved store the change
+  // must go through admin approval, so confirm via the modal first; otherwise
+  // (onboarding store, no approval needed yet) open the form directly.
+  function handleEditAddress() {
+    if (isApproved) {
+      setShowApprovalModal(true)
+    } else {
+      setAddressEditing(true)
+    }
+  }
+
+  // Cancel an in-progress edit: hide the form and restore its fields to the
+  // currently-saved values.
+  function cancelEditAddress() {
+    setAddressEditing(false)
+    resetAddr({
+      line1: '',
+      line2: '',
+      address: store?.address ?? '',
+      area: store?.area ?? '',
+      city: store?.city ?? '',
+      state: store?.state ?? '',
+      pincode: store?.pincode ?? '',
+      contact_name: (kycData as any)?.pickup_contact_name ?? '',
+      phone: (kycData as any)?.pickup_phone ?? '',
+      email: (kycData as any)?.pickup_email ?? '',
+      gst_number: kycData?.gst_number ?? '',
+    })
   }
 
   function copyLink() {
@@ -311,6 +347,10 @@ export default function SettingsPage() {
 
   // Determine the address form label based on store approval status.
   const isApproved = store?.approval_status === 'approved'
+  // A pickup address is already on record once the store has a non-empty
+  // address. When true we show it read-only (with Edit) instead of the form.
+  const hasAddress = Boolean(store?.address && String(store.address).trim())
+  const showAddressForm = !hasAddress || addressEditing
 
   return (
     <div className="max-w-2xl space-y-6 pb-10">
@@ -524,6 +564,37 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {/* Saved address — shown read-only once a pickup address exists. */}
+        {hasAddress && !addressEditing && (
+          <div className="rounded-lg border border-[#EEEEEE] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-sm">
+                {(kycData as any)?.pickup_contact_name && (
+                  <p className="font-semibold text-[#1A1A1A]">
+                    {(kycData as any).pickup_contact_name}
+                    {(kycData as any)?.pickup_phone && (
+                      <span className="font-normal text-[#666666]"> · {(kycData as any).pickup_phone}</span>
+                    )}
+                  </p>
+                )}
+                <p className="text-[#1A1A1A] mt-1">{store.address}</p>
+                <p className="text-[#666666]">
+                  {[store.area, store.city, store.state].filter(Boolean).join(', ')}
+                  {store.pincode ? ` — ${store.pincode}` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleEditAddress}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 border border-[#EEEEEE] rounded-lg text-sm font-semibold text-[#666666] hover:bg-[#F9F9F9]"
+              >
+                <Pencil size={13} /> Edit address
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showAddressForm && (
         <form onSubmit={handleSubmitAddr(onSubmitAddress)} className="space-y-4">
           {/* Contact info — required by the courier (NimbusPost) for pickup.
               The pickup address is sent to the courier with each order. */}
@@ -563,14 +634,13 @@ export default function SettingsPage() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
-              Landmark / Additional details <span className="text-[#E23744]">*</span>
+              Landmark / Additional details <span className="text-[#AAAAAA] font-normal">(optional)</span>
             </label>
             <input
-              {...registerAddr('line2', { required: 'Landmark / additional details is required' })}
+              {...registerAddr('line2')}
               className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]"
               placeholder="Near Main Market, Opp. Bus Stand"
             />
-            {errorsAddr.line2 && <p className="text-xs text-[#E23744] mt-0.5">{String(errorsAddr.line2.message)}</p>}
           </div>
 
           <div>
@@ -601,29 +671,68 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {isApproved ? (
+          <div className="flex gap-2">
+            {hasAddress && addressEditing && (
+              <button
+                type="button"
+                onClick={cancelEditAddress}
+                disabled={savingAddress}
+                className="px-4 py-2.5 border border-[#EEEEEE] rounded-lg text-sm font-semibold text-[#666666] hover:bg-[#F9F9F9] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            )}
             <button
               type="submit"
               disabled={savingAddress}
-              className="w-full border border-[#FF6B2B] text-[#FF6B2B] py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-[#FF6B2B]/5 transition-colors"
+              className="flex-1 border border-[#FF6B2B] text-[#FF6B2B] py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-[#FF6B2B]/5 transition-colors"
             >
               {savingAddress
-                ? 'Submitting...'
-                : addressRequest?.status === 'pending'
-                ? 'Update pending request'
-                : 'Submit address change for approval'}
+                ? 'Saving...'
+                : !hasAddress
+                ? 'Add address'
+                : isApproved
+                ? (addressRequest?.status === 'pending' ? 'Update pending request' : 'Submit address change for approval')
+                : 'Save pickup address'}
             </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={savingAddress}
-              className="w-full border border-[#FF6B2B] text-[#FF6B2B] py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-[#FF6B2B]/5 transition-colors"
-            >
-              {savingAddress ? 'Saving...' : 'Save pickup address'}
-            </button>
-          )}
+          </div>
         </form>
+        )}
       </div>
+
+      {/* Edit-requires-approval confirmation (approved stores). */}
+      {showApprovalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-xl p-5 max-w-sm w-full space-y-4 shadow-lg">
+            <div className="flex items-start gap-3">
+              <Clock size={20} className="text-orange-500 mt-0.5 shrink-0" />
+              <div>
+                <h3 className="font-semibold text-[#1A1A1A]">Address change needs admin approval</h3>
+                <p className="text-sm text-[#666666] mt-1">
+                  Updating your store pickup address requires admin approval before it takes effect.
+                  Your store keeps shipping from the current address until the new one is approved.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowApprovalModal(false)}
+                className="px-4 py-2 text-sm font-semibold text-[#666666] rounded-lg hover:bg-[#F9F9F9]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowApprovalModal(false); setAddressEditing(true) }}
+                className="px-4 py-2 text-sm font-semibold text-white bg-[#FF6B2B] rounded-lg hover:bg-[#FF6B2B]/90"
+              >
+                Continue to edit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
