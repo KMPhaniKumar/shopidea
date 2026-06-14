@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { Sidebar } from '@/components/seller/Sidebar'
 import { TopBar } from '@/components/seller/TopBar'
+import { SellerNotifier } from '@/components/seller/SellerNotifier'
 import { SellerGate, useSellerVerification } from '@/components/seller/SellerGate'
 
 // Inner layout reads features_unlocked from the context that SellerGate provides.
@@ -15,6 +16,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-surface">
       <Toaster position="top-center" />
+      <SellerNotifier />
       <Sidebar
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
