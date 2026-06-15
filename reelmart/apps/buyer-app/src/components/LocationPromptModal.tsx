@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   Modal, View, Text, TouchableOpacity, StyleSheet,
   Dimensions, KeyboardAvoidingView, Platform, ScrollView,
-  TextInput, ActivityIndicator,
+  TextInput, ActivityIndicator, Alert,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, radius, spacing } from '../constants/theme'
 import { getSavedAddresses, saveAddress, removeAddress, SavedAddress } from '../lib/savedAddresses'
+import { detectCurrentAddress } from '../lib/geocode'
 
 const CITY_KEY = '@reelmart_city'
 const ADDR_KEY = '@reelmart_default_address_id'
@@ -83,7 +84,30 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [searching, setSearching] = useState(false)
   const [draft, setDraft] = useState<DraftAddress>(EMPTY_DRAFT)
+  const [locating, setLocating] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // "Use current location" — GPS + reverse geocode → prefill the form. The
+  // searched/detected address goes into Area/Locality; pincode stays editable.
+  async function useCurrentLocation() {
+    setLocating(true)
+    try {
+      const a = await detectCurrentAddress()
+      setDraft(prev => ({
+        ...prev,
+        area: a.formatted || a.area || prev.area,
+        city: a.city || prev.city,
+        state: a.state || prev.state,
+        pincode: a.pincode || prev.pincode,
+      }))
+      setIsManual(false)
+      setStep('form')
+    } catch (e: any) {
+      Alert.alert('Location unavailable', e?.message ?? 'Could not detect your location. Try searching instead.')
+    } finally {
+      setLocating(false)
+    }
+  }
 
   useEffect(() => {
     async function init() {
@@ -164,7 +188,13 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
   }
 
   async function handleSaveAddress() {
+    if (!draft.area.trim()) { Alert.alert('Add address', 'Search your location or use current location.'); return }
+    if (!draft.line1.trim()) { Alert.alert('Add address', 'Enter your flat / home / building.'); return }
+    if (!draft.name.trim()) { Alert.alert('Add address', 'Enter the full name.'); return }
+    if (!/^[6-9]\d{9}$/.test(draft.phone.replace(/\D/g, ''))) { Alert.alert('Add address', 'Enter a valid 10-digit mobile number.'); return }
+    if (!/^\d{6}$/.test(draft.pincode)) { Alert.alert('Add address', 'Enter a valid 6-digit pincode.'); return }
     const city = draft.city || draft.area
+    try {
     const saved = await saveAddress({
       label: draft.addressType,
       line1: draft.line1,
@@ -183,6 +213,9 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
     setSavedCity(city)
     onCitySet(city)
     onClose()
+    } catch (e: any) {
+      Alert.alert('Could not save address', e?.message ?? 'Please try again.')
+    }
   }
 
   async function pickSavedAddress(addr: SavedAddress) {
@@ -243,6 +276,21 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
                     : null
                 }
               </View>
+
+              {/* Use current location */}
+              <TouchableOpacity
+                style={styles.currentLocBtn}
+                onPress={useCurrentLocation}
+                disabled={locating}
+                activeOpacity={0.75}
+              >
+                {locating
+                  ? <ActivityIndicator size="small" color={colors.primary} />
+                  : <Text style={styles.currentLocIcon}>📍</Text>}
+                <Text style={styles.currentLocText}>
+                  {locating ? 'Detecting your location…' : 'Use current location'}
+                </Text>
+              </TouchableOpacity>
 
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
@@ -419,6 +467,17 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
                   </View>
                 )}
 
+                {/* Pincode — kept editable; delivery serviceability depends on it */}
+                {!isManual && (
+                  <SimpleInput
+                    placeholder="Pincode *"
+                    value={draft.pincode}
+                    onChangeText={v => setDraft(p => ({ ...p, pincode: v.replace(/\D/g, '').slice(0, 6) }))}
+                    keyboardType="numeric"
+                    maxLength={6}
+                  />
+                )}
+
                 {/* Name */}
                 <SimpleInput
                   placeholder="Enter your full name *"
@@ -570,6 +629,13 @@ const styles = StyleSheet.create({
   searchIcon: { fontSize: 16 },
   searchInput: { flex: 1, fontSize: 15, color: '#1A1A1A' },
   searchClear: { fontSize: 15, color: '#AAAAAA' },
+  currentLocBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1.5, borderColor: colors.primary, borderRadius: 14,
+    height: 48, marginBottom: 16,
+  },
+  currentLocIcon: { fontSize: 16 },
+  currentLocText: { fontSize: 14, fontWeight: '700', color: colors.primary },
 
   card: {
     backgroundColor: '#FFFFFF', borderRadius: 16,

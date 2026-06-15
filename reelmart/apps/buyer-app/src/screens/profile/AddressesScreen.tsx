@@ -7,6 +7,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, radius, spacing } from '../../constants/theme'
 import { getSavedAddresses, removeAddress, SavedAddress } from '../../lib/savedAddresses'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import LocationPromptModal from '../../components/LocationPromptModal'
 
 const CITY_KEY = '@reelmart_city'
 const ADDR_KEY = '@reelmart_default_address_id'
@@ -63,6 +64,7 @@ export default function AddressesScreen({ navigation }: Props) {
   const [addresses, setAddresses] = useState<SavedAddress[]>([])
   const [defaultId, setDefaultId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showAddModal, setShowAddModal] = useState(false)
 
   const load = useCallback(async () => {
     const [addrs, addrId] = await Promise.all([
@@ -120,7 +122,9 @@ export default function AddressesScreen({ navigation }: Props) {
           <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Saved Addresses</Text>
-        <View style={{ width: 48 }} />
+        <TouchableOpacity onPress={() => setShowAddModal(true)}>
+          <Text style={styles.addBtn}>+ Add</Text>
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -129,7 +133,10 @@ export default function AddressesScreen({ navigation }: Props) {
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>📍</Text>
           <Text style={styles.emptyTitle}>No saved addresses</Text>
-          <Text style={styles.emptySub}>Add an address from the home screen or during checkout</Text>
+          <Text style={styles.emptySub}>Add an address to speed up checkout</Text>
+          <TouchableOpacity style={styles.emptyAddBtn} onPress={() => setShowAddModal(true)}>
+            <Text style={styles.emptyAddBtnText}>+ Add Address</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -142,8 +149,18 @@ export default function AddressesScreen({ navigation }: Props) {
               onDelete={() => handleDelete(addr.id)}
             />
           ))}
+          <TouchableOpacity style={styles.addAnotherBtn} onPress={() => setShowAddModal(true)}>
+            <Text style={styles.addAnotherText}>+ Add Another Address</Text>
+          </TouchableOpacity>
         </ScrollView>
       )}
+
+      {/* Reuses the same search + current-location + form flow as checkout. */}
+      <LocationPromptModal
+        visible={showAddModal}
+        onClose={() => { setShowAddModal(false); load() }}
+        onCitySet={() => {}}
+      />
     </View>
   )
 }
@@ -158,8 +175,20 @@ const styles = StyleSheet.create({
   },
   back: { fontSize: 16, color: colors.primary, fontWeight: '600', width: 48 },
   title: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
+  addBtn: { fontSize: 15, color: colors.primary, fontWeight: '700', width: 48, textAlign: 'right' },
 
   body: { padding: spacing.md, paddingBottom: 40 },
+
+  emptyAddBtn: {
+    marginTop: 20, backgroundColor: colors.primary,
+    paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24,
+  },
+  emptyAddBtnText: { color: colors.white, fontWeight: '800', fontSize: 14 },
+  addAnotherBtn: {
+    borderWidth: 1.5, borderColor: colors.border, borderStyle: 'dashed',
+    borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 4,
+  },
+  addAnotherText: { color: colors.textSecondary, fontWeight: '700', fontSize: 14 },
 
   card: {
     backgroundColor: colors.white, borderRadius: 16,
