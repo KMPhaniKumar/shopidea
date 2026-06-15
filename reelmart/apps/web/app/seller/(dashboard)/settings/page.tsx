@@ -8,6 +8,7 @@ import { Copy, Download, ExternalLink, Upload, Clock, XCircle, Pencil } from 'lu
 import debounce from 'lodash/debounce'
 import { SITE_URL, SITE_HOST } from '@/lib/site-url'
 import { isValidPan, isValidGst } from '@/lib/kyc'
+import { BUSINESS_TYPES } from '@/lib/businessCategories'
 
 // Safe (non-KYC) columns accessible to the authenticated role after migration
 // 024. KYC columns (pan_number, gst_number, kyc_submitted_at, aadhaar_url) are
@@ -48,17 +49,6 @@ const SAFE_STORE_COLUMNS = [
   'updated_at',
 ].join(',')
 
-const BUSINESS_TYPES = [
-  'Fashion',
-  'Jewellery',
-  'Electronics',
-  'Home & Kitchen',
-  'Beauty & Wellness',
-  'Handicrafts',
-  'Books & Stationery',
-  'Fitness',
-  'Other',
-]
 
 // Shape returned from store_address_changes
 interface AddressChangeRequest {

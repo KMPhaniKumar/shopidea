@@ -8,17 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
 import { X, Upload } from 'lucide-react'
-
-const BUSINESS_CATEGORIES: Record<string, string[]> = {
-  'Fashion': ['Sarees', 'Kurtis', 'Lehengas', 'Men\'s Wear', 'Kids Wear', 'Western Wear'],
-  'Jewellery': ['Gold Jewellery', 'Silver Jewellery', 'Artificial Jewellery', 'Bangles', 'Necklaces'],
-  'Electronics': ['Mobile Accessories', 'Earphones', 'Chargers', 'Gadgets', 'Smart Watches'],
-  'Home & Kitchen': ['Cookware', 'Home Decor', 'Furniture', 'Bedding', 'Storage'],
-  'Beauty & Wellness': ['Skincare', 'Haircare', 'Makeup', 'Perfumes', 'Organic Products'],
-  'Handicrafts': ['Pottery', 'Paintings', 'Handmade Bags', 'Embroidery', 'Wood Craft'],
-  'Books & Stationery': ['Books', 'Notebooks', 'Art Supplies', 'Gifts'],
-  'Fitness': ['Equipment', 'Supplements', 'Yoga Products', 'Sports Gear'],
-}
+import { productCategoriesFor } from '@/lib/businessCategories'
 
 const schema = z.object({
   name: z.string().min(2, 'Name required'),
@@ -109,9 +99,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
     },
   })
 
-  const productCategories = storeCategory
-    ? (BUSINESS_CATEGORIES[storeCategory] ?? Object.values(BUSINESS_CATEGORIES).flat())
-    : Object.values(BUSINESS_CATEGORIES).flat()
+  const productCategories = productCategoriesFor(storeCategory)
 
   async function onSubmit(data: FormData) {
     setSaving(true)
