@@ -12,7 +12,6 @@ export interface Category {
 export const CATEGORIES: Category[] = [
   { id: 'jewellery',   label: 'Jewellery',          icon: '💍', bg: '#FFF9E6', accent: '#C99A00' },
   { id: 'clothing',    label: 'Clothing & Fashion', icon: '👗', bg: '#FDEAF3', accent: '#D6336C' },
-  { id: 'food',        label: 'Food & Beverages',   icon: '🍱', bg: '#FFF4EC', accent: '#FF6B2B' },
   { id: 'electronics', label: 'Electronics',        icon: '📱', bg: '#E9F1FF', accent: '#1E88E5' },
   { id: 'home',        label: 'Home & Decor',       icon: '🏡', bg: '#E9F8F0', accent: '#1A8F5A' },
   { id: 'beauty',      label: 'Beauty & Wellness',  icon: '💄', bg: '#F4EAFE', accent: '#7C3AED' },

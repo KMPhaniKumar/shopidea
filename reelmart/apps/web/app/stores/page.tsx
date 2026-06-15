@@ -15,7 +15,7 @@ export const revalidate = 60
 
 export const metadata: Metadata = {
   title: 'Browse stores · ReelMart',
-  description: 'Browse Instagram sellers by category on ReelMart — clothing, jewellery, food and more. Real stores, real products across India.',
+  description: 'Browse Instagram sellers by category on ReelMart — clothing, jewellery, electronics and more. Real stores, real products across India.',
 }
 
 export default async function StoresPage() {

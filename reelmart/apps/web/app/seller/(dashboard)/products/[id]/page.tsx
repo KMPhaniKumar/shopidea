@@ -10,7 +10,6 @@ import toast, { Toaster } from 'react-hot-toast'
 import { X, Upload } from 'lucide-react'
 
 const BUSINESS_CATEGORIES: Record<string, string[]> = {
-  'Food & Beverages': ['Cakes & Bakery', 'Tiffin & Meals', 'Sweets & Mithai', 'Beverages', 'Pickles & Snacks', 'Dry Fruits'],
   'Fashion': ['Sarees', 'Kurtis', 'Lehengas', 'Men\'s Wear', 'Kids Wear', 'Western Wear'],
   'Jewellery': ['Gold Jewellery', 'Silver Jewellery', 'Artificial Jewellery', 'Bangles', 'Necklaces'],
   'Electronics': ['Mobile Accessories', 'Earphones', 'Chargers', 'Gadgets', 'Smart Watches'],
@@ -18,7 +17,6 @@ const BUSINESS_CATEGORIES: Record<string, string[]> = {
   'Beauty & Wellness': ['Skincare', 'Haircare', 'Makeup', 'Perfumes', 'Organic Products'],
   'Handicrafts': ['Pottery', 'Paintings', 'Handmade Bags', 'Embroidery', 'Wood Craft'],
   'Books & Stationery': ['Books', 'Notebooks', 'Art Supplies', 'Gifts'],
-  'Grocery': ['Spices', 'Rice & Grains', 'Oils', 'Organic Produce'],
   'Fitness': ['Equipment', 'Supplements', 'Yoga Products', 'Sports Gear'],
 }
 
