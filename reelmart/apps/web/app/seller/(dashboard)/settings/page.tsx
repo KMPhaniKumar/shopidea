@@ -49,7 +49,6 @@ const SAFE_STORE_COLUMNS = [
 ].join(',')
 
 const BUSINESS_TYPES = [
-  'Food & Beverages',
   'Fashion',
   'Jewellery',
   'Electronics',
@@ -57,7 +56,6 @@ const BUSINESS_TYPES = [
   'Beauty & Wellness',
   'Handicrafts',
   'Books & Stationery',
-  'Grocery',
   'Fitness',
   'Other',
 ]
