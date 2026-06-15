@@ -7,7 +7,7 @@
 // (never the entire flattened set).
 
 export const BUSINESS_TYPES = [
-  'Fashion',
+  'Clothing & Fashion',
   'Jewellery',
   'Electronics',
   'Home & Kitchen',
@@ -23,7 +23,7 @@ export const GENERIC_PRODUCT_CATEGORIES = ['General', 'Other']
 
 // Product sub-categories keyed by business type. Keys must match BUSINESS_TYPES.
 export const PRODUCT_CATEGORIES: Record<string, string[]> = {
-  'Fashion': ['Sarees', 'Kurtis', 'Lehengas', "Men's Wear", 'Kids Wear', 'Western Wear'],
+  'Clothing & Fashion': ['Sarees', 'Kurtis', 'Lehengas', "Men's Wear", 'Kids Wear', 'Western Wear'],
   'Jewellery': ['Gold Jewellery', 'Silver Jewellery', 'Artificial Jewellery', 'Bangles', 'Necklaces'],
   'Electronics': ['Mobile Accessories', 'Earphones', 'Chargers', 'Gadgets', 'Smart Watches'],
   'Home & Kitchen': ['Cookware', 'Home Decor', 'Furniture', 'Bedding', 'Storage'],
