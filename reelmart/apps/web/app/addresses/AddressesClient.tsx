@@ -2,39 +2,41 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Loader2, MapPin, Plus, Star, Trash2, X, ChevronDown } from 'lucide-react'
+import { Loader2, MapPin, Plus, Star, Trash2, X, Pencil } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
 import {
-  listAddresses, saveAddress, setDefaultAddress, deleteAddress,
+  listAddresses, saveAddress, updateAddress, setDefaultAddress, deleteAddress,
   type SavedAddress, type AddressDraft,
 } from '@/lib/saved-addresses'
-import { AddressSearch } from '@/components/AddressSearch'
+import { BuyerAddressForm } from '@/components/BuyerAddressForm'
 
 type AuthStep = 'loading' | 'unauthenticated' | 'ready'
 
-const LABELS: AddressDraft['label'][] = ['Home', 'Work', 'Other']
-
-const EMPTY_DRAFT: AddressDraft = {
-  label: 'Home',
-  name: '',
-  phone: '',
-  alt_phone: '',
-  line1: '',
-  line2: '',
-  area: '',
-  city: '',
-  state: '',
-  pincode: '',
+// Map a stored address to the form's initial draft (edit flow).
+function toInitial(a: SavedAddress): Partial<AddressDraft> {
+  return {
+    label: (a.label as AddressDraft['label']) || 'Home',
+    name: a.name,
+    phone: (a.phone || '').replace(/^\+?91/, ''),
+    line1: a.line1,
+    line2: a.line2 ?? '',
+    area: a.area ?? '',
+    city: a.city,
+    state: a.state,
+    pincode: a.pincode,
+  }
 }
 
 function AddressCard({
   address,
   onSetDefault,
+  onEdit,
   onDelete,
 }: {
   address: SavedAddress
   onSetDefault: () => void
+  onEdit: () => void
   onDelete: () => void
 }) {
   const [deleting, setDeleting] = useState(false)
@@ -89,6 +91,12 @@ function AddressCard({
           </button>
         )}
         <button
+          onClick={onEdit}
+          className="flex items-center gap-1.5 text-xs font-semibold text-secondary border border-border px-3 py-1.5 rounded-full hover:bg-surface transition"
+        >
+          <Pencil size={11} /> Edit
+        </button>
+        <button
           onClick={handleDelete}
           disabled={deleting}
           className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition border ${
@@ -116,46 +124,30 @@ function AddressCard({
   )
 }
 
-function AddressForm({
+// Thin wrapper around the shared BuyerAddressForm. Handles add (saveAddress)
+// and edit (updateAddress) via the optional addressId.
+function AddressFormCard({
   userId,
+  initial,
+  addressId,
   onSaved,
   onCancel,
 }: {
   userId: string
+  initial?: Partial<AddressDraft>
+  addressId?: string
   onSaved: (addr: SavedAddress) => void
   onCancel: () => void
 }) {
   const supabase = createClient()
-  const [draft, setDraft] = useState<AddressDraft>({ ...EMPTY_DRAFT })
   const [saving, setSaving] = useState(false)
 
-  function set(field: keyof AddressDraft, value: string) {
-    setDraft(d => ({ ...d, [field]: value }))
-  }
-
-  function handlePlacePick(details: { area: string; city: string; state: string; pincode: string }) {
-    setDraft(d => ({
-      ...d,
-      area: details.area || d.area,
-      city: details.city || d.city,
-      state: details.state || d.state,
-      pincode: details.pincode || d.pincode,
-    }))
-  }
-
-  async function handleSave() {
-    if (!draft.name.trim()) { toast.error('Enter contact name'); return }
-    if (!/^[6-9]\d{9}$/.test(draft.phone.replace(/\D/g, '').slice(-10))) {
-      toast.error('Enter a valid 10-digit phone number'); return
-    }
-    if (!draft.line1.trim()) { toast.error('Enter address line 1'); return }
-    if (!draft.city.trim()) { toast.error('Enter city'); return }
-    if (!draft.state.trim()) { toast.error('Enter state'); return }
-    if (!/^\d{6}$/.test(draft.pincode.trim())) { toast.error('Enter a valid 6-digit pincode'); return }
-
+  async function handleSave(draft: AddressDraft) {
     setSaving(true)
     try {
-      const saved = await saveAddress(supabase, userId, draft)
+      const saved = addressId
+        ? await updateAddress(supabase, userId, addressId, draft)
+        : await saveAddress(supabase, userId, draft)
       toast.success('Address saved')
       onSaved(saved)
     } catch {
@@ -168,144 +160,12 @@ function AddressForm({
   return (
     <div className="bg-white rounded-card border border-border p-5 space-y-4">
       <div className="flex items-center justify-between mb-1">
-        <h3 className="font-bold text-text text-sm">New Address</h3>
+        <h3 className="font-bold text-text text-sm">{addressId ? 'Edit Address' : 'New Address'}</h3>
         <button onClick={onCancel} className="text-muted hover:text-secondary transition">
           <X size={16} />
         </button>
       </div>
-
-      {/* Label */}
-      <div>
-        <label className="block text-xs font-semibold text-secondary mb-1.5">Address Type</label>
-        <div className="flex gap-2">
-          {LABELS.map(l => (
-            <button
-              key={l}
-              type="button"
-              onClick={() => set('label', l)}
-              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${
-                draft.label === l
-                  ? 'bg-primary text-white border-primary'
-                  : 'bg-surface text-secondary border-border hover:border-primary'
-              }`}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Name + phone */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-semibold text-secondary mb-1.5">Contact Name *</label>
-          <input
-            type="text"
-            value={draft.name}
-            onChange={e => set('name', e.target.value)}
-            placeholder="Full name"
-            className="w-full px-3.5 py-2.5 text-sm border border-border rounded-btn outline-none focus:border-primary transition text-text placeholder:text-muted"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-secondary mb-1.5">Phone *</label>
-          <div className="flex rounded-btn overflow-hidden border border-border focus-within:border-primary transition">
-            <span className="px-3 flex items-center text-sm text-secondary border-r border-border bg-surface">+91</span>
-            <input
-              type="tel"
-              value={draft.phone.replace(/\D/g, '').slice(-10)}
-              onChange={e => set('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="9876543210"
-              className="flex-1 px-3 py-2.5 text-sm outline-none text-text placeholder:text-muted"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Google Places search */}
-      <div>
-        <label className="block text-xs font-semibold text-secondary mb-1.5">Search Location</label>
-        <AddressSearch onPick={handlePlacePick} placeholder="Search locality, city..." />
-      </div>
-
-      {/* Line 1 + Line 2 */}
-      <div>
-        <label className="block text-xs font-semibold text-secondary mb-1.5">Address Line 1 *</label>
-        <input
-          type="text"
-          value={draft.line1}
-          onChange={e => set('line1', e.target.value)}
-          placeholder="House / Flat no., Street"
-          className="w-full px-3.5 py-2.5 text-sm border border-border rounded-btn outline-none focus:border-primary transition text-text placeholder:text-muted"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-semibold text-secondary mb-1.5">Address Line 2</label>
-        <input
-          type="text"
-          value={draft.line2 ?? ''}
-          onChange={e => set('line2', e.target.value)}
-          placeholder="Apartment, building (optional)"
-          className="w-full px-3.5 py-2.5 text-sm border border-border rounded-btn outline-none focus:border-primary transition text-text placeholder:text-muted"
-        />
-      </div>
-
-      {/* Area + Pincode */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-semibold text-secondary mb-1.5">Area / Locality</label>
-          <input
-            type="text"
-            value={draft.area ?? ''}
-            onChange={e => set('area', e.target.value)}
-            placeholder="e.g. Koramangala"
-            className="w-full px-3.5 py-2.5 text-sm border border-border rounded-btn outline-none focus:border-primary transition text-text placeholder:text-muted"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-secondary mb-1.5">Pincode *</label>
-          <input
-            type="tel"
-            value={draft.pincode}
-            onChange={e => set('pincode', e.target.value.replace(/\D/g, '').slice(0, 6))}
-            placeholder="560001"
-            className="w-full px-3.5 py-2.5 text-sm border border-border rounded-btn outline-none focus:border-primary transition text-text placeholder:text-muted"
-          />
-        </div>
-      </div>
-
-      {/* City + State */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-semibold text-secondary mb-1.5">City *</label>
-          <input
-            type="text"
-            value={draft.city}
-            onChange={e => set('city', e.target.value)}
-            placeholder="e.g. Bengaluru"
-            className="w-full px-3.5 py-2.5 text-sm border border-border rounded-btn outline-none focus:border-primary transition text-text placeholder:text-muted"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-secondary mb-1.5">State *</label>
-          <input
-            type="text"
-            value={draft.state}
-            onChange={e => set('state', e.target.value)}
-            placeholder="e.g. Karnataka"
-            className="w-full px-3.5 py-2.5 text-sm border border-border rounded-btn outline-none focus:border-primary transition text-text placeholder:text-muted"
-          />
-        </div>
-      </div>
-
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="w-full bg-primary text-white py-3 rounded-btn font-bold text-sm disabled:opacity-40 hover:opacity-90 transition flex items-center justify-center gap-2"
-      >
-        {saving ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
-        {saving ? 'Saving...' : 'Save Address'}
-      </button>
+      <BuyerAddressForm initial={initial} saving={saving} onSave={handleSave} onCancel={onCancel} />
     </div>
   )
 }
@@ -317,6 +177,7 @@ export default function AddressesClient() {
   const [addresses, setAddresses] = useState<SavedAddress[]>([])
   const [loadingAddresses, setLoadingAddresses] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState<SavedAddress | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -354,7 +215,6 @@ export default function AddressesClient() {
     if (!userId) return
     await deleteAddress(supabase, userId, addressId)
     const updated = addresses.filter(a => a.id !== addressId)
-    // If the deleted one was default, mark the next one as default in local state
     const hadDefault = addresses.find(a => a.id === addressId)?.is_default
     if (hadDefault && updated.length > 0) {
       await setDefaultAddress(supabase, userId, updated[0].id)
@@ -364,11 +224,15 @@ export default function AddressesClient() {
     toast.success('Address removed')
   }
 
-  function handleSaved(addr: SavedAddress) {
+  function handleSaved() {
     setShowForm(false)
-    // Refresh list to pick up is_default changes from deduplication/first-address logic
+    setEditing(null)
     if (userId) loadAddrs(userId)
   }
+
+  function startAdd() { setEditing(null); setShowForm(true) }
+  function startEdit(a: SavedAddress) { setShowForm(false); setEditing(a) }
+  function closeForm() { setShowForm(false); setEditing(null) }
 
   if (authStep === 'loading') {
     return (
@@ -391,6 +255,8 @@ export default function AddressesClient() {
     )
   }
 
+  const formOpen = showForm || !!editing
+
   return (
     <div className="min-h-screen bg-surface">
       <Toaster position="top-center" />
@@ -400,22 +266,24 @@ export default function AddressesClient() {
           <Link href="/profile" className="text-sm text-primary font-semibold">← Profile</Link>
           <h1 className="font-bold text-text">Saved Addresses</h1>
           <button
-            onClick={() => setShowForm(s => !s)}
+            onClick={() => (formOpen ? closeForm() : startAdd())}
             className="text-sm text-primary font-semibold flex items-center gap-1"
           >
-            {showForm ? <X size={14} /> : <Plus size={14} />}
-            {showForm ? 'Cancel' : 'Add'}
+            {formOpen ? <X size={14} /> : <Plus size={14} />}
+            {formOpen ? 'Cancel' : 'Add'}
           </button>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-5 space-y-4 pb-12">
 
-        {showForm && userId && (
-          <AddressForm
+        {formOpen && userId && (
+          <AddressFormCard
             userId={userId}
+            initial={editing ? toInitial(editing) : undefined}
+            addressId={editing?.id}
             onSaved={handleSaved}
-            onCancel={() => setShowForm(false)}
+            onCancel={closeForm}
           />
         )}
 
@@ -423,13 +291,13 @@ export default function AddressesClient() {
           <div className="flex justify-center py-12">
             <Loader2 size={24} className="animate-spin text-primary" />
           </div>
-        ) : addresses.length === 0 && !showForm ? (
+        ) : addresses.length === 0 && !formOpen ? (
           <div className="bg-white rounded-card border border-border p-10 text-center">
             <MapPin size={40} className="text-muted mx-auto mb-3" />
             <h2 className="font-bold text-text mb-1">No saved addresses</h2>
             <p className="text-sm text-secondary mb-5">Add an address to speed up checkout.</p>
             <button
-              onClick={() => setShowForm(true)}
+              onClick={startAdd}
               className="inline-flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-btn font-bold text-sm hover:opacity-90 transition"
             >
               <Plus size={15} /> Add Address
@@ -442,12 +310,13 @@ export default function AddressesClient() {
                 key={addr.id}
                 address={addr}
                 onSetDefault={() => handleSetDefault(addr.id)}
+                onEdit={() => startEdit(addr)}
                 onDelete={() => handleDelete(addr.id)}
               />
             ))}
-            {!showForm && (
+            {!formOpen && (
               <button
-                onClick={() => setShowForm(true)}
+                onClick={startAdd}
                 className="w-full flex items-center justify-center gap-2 border-[1.5px] border-dashed border-border rounded-card py-4 text-sm font-semibold text-secondary hover:border-primary hover:text-primary transition"
               >
                 <Plus size={15} /> Add Another Address

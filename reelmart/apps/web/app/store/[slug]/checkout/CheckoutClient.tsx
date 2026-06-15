@@ -7,7 +7,8 @@ import toast, { Toaster } from 'react-hot-toast'
 import { ArrowLeft, MapPin, ChevronRight, Plus, Minus, Trash2, Loader2, Search } from 'lucide-react'
 import { formatDeliveryDate } from '@/lib/delivery-date'
 import { CartItem, loadCart, saveCart, clearCart, cartTotal } from '@/lib/cart'
-import { saveAddress, searchPlaces, fetchPlaceDetails, type PlacePrediction } from '@/lib/saved-addresses'
+import { saveAddress, searchPlaces, fetchPlaceDetails, type PlacePrediction, type AddressDraft } from '@/lib/saved-addresses'
+import { BuyerAddressForm } from '@/components/BuyerAddressForm'
 import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, preloadOtpWidget, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
 interface Store {
   id: string
@@ -229,39 +230,15 @@ export default function CheckoutClient({ store }: { store: Store }) {
     }
   }
 
-  async function saveNewAddress() {
+  async function saveNewAddress(draft: AddressDraft) {
     if (!userId) return
-    if (!newAddr.name.trim()) return toast.error('Enter the recipient name')
-    const cleanedPhone = newAddr.phone.replace(/\D/g, '')
-    if (!/^[6-9]\d{9}$/.test(cleanedPhone)) return toast.error('Enter a valid 10-digit contact number')
-    if (newAddr.alt_phone && !/^[6-9]\d{9}$/.test(newAddr.alt_phone.replace(/\D/g, ''))) {
-      return toast.error('Alternate number must be a valid 10-digit Indian mobile')
-    }
-    if (!newAddr.line1.trim()) return toast.error('Enter address line')
-    if (!/^\d{6}$/.test(newAddr.pincode)) return toast.error('Invalid pincode')
-    if (!newAddr.city.trim() || !newAddr.state.trim()) return toast.error('Enter city and state')
     setSavingAddr(true)
     try {
-      const saved = await saveAddress(supabase, userId, {
-        label: newAddr.label,
-        name: newAddr.name,
-        phone: newAddr.phone,
-        alt_phone: newAddr.alt_phone || undefined,
-        line1: newAddr.line1,
-        line2: newAddr.line2 || undefined,
-        area: newAddr.area || undefined,
-        city: newAddr.city,
-        state: newAddr.state,
-        pincode: newAddr.pincode,
-      })
+      const saved = await saveAddress(supabase, userId, draft)
       // Refresh list so the new/updated row appears in its proper sort order
       await loadAddresses(userId)
       setSelectedAddressId(saved.id)
       setShowNewForm(false)
-      setNewAddr({
-        label: 'Home', name: '', phone, alt_phone: '',
-        line1: '', line2: '', area: '', city: '', state: '', pincode: '',
-      })
       setStep('review')
     } catch (err: any) {
       toast.error(err?.message ?? 'Could not save address')
@@ -579,12 +556,11 @@ export default function CheckoutClient({ store }: { store: Store }) {
             )}
 
             {(showNewForm || addresses.length === 0) && (
-              <NewAddressForm
-                value={newAddr}
-                onChange={setNewAddr}
-                onCancel={addresses.length > 0 ? () => setShowNewForm(false) : null}
-                onSave={saveNewAddress}
+              <BuyerAddressForm
+                defaultPhone={phone}
                 saving={savingAddr}
+                onSave={saveNewAddress}
+                onCancel={addresses.length > 0 ? () => setShowNewForm(false) : undefined}
               />
             )}
           </Section>

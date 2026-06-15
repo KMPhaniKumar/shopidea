@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   const url =
     `https://maps.googleapis.com/maps/api/place/details/json` +
     `?place_id=${encodeURIComponent(placeId)}` +
-    `&key=${key}&fields=address_components&language=en`
+    `&key=${key}&fields=address_components,formatted_address&language=en`
 
   try {
     const res = await fetch(url, { next: { revalidate: 0 } })
@@ -46,6 +46,8 @@ export async function GET(req: NextRequest) {
     }
 
     const details = {
+      // Full human-readable address — used to fill the "Area / Locality" box.
+      formatted: (json.result?.formatted_address as string) ?? '',
       area: get('sublocality_level_1', 'sublocality_level_2', 'sublocality', 'neighborhood', 'locality'),
       city: get('administrative_area_level_2', 'locality', 'administrative_area_level_1'),
       state: get('administrative_area_level_1'),

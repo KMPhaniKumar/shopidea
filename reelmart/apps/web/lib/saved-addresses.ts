@@ -95,6 +95,38 @@ export async function saveAddress(
   return data as SavedAddress
 }
 
+// Update an existing address in place (edit flow). Updates by id, scoped to
+// the owner; keeps the row's is_default flag untouched.
+export async function updateAddress(
+  supabase: SupabaseClient, userId: string, addressId: string, draft: AddressDraft,
+): Promise<SavedAddress> {
+  const cleanedPhone = draft.phone.replace(/\D/g, '')
+  const cleanedAlt   = (draft.alt_phone ?? '').replace(/\D/g, '')
+
+  const payload = {
+    label: draft.label || 'Home',
+    name: draft.name.trim(),
+    phone: cleanedPhone.startsWith('91') && cleanedPhone.length === 12
+      ? `+${cleanedPhone}` : `+91${cleanedPhone}`,
+    alt_phone: cleanedAlt
+      ? (cleanedAlt.startsWith('91') && cleanedAlt.length === 12 ? `+${cleanedAlt}` : `+91${cleanedAlt}`)
+      : null,
+    line1: draft.line1.trim(),
+    line2: draft.line2?.trim() || null,
+    area: draft.area?.trim() || null,
+    city: draft.city.trim(),
+    state: draft.state.trim(),
+    pincode: draft.pincode.trim(),
+  }
+
+  const { data, error } = await supabase
+    .from('addresses').update(payload)
+    .eq('id', addressId).eq('user_id', userId)
+    .select('*').single()
+  if (error) throw error
+  return data as SavedAddress
+}
+
 export async function setDefaultAddress(
   supabase: SupabaseClient, userId: string, addressId: string,
 ): Promise<void> {
@@ -135,15 +167,27 @@ export async function searchPlaces(query: string): Promise<PlacePrediction[]> {
   } catch { return [] }
 }
 
-export interface PlaceDetails { area: string; city: string; state: string; pincode: string }
+export interface PlaceDetails { formatted: string; area: string; city: string; state: string; pincode: string }
+
+const EMPTY_PLACE: PlaceDetails = { formatted: '', area: '', city: '', state: '', pincode: '' }
 
 export async function fetchPlaceDetails(placeId: string): Promise<PlaceDetails> {
-  const empty: PlaceDetails = { area: '', city: '', state: '', pincode: '' }
-  if (!placeId) return empty
+  if (!placeId) return EMPTY_PLACE
   try {
     const res = await fetch(`/api/places/details?place_id=${encodeURIComponent(placeId)}`)
     const json = await res.json()
-    if (!json.success) return empty
-    return json.data as PlaceDetails
-  } catch { return empty }
+    if (!json.success) return EMPTY_PLACE
+    return { ...EMPTY_PLACE, ...json.data } as PlaceDetails
+  } catch { return EMPTY_PLACE }
+}
+
+// Resolve the device's current GPS coordinates to an address via reverse
+// geocoding (used by the "Use current location" button).
+export async function reverseGeocode(lat: number, lng: number): Promise<PlaceDetails> {
+  try {
+    const res = await fetch(`/api/places/reverse?lat=${lat}&lng=${lng}`)
+    const json = await res.json()
+    if (!json.success) return EMPTY_PLACE
+    return { ...EMPTY_PLACE, ...json.data } as PlaceDetails
+  } catch { return EMPTY_PLACE }
 }
