@@ -94,6 +94,14 @@ export default function OrderConfirmedClient({ orderId }: { orderId: string }) {
           <p className="text-xs opacity-80 mt-1">{dt}</p>
         </div>
 
+        {/* Primary CTA — visible right under the confirmation, not buried at the bottom */}
+        <Link
+          href="/orders"
+          className="w-full bg-[#FF6B2B] text-white py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#e55a1f]"
+        >
+          <Package size={16} /> View My Orders
+        </Link>
+
         {/* Current status + tracking CTA */}
         <section className="bg-white rounded-2xl border border-gray-200 p-5">
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Current Status</p>
@@ -185,10 +193,6 @@ export default function OrderConfirmedClient({ orderId }: { orderId: string }) {
             {[order.delivery_address.line1, order.delivery_address.area, order.delivery_address.city, order.delivery_address.pincode].filter(Boolean).join(', ')}
           </p>
         </section>
-
-        <Link href="/orders" className="block text-center text-sm font-semibold text-[#FF6B2B] pt-2">
-          View all my orders →
-        </Link>
 
         <p className="text-center text-xs text-gray-400 pt-2">
           Save this page to refer back. Need help? WhatsApp us at +91 88888 88888
