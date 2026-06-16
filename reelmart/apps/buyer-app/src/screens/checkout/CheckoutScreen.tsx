@@ -120,6 +120,8 @@ export default function CheckoutScreen({ navigation, route }: Props) {
 
   const deliveryFee = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE
   const total = subtotal + deliveryFee
+  // NimbusPost-confirmed non-serviceable pincode → block checkout.
+  const notDeliverable = !!deliveryEstimate && !deliveryEstimate.deliverable
 
 function validateAddress(): string | null {
     if (!address.name.trim()) return 'Enter your name'
@@ -134,6 +136,10 @@ function validateAddress(): string | null {
   async function handlePlaceOrder() {
     const err = validateAddress()
     if (err) { Alert.alert('Incomplete address', err); return }
+    if (deliveryEstimate && !deliveryEstimate.deliverable) {
+      Alert.alert('Not deliverable', "We don't deliver to this pincode yet. Please choose a different address.")
+      return
+    }
     if (!session?.user) return
 
     setLoading(true)
@@ -375,14 +381,16 @@ function validateAddress(): string | null {
           <Text style={styles.footerLabel}>{items.length} item{items.length !== 1 ? 's' : ''}</Text>
         </View>
         <TouchableOpacity
-          style={[styles.placeBtn, loading && styles.placeBtnDisabled]}
+          style={[styles.placeBtn, (loading || notDeliverable) && styles.placeBtnDisabled]}
           onPress={handlePlaceOrder}
-          disabled={loading}
+          disabled={loading || notDeliverable}
         >
           {loading
             ? <ActivityIndicator color={colors.white} />
             : <Text style={styles.placeBtnText}>
-                {paymentMethod === 'cod' ? 'Place Order' : 'Proceed to Pay'} →
+                {notDeliverable
+                  ? 'Not deliverable to this pincode'
+                  : `${paymentMethod === 'cod' ? 'Place Order' : 'Proceed to Pay'} →`}
               </Text>
           }
         </TouchableOpacity>

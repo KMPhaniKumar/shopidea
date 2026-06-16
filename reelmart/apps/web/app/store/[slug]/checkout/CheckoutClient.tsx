@@ -143,6 +143,8 @@ export default function CheckoutClient({ store }: { store: Store }) {
     () => addresses.find(a => a.id === selectedAddressId) ?? null,
     [addresses, selectedAddressId],
   )
+  // NimbusPost-confirmed non-serviceable pincode → block checkout.
+  const notDeliverable = !!deliveryEstimate && !deliveryEstimate.deliverable
 
   // Fetch ETA when both pincodes are known. Cached by pickup-delivery key
   // so toggling between saved addresses doesn't re-hit the courier API.
@@ -282,6 +284,10 @@ export default function CheckoutClient({ store }: { store: Store }) {
 
   async function placeOrder() {
     if (!userId || !selectedAddress) return
+    if (deliveryEstimate && !deliveryEstimate.deliverable) {
+      toast.error("We don't deliver to this pincode yet. Please choose a different address.")
+      return
+    }
     setPlacing(true)
 
     // COD: the order is real on placement — create it now.
@@ -599,17 +605,25 @@ export default function CheckoutClient({ store }: { store: Store }) {
             </button>
           )}
           {step === 'address' && selectedAddressId && !showNewForm && (
-            <button onClick={() => setStep('review')} className="flex-1 bg-[#FF6B2B] text-white py-3 px-6 rounded-full font-bold text-sm hover:bg-[#e55a1f]">
-              Continue →
+            <button
+              onClick={() => setStep('review')}
+              disabled={notDeliverable}
+              className="flex-1 bg-[#FF6B2B] text-white py-3 px-6 rounded-full font-bold text-sm disabled:opacity-50 disabled:bg-gray-300 hover:bg-[#e55a1f]"
+            >
+              {notDeliverable ? 'Not deliverable here' : 'Continue →'}
             </button>
           )}
           {step === 'review' && selectedAddress && !showNewForm && (
             <button
               onClick={placeOrder}
-              disabled={placing}
-              className="flex-1 bg-[#00B98E] text-white py-3 px-6 rounded-full font-bold text-sm disabled:opacity-50 hover:bg-[#009e79] flex items-center justify-center gap-2"
+              disabled={placing || notDeliverable}
+              className="flex-1 bg-[#00B98E] text-white py-3 px-6 rounded-full font-bold text-sm disabled:opacity-50 disabled:bg-gray-300 hover:bg-[#009e79] flex items-center justify-center gap-2"
             >
-              {placing ? <Loader2 className="animate-spin" size={18} /> : (paymentMethod === 'cod' ? 'Place Order' : 'Pay & Place Order')} →
+              {placing
+                ? <Loader2 className="animate-spin" size={18} />
+                : notDeliverable
+                ? 'Not deliverable to this pincode'
+                : `${paymentMethod === 'cod' ? 'Place Order' : 'Pay & Place Order'} →`}
             </button>
           )}
         </div>
