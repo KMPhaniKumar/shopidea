@@ -19,6 +19,8 @@ const STATUS_COLORS: Record<string, string> = {
 }
 const STATUS_FLOW = ['pending', 'accepted', 'packed', 'shipped', 'delivered']
 
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'https://api-dev.reelmart.in').replace(/\/$/, '')
+
 export default function OrdersPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -86,6 +88,10 @@ export default function OrdersPage() {
   }
 
   async function updateStatus(orderId: string, status: string) {
+    // Packing an order auto-books a NimbusPost shipment via the delivery-service
+    // (which then sets the order to 'shipped' with an AWB + tracking link).
+    if (status === 'packed') return packAndShip(orderId)
+
     const updates: any = { status }
     if (status === 'delivered') updates.delivered_at = new Date().toISOString()
     const { error } = await supabase.from('orders').update(updates).eq('id', orderId)
@@ -93,6 +99,43 @@ export default function OrdersPage() {
     toast.success(`Order ${status}`)
     if (storeId) loadOrders(storeId)
     if (selected?.id === orderId) setSelected((prev: any) => ({ ...prev, status }))
+  }
+
+  // Mark packed, then book the courier shipment with NimbusPost. The order is
+  // recorded as 'packed' first so the action sticks even if booking fails (the
+  // seller can retry); on success the delivery-service flips it to 'shipped'
+  // and writes the AWB + tracking URL.
+  async function packAndShip(orderId: string) {
+    const { error: packErr } = await supabase.from('orders').update({ status: 'packed' }).eq('id', orderId)
+    if (packErr) { toast.error(`Failed to update: ${packErr.message}`); return }
+    if (selected?.id === orderId) setSelected((prev: any) => ({ ...prev, status: 'packed' }))
+
+    const t = toast.loading('Booking courier shipment…')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`${API_URL}/api/delivery/create-shipment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ orderId }),
+      })
+      const json = await res.json()
+      if (!json.success) {
+        toast.error(json.error ?? 'Courier booking failed — order is packed, retry to ship.', { id: t })
+      } else {
+        toast.success(`Shipment booked · AWB ${json.data?.awb ?? ''}`, { id: t })
+      }
+    } catch (e: any) {
+      toast.error(`Courier booking failed: ${e?.message ?? 'network error'} — order is packed, retry to ship.`, { id: t })
+    } finally {
+      if (storeId) await loadOrders(storeId)
+      if (selected?.id === orderId) {
+        const { data: fresh } = await supabase.from('orders').select('*').eq('id', orderId).single()
+        if (fresh) setSelected(fresh)
+      }
+    }
   }
 
   function fullAddressLines(addr: any): string[] {
