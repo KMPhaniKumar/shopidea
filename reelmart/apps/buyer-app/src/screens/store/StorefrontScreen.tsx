@@ -59,6 +59,7 @@ export default function StorefrontScreen({ navigation, route }: Props) {
           name: product.name,
           image: product.images?.[0] ?? '',
           price: product.price,
+          compare_price: product.compare_price ?? undefined,
           qty: 1,
         },
         qty: (prev[key]?.qty ?? 0) + 1,

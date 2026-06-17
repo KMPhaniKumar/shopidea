@@ -68,6 +68,9 @@ export default function ProductClient({ product, storeSlug }: { product: Product
         name: product.name,
         image: product.images?.[0] ?? '',
         price: product.price,
+        ...(product.compare_price != null && product.compare_price > product.price
+          ? { compare_price: product.compare_price }
+          : {}),
         qty: 1,
       }]
     })

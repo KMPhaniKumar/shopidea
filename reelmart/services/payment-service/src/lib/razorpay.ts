@@ -30,6 +30,22 @@ export function verifyWebhookSignature(rawBody: string, signature: string): bool
   return crypto.timingSafeEqual(expectedBuf, actualBuf)
 }
 
+// Fetch the Razorpay payment object to extract the method (upi/card/netbanking/wallet/emi).
+// Returns the lowercase method string, or null if the fetch fails for any reason.
+// This is intentionally non-throwing — callers must treat null as "unknown, proceed anyway".
+export async function fetchPaymentMethod(paymentId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+      headers: { Authorization: `Basic ${AUTH}` },
+    })
+    if (!res.ok) return null
+    const body = await res.json() as any
+    return typeof body.method === 'string' ? body.method.toLowerCase() : null
+  } catch {
+    return null
+  }
+}
+
 export async function createRefund(paymentId: string, amountPaise: number): Promise<any> {
   const res = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}/refund`, {
     method: 'POST',

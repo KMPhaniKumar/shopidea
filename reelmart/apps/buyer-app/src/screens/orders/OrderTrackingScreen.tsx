@@ -8,6 +8,7 @@ import { RouteProp } from '@react-navigation/native'
 import { colors, radius, spacing } from '../../constants/theme'
 import { useOrderStore } from '../../store/orderStore'
 import { subscribeToOrderStatus, STATUS_LABELS, getOrderById } from '../../services/orderService'
+import { computePriceBreakup, fmtRupee } from '../../services/orderPricing'
 import { supabase } from '../../lib/supabase'
 import OrderTimeline from '../../components/OrderTimeline'
 
@@ -37,6 +38,24 @@ export default function OrderTrackingScreen({ navigation, route }: Props) {
   const isTerminal = ['rejected', 'cancelled'].includes(localOrder.status)
   const items = localOrder.items as any[]
   const address = localOrder.delivery_address as any
+
+  // Build address lines
+  const addressLine1 = [address.line1, address.line2, address.area]
+    .filter(Boolean)
+    .join(', ')
+  const addressLine2 = `${address.city}, ${address.state} – ${address.pincode}`
+
+  // Price breakup
+  const breakup = computePriceBreakup({
+    items,
+    subtotal: localOrder.subtotal,
+    delivery_fee: localOrder.delivery_fee,
+    discount_amount: (localOrder as any).discount_amount,
+    coins_discount: (localOrder as any).coins_discount,
+    total_amount: localOrder.total_amount,
+    payment_method: localOrder.payment_method ?? 'online',
+    payment_method_detail: (localOrder as any).payment_method_detail,
+  })
 
   return (
     <View style={styles.container}>
@@ -105,24 +124,91 @@ export default function OrderTrackingScreen({ navigation, route }: Props) {
               <Text style={styles.itemPrice}>₹{item.price * item.qty} ×{item.qty}</Text>
             </View>
           ))}
-          <View style={styles.divider} />
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total Paid</Text>
-            <Text style={styles.totalVal}>₹{localOrder.total_amount}</Text>
-          </View>
-          <Text style={styles.paymentMethod}>
-            {localOrder.payment_method === 'cod' ? '💵 Cash on Delivery' : '✅ Paid Online'}
-          </Text>
         </View>
 
-        {/* Address */}
+        {/* Price details */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Delivery Address</Text>
-          <Text style={styles.addressText}>
-            {address.name} · {address.phone}{'\n'}
-            {address.line1}{address.area ? `, ${address.area}` : ''}{'\n'}
-            {address.city} – {address.pincode}
-          </Text>
+          <Text style={styles.sectionTitle}>Price details</Text>
+
+          {/* Listing price (MRP) — only when hasMrp */}
+          {breakup.hasMrp && (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Listing price</Text>
+              <Text style={styles.priceMrp}>₹{fmtRupee(breakup.listingTotal)}</Text>
+            </View>
+          )}
+
+          {/* Special price / Item total */}
+          <View style={styles.priceRow}>
+            <Text style={styles.priceLabel}>
+              {breakup.hasMrp ? 'Special price' : 'Item total'}
+            </Text>
+            <Text style={styles.priceVal}>₹{fmtRupee(breakup.specialTotal)}</Text>
+          </View>
+
+          {/* Delivery fee */}
+          <View style={styles.priceRow}>
+            <Text style={styles.priceLabel}>Total fees</Text>
+            {breakup.fees === 0 ? (
+              <Text style={styles.priceFree}>FREE</Text>
+            ) : (
+              <Text style={styles.priceVal}>₹{fmtRupee(breakup.fees)}</Text>
+            )}
+          </View>
+
+          {/* Other discount — only when > 0 */}
+          {breakup.otherDiscount > 0 && (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Other discount</Text>
+              <Text style={styles.priceDiscount}>−₹{fmtRupee(breakup.otherDiscount)}</Text>
+            </View>
+          )}
+
+          {/* Dashed divider */}
+          <View style={styles.dashedDivider} />
+
+          {/* Total amount */}
+          <View style={styles.priceRow}>
+            <Text style={styles.priceTotalLabel}>Total amount</Text>
+            <Text style={styles.priceTotalVal}>₹{fmtRupee(breakup.total)}</Text>
+          </View>
+
+          {/* Paid by pill */}
+          <View style={styles.paidByRow}>
+            <Text style={styles.paidByLabel}>Paid by</Text>
+            <View style={styles.paidByPill}>
+              <Text style={styles.paidByPillText}>{breakup.paidBy}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Delivery details */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Delivery details</Text>
+
+          {/* Address row */}
+          <View style={styles.deliveryRow}>
+            <Text style={styles.deliveryIcon}>🏠</Text>
+            <View style={styles.deliveryContent}>
+              <Text style={styles.deliveryTag}>Home</Text>
+              <Text style={styles.deliveryAddress}>{addressLine1}</Text>
+              <Text style={styles.deliveryAddress}>{addressLine2}</Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Person row */}
+          <View style={styles.deliveryRow}>
+            <Text style={styles.deliveryIcon}>👤</Text>
+            <View style={styles.deliveryContent}>
+              <Text style={styles.deliveryName}>{address.name}</Text>
+              <Text style={styles.deliveryPhone}>{address.phone}</Text>
+              {address.alt_phone ? (
+                <Text style={styles.deliveryPhone}>Alt: {address.alt_phone}</Text>
+              ) : null}
+            </View>
+          </View>
         </View>
 
         {/* Reorder */}
@@ -186,7 +272,7 @@ const styles = StyleSheet.create({
   trackingPendingTitle: { fontSize: 14, fontWeight: '700', color: '#9A3412', marginBottom: 4 },
   trackingPendingSub: { fontSize: 12, color: '#7C2D12', lineHeight: 18 },
 
-  // Items section
+  // Shared card / section
   section: {
     backgroundColor: colors.surface, borderRadius: radius.lg,
     padding: spacing.md,
@@ -196,15 +282,52 @@ const styles = StyleSheet.create({
     fontSize: 12, fontWeight: '700', color: colors.textMuted,
     marginBottom: spacing.md, textTransform: 'uppercase', letterSpacing: 0.5,
   },
+
+  // Items
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   itemName: { flex: 1, fontSize: 14, color: colors.textPrimary, marginRight: spacing.sm },
   itemPrice: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+
+  // Price details rows
+  priceRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: 8,
+  },
+  priceLabel: { fontSize: 14, color: colors.textSecondary },
+  priceVal: { fontSize: 14, fontWeight: '500', color: colors.textPrimary },
+  priceMrp: {
+    fontSize: 14, fontWeight: '500', color: colors.textMuted,
+    textDecorationLine: 'line-through',
+  },
+  priceFree: { fontSize: 14, fontWeight: '700', color: '#00B98E' },
+  priceDiscount: { fontSize: 14, fontWeight: '700', color: '#00B98E' },
+  dashedDivider: {
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+    borderStyle: 'dashed', marginVertical: spacing.sm,
+  },
+  priceTotalLabel: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  priceTotalVal: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
+  paidByRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: spacing.sm,
+  },
+  paidByLabel: { fontSize: 13, color: colors.textSecondary },
+  paidByPill: {
+    backgroundColor: '#FFF0E9', borderRadius: radius.pill,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderWidth: 1, borderColor: '#FFD5BE',
+  },
+  paidByPillText: { fontSize: 12, fontWeight: '700', color: colors.primary },
+
+  // Delivery details
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  totalLabel: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-  totalVal: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
-  paymentMethod: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
-  addressText: { fontSize: 14, color: colors.textPrimary, lineHeight: 22 },
+  deliveryRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  deliveryIcon: { fontSize: 20, marginTop: 1 },
+  deliveryContent: { flex: 1 },
+  deliveryTag: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
+  deliveryAddress: { fontSize: 14, color: colors.textPrimary, lineHeight: 20 },
+  deliveryName: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  deliveryPhone: { fontSize: 13, color: colors.textSecondary, marginTop: 1 },
 
   // Reorder CTA
   reorderBtn: {

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { supabaseAdmin } from '../lib/supabase'
 import { requireAuth, AuthRequest } from '../middleware/auth'
-import { createRazorpayOrder, verifySignature, verifyWebhookSignature, createRefund } from '../lib/razorpay'
+import { createRazorpayOrder, verifySignature, verifyWebhookSignature, createRefund, fetchPaymentMethod } from '../lib/razorpay'
 import { recordOrderEvent } from '../lib/orderEvents'
 
 export const paymentsRouter = Router()
@@ -79,6 +79,11 @@ paymentsRouter.post('/confirm', requireAuth, async (req: AuthRequest, res: Respo
     return res.status(400).json({ success: false, error: 'Invalid payment signature' })
   }
 
+  // Fetch the payment instrument (upi/card/netbanking/wallet/emi) from Razorpay.
+  // fetchPaymentMethod is non-throwing and returns null on any failure, so a network
+  // hiccup or API error here never blocks order creation.
+  const paymentMethodDetail = await fetchPaymentMethod(razorpay_payment_id)
+
   const { data, error } = await supabaseAdmin.from('orders').insert({
     buyer_id: req.user!.id,
     store_id: order.store_id,
@@ -93,6 +98,7 @@ paymentsRouter.post('/confirm', requireAuth, async (req: AuthRequest, res: Respo
     status: 'pending',
     razorpay_order_id,
     razorpay_payment_id,
+    payment_method_detail: paymentMethodDetail,
   }).select('id, order_number').single()
 
   if (error || !data) return res.status(500).json({ success: false, error: error?.message ?? 'order-create-failed' })

@@ -6,6 +6,7 @@ export interface CartItem {
   name: string
   image: string
   price: number
+  compare_price?: number
   variant?: string
   variantId?: string
   qty: number

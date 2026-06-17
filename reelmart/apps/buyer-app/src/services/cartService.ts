@@ -13,6 +13,7 @@ export interface CartItemRow {
     id: string
     name: string
     price: number
+    compare_price: number | null
     images: string[] | null
     stock_count: number | null
     stock_type: string | null
@@ -35,7 +36,7 @@ export interface CartTotals {
 export async function getCart(userId: string): Promise<CartItemRow[]> {
   const { data } = await supabase
     .from('cart_items')
-    .select('*, products(id, name, price, images, stock_count, stock_type, is_available), stores(id, store_name, store_slug, logo_url, city)')
+    .select('*, products(id, name, price, compare_price, images, stock_count, stock_type, is_available), stores(id, store_name, store_slug, logo_url, city)')
     .eq('user_id', userId)
     .order('created_at', { ascending: true })
   return (data as unknown as CartItemRow[]) ?? []
@@ -139,6 +140,7 @@ export function cartItemsToCheckout(items: CartItemRow[]) {
     name: item.products.name,
     image: item.products.images?.[0] ?? '',
     price: item.selected_variant?.price ?? item.products.price,
+    compare_price: item.products.compare_price ?? undefined,
     variant: item.selected_variant?.value,
     qty: item.quantity,
   }))

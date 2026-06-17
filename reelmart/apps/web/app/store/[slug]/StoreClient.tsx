@@ -79,6 +79,9 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
         name: p.name,
         image: p.images?.[0] ?? '',
         price: p.price,
+        ...(p.compare_price != null && p.compare_price > p.price
+          ? { compare_price: p.compare_price }
+          : {}),
         qty: 1,
       }]
     })
