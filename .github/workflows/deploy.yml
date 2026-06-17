@@ -126,33 +126,53 @@ jobs:
     needs: lint-web
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    # Web normally ships via Vercel's own GitHub integration on push to main.
+    # This CLI deploy is a fallback that self-skips when the Vercel secrets are
+    # absent (the `secrets` context isn't allowed in a job-level `if`, so we map
+    # the token to env and gate the steps on it). This keeps deploys green
+    # instead of failing on an empty --token every push.
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - if: env.VERCEL_TOKEN != ''
+        uses: actions/checkout@v4
+      - if: env.VERCEL_TOKEN != ''
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: npm install -g vercel
+      - if: env.VERCEL_TOKEN != ''
+        run: npm install -g vercel
       - name: Deploy
-        run: vercel --prod --yes --token ${{ secrets.VERCEL_TOKEN }}
+        if: env.VERCEL_TOKEN != ''
+        run: vercel --prod --yes --token "$VERCEL_TOKEN"
         working-directory: reelmart/apps/web
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
   deploy-supabase:
     name: Apply Supabase Migrations
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    # Migrations are normally applied via the supabase CLI / db-migrate skill.
+    # This job self-skips when SUPABASE_DB_URL is absent (the `secrets` context
+    # isn't allowed in a job-level `if`, so we map it to env and gate the steps)
+    # — otherwise it would fail on an empty --db-url and show false-red every push.
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      - if: env.SUPABASE_DB_URL != ''
+        uses: actions/checkout@v4
+      - if: env.SUPABASE_DB_URL != ''
+        uses: supabase/setup-cli@v1
         with:
           version: latest
       - name: Push DB migrations
-        run: supabase db push --db-url ${{ secrets.SUPABASE_DB_URL }}
+        if: env.SUPABASE_DB_URL != ''
+        run: supabase db push --db-url "$SUPABASE_DB_URL"
         working-directory: reelmart
       - name: Deploy Edge Functions
-        run: supabase functions deploy --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        if: env.SUPABASE_DB_URL != '' && env.SUPABASE_ACCESS_TOKEN != ''
+        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
         working-directory: reelmart
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
