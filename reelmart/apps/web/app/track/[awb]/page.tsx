@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { Package, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import OrderTimeline from '@/components/order/OrderTimeline'
 
 const TIMELINE_STEPS = ['confirmed', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered'] as const
 type Step = typeof TIMELINE_STEPS[number]
@@ -24,6 +25,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 interface OrderForTracking {
+  id: string
   order_number: string
   total_amount: number
   items: { name: string; qty: number; price: number; image?: string }[]
@@ -56,7 +58,7 @@ async function fetchOrder(awb: string): Promise<OrderForTracking | null> {
   const supabase = createClient()
   const { data } = await supabase
     .from('orders')
-    .select('order_number, total_amount, items, delivery_address, stores(store_name, logo_url)')
+    .select('id, order_number, total_amount, items, delivery_address, stores(store_name, logo_url)')
     .eq('awb_code', awb)
     .maybeSingle()
   return (data as any) ?? null
@@ -137,49 +139,53 @@ export default async function TrackPage({ params }: Props) {
           </div>
         </section>
 
-        {/* Timeline */}
-        <section className="bg-white rounded-2xl border border-gray-200 p-5">
-          <h2 className="font-bold text-[#1A1A1A] mb-4">Order Status</h2>
-          {trackingFailed && (
-            <p className="text-xs text-orange-600 bg-orange-50 border border-orange-100 rounded-lg p-2 mb-4">
-              Live tracking is temporarily unavailable. Showing last known status.
-            </p>
-          )}
-          <ol className="relative">
-            {TIMELINE_STEPS.map((step, i) => {
-              const reached = i <= currentIdx
-              const isCurrent = i === currentIdx
-              const at = historyByStep.get(step)
-              return (
-                <li key={step} className="flex gap-3 pb-5 last:pb-0 relative">
-                  {/* Vertical connector */}
-                  {i < TIMELINE_STEPS.length - 1 && (
+        {/* Rich order timeline — reads from order_status_events */}
+        <OrderTimeline orderId={order.id} />
+
+        {/* Courier scan data (NimbusPost) */}
+        {!trackingFailed && (
+          <section className="bg-white rounded-2xl border border-gray-200 p-5">
+            <h2 className="font-bold text-[#1A1A1A] mb-4 text-sm">Courier scans</h2>
+            {trackingFailed && (
+              <p className="text-xs text-orange-600 bg-orange-50 border border-orange-100 rounded-lg p-2 mb-4">
+                Live tracking is temporarily unavailable. Showing last known status.
+              </p>
+            )}
+            <ol className="relative">
+              {TIMELINE_STEPS.map((step, i) => {
+                const reached = i <= currentIdx
+                const isCurrent = i === currentIdx
+                const at = historyByStep.get(step)
+                return (
+                  <li key={step} className="flex gap-3 pb-5 last:pb-0 relative">
+                    {i < TIMELINE_STEPS.length - 1 && (
+                      <span
+                        aria-hidden="true"
+                        className={`absolute left-[11px] top-6 bottom-0 w-0.5 ${reached && i + 1 <= currentIdx ? 'bg-[#00B98E]' : 'bg-gray-200'}`}
+                      />
+                    )}
                     <span
-                      aria-hidden="true"
-                      className={`absolute left-[11px] top-6 bottom-0 w-0.5 ${reached && i + 1 <= currentIdx ? 'bg-[#00B98E]' : 'bg-gray-200'}`}
-                    />
-                  )}
-                  <span
-                    className={`mt-0.5 w-6 h-6 rounded-full shrink-0 flex items-center justify-center border-2 ${
-                      reached
-                        ? 'bg-[#00B98E] border-[#00B98E] text-white'
-                        : 'bg-white border-gray-300 text-gray-400'
-                    } ${isCurrent ? 'ring-4 ring-[#00B98E]/20' : ''}`}
-                  >
-                    {reached ? '✓' : ''}
-                  </span>
-                  <div className="flex-1 -mt-0.5">
-                    <p className={`text-sm font-semibold ${reached ? 'text-[#1A1A1A]' : 'text-gray-400'}`}>
-                      {STEP_LABEL[step]}
-                    </p>
-                    {at && <p className="text-xs text-gray-500 mt-0.5">{formatDate(at)}</p>}
-                    {isCurrent && !at && <p className="text-xs text-[#00B98E] font-semibold mt-0.5">Current</p>}
-                  </div>
-                </li>
-              )
-            })}
-          </ol>
-        </section>
+                      className={`mt-0.5 w-6 h-6 rounded-full shrink-0 flex items-center justify-center border-2 ${
+                        reached
+                          ? 'bg-[#00B98E] border-[#00B98E] text-white'
+                          : 'bg-white border-gray-300 text-gray-400'
+                      } ${isCurrent ? 'ring-4 ring-[#00B98E]/20' : ''}`}
+                    >
+                      {reached ? '✓' : ''}
+                    </span>
+                    <div className="flex-1 -mt-0.5">
+                      <p className={`text-sm font-semibold ${reached ? 'text-[#1A1A1A]' : 'text-gray-400'}`}>
+                        {STEP_LABEL[step]}
+                      </p>
+                      {at && <p className="text-xs text-gray-500 mt-0.5">{formatDate(at)}</p>}
+                      {isCurrent && !at && <p className="text-xs text-[#00B98E] font-semibold mt-0.5">Current</p>}
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          </section>
+        )}
 
         {/* Helper card */}
         <section className="bg-[#1A1A1A] text-white rounded-2xl p-5 text-sm">

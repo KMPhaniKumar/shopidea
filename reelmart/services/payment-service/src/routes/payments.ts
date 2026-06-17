@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { supabaseAdmin } from '../lib/supabase'
 import { requireAuth, AuthRequest } from '../middleware/auth'
 import { createRazorpayOrder, verifySignature, verifyWebhookSignature, createRefund } from '../lib/razorpay'
+import { recordOrderEvent } from '../lib/orderEvents'
 
 export const paymentsRouter = Router()
 
@@ -95,6 +96,17 @@ paymentsRouter.post('/confirm', requireAuth, async (req: AuthRequest, res: Respo
   }).select('id, order_number').single()
 
   if (error || !data) return res.status(500).json({ success: false, error: error?.message ?? 'order-create-failed' })
+
+  // Fire-and-forget: log the initial timeline event for this online order.
+  // Never awaited in a way that blocks the response; any failure is logged
+  // internally and never surfaced to the caller.
+  void recordOrderEvent({
+    orderId: data.id,
+    code: 'order_placed',
+    source: 'system',
+    dedupKey: `order:${data.id}:order_placed`,
+  })
+
   res.json({ success: true, data })
 })
 

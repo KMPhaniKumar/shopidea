@@ -21,6 +21,7 @@ import {
   type NdrActionItem,
 } from '../lib/nimbus'
 import { estimateDeliveryDays } from '../lib/estimateDelivery'
+import { recordOrderEvent, syncTrackingToEvents } from '../lib/orderEvents'
 
 export const deliveryRouter = Router()
 
@@ -359,7 +360,20 @@ deliveryRouter.post('/create-shipment', requireAuth, async (req: AuthRequest, re
       label_url: labelUrl,
       courier_name: courierName,
       status: 'shipped',
+      shipped_at: new Date().toISOString(),
     }).eq('id', orderId)
+
+    // Authoritative shipment_booked event. Dedup key matches the key used in
+    // order-service PUT /status so a manual seller status flip can't double it.
+    recordOrderEvent({
+      orderId,
+      code: 'shipment_booked',
+      source: 'courier',
+      description: courierName ?? null,
+      occurredAt: new Date().toISOString(),
+      meta: { awb },
+      dedupKey: `order:${orderId}:shipment_booked`,
+    })
 
     res.json({
       success: true,
@@ -399,6 +413,24 @@ deliveryRouter.get('/track/:awbCode', async (req, res) => {
     const tracking = await trackShipment(awb)
     const events = tracking?.history ?? []
     const current = mapNimbusStatus(tracking?.status)
+
+    // Persist courier scans to the unified timeline. Look up the order_id by
+    // awb_code. Fire-and-forget — never delay the response.
+    ;(async () => {
+      try {
+        const { data: orderRow } = await supabaseAdmin
+          .from('orders')
+          .select('id')
+          .eq('awb_code', awb)
+          .maybeSingle()
+        if (orderRow?.id) {
+          await syncTrackingToEvents(orderRow.id, awb, tracking)
+        }
+      } catch (syncErr: unknown) {
+        const msg = syncErr instanceof Error ? syncErr.message : String(syncErr)
+        console.error('[delivery] track sync error', { awb, error: msg })
+      }
+    })()
 
     const seen = new Set<TimelineStep>()
     const history: { step: TimelineStep; label: string; at: string }[] = []
@@ -551,6 +583,29 @@ deliveryRouter.post('/track/bulk', requireInternalKey, async (req, res) => {
 
   try {
     const results = await bulkTrack(parse.data.awbs)
+
+    // Persist courier scans for each AWB. Resolve order_id by awb_code then
+    // sync. Errors per AWB are isolated — one bad AWB must not abort the rest.
+    ;(async () => {
+      for (const trackingResult of results) {
+        const awb = trackingResult.awb_number
+        if (!awb) continue
+        try {
+          const { data: orderRow } = await supabaseAdmin
+            .from('orders')
+            .select('id')
+            .eq('awb_code', awb)
+            .maybeSingle()
+          if (orderRow?.id) {
+            await syncTrackingToEvents(orderRow.id, awb, trackingResult)
+          }
+        } catch (perAwbErr: unknown) {
+          const msg = perAwbErr instanceof Error ? perAwbErr.message : String(perAwbErr)
+          console.error('[delivery] bulk-track sync error', { awb, error: msg })
+        }
+      }
+    })()
+
     res.json({ success: true, data: results })
   } catch (err) {
     console.error('[delivery] bulk-track error')

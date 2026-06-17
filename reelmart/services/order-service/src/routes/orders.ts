@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { supabaseAdmin } from '../lib/supabase'
 import { requireAuth, AuthRequest } from '../middleware/auth'
 import { notifyOrderUpdate } from '../lib/notify'
+import { recordOrderEvent } from '../lib/orderEvents'
 
 export const ordersRouter = Router()
 
@@ -66,6 +67,16 @@ ordersRouter.post('/', requireAuth, async (req, res) => {
   }).select('*, stores(store_name)').single()
 
   if (error) return res.status(400).json({ success: false, error: error.message })
+
+  // Emit order_placed event. Dedup key prevents duplicates on retries.
+  recordOrderEvent({
+    orderId: data.id,
+    code: 'order_placed',
+    source: 'system',
+    occurredAt: data.created_at,
+    dedupKey: `order:${data.id}:order_placed`,
+  })
+
   res.status(201).json({ success: true, data })
 })
 
@@ -148,8 +159,14 @@ ordersRouter.put('/:id/status', requireAuth, async (req, res) => {
     return res.status(403).json({ success: false, error: 'This store is currently unavailable', code: 'STORE_SUSPENDED' })
   }
 
+  const now = new Date().toISOString()
   const updates: any = { status }
-  if (status === 'delivered') updates.delivered_at = new Date().toISOString()
+  if (status === 'accepted') updates.accepted_at = now
+  if (status === 'packed') updates.packed_at = now
+  // shipped is authoritative in delivery-service create-shipment; set here only
+  // when the seller flips status manually (e.g. via dashboard without NimbusPost).
+  if (status === 'shipped') updates.shipped_at = now
+  if (status === 'delivered') updates.delivered_at = now
   if (tracking_number) updates.tracking_number = tracking_number
   if (awb_code) updates.awb_code = awb_code
 
@@ -170,6 +187,42 @@ ordersRouter.put('/:id/status', requireAuth, async (req, res) => {
     (data as any).buyer_id,
   )
 
+  // Append a status-change event to the unified timeline.
+  const rejectionReason: string | undefined = req.body.rejection_reason
+  const orderId = req.params.id
+
+  if (status === 'accepted') {
+    recordOrderEvent({ orderId, code: 'order_accepted', source: 'seller', occurredAt: now })
+  } else if (status === 'packed') {
+    recordOrderEvent({ orderId, code: 'order_packed', source: 'seller', occurredAt: now })
+  } else if (status === 'shipped') {
+    // delivery-service create-shipment is the authoritative emitter for
+    // shipment_booked. Dedup so a manual flip here can't double with it.
+    recordOrderEvent({
+      orderId,
+      code: 'shipment_booked',
+      source: 'courier',
+      occurredAt: now,
+      dedupKey: `order:${orderId}:shipment_booked`,
+    })
+  } else if (status === 'delivered') {
+    recordOrderEvent({ orderId, code: 'delivered', source: 'courier', occurredAt: now })
+  } else if (status === 'rejected') {
+    recordOrderEvent({
+      orderId,
+      code: 'order_rejected',
+      source: 'seller',
+      description: rejectionReason || null,
+      occurredAt: now,
+    })
+  } else if (status === 'cancelled') {
+    recordOrderEvent({ orderId, code: 'order_cancelled', source: 'system', occurredAt: now })
+  } else if (status === 'return_requested') {
+    recordOrderEvent({ orderId, code: 'return_requested', source: 'buyer', occurredAt: now })
+  } else if (status === 'returned') {
+    recordOrderEvent({ orderId, code: 'returned', source: 'system', occurredAt: now })
+  }
+
   res.json({ success: true, data })
 })
 
@@ -184,5 +237,13 @@ ordersRouter.post('/:id/cancel', requireAuth, async (req, res) => {
 
   const { data } = await supabaseAdmin
     .from('orders').update({ status: 'cancelled' }).eq('id', req.params.id).select('*').single()
+
+  recordOrderEvent({
+    orderId: req.params.id,
+    code: 'order_cancelled',
+    source: 'buyer',
+    occurredAt: new Date().toISOString(),
+  })
+
   res.json({ success: true, data })
 })

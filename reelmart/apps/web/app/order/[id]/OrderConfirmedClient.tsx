@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { CheckCircle2, Smartphone, Apple, Package, Loader2, AlertCircle } from 'lucide-react'
+import OrderTimeline from '@/components/order/OrderTimeline'
 
 interface Order {
   id: string
@@ -102,28 +103,18 @@ export default function OrderConfirmedClient({ orderId }: { orderId: string }) {
           <Package size={16} /> View My Orders
         </Link>
 
-        {/* Current status + tracking CTA */}
-        <section className="bg-white rounded-2xl border border-gray-200 p-5">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Current Status</p>
-          <div className={`inline-block text-xs font-semibold px-3 py-1.5 rounded-full border ${
-            STATUS_LABEL[order.status]?.cls ?? 'bg-gray-100 text-gray-600 border-gray-200'
-          }`}>
-            {STATUS_LABEL[order.status]?.text ?? order.status}
-          </div>
-          {order.awb_code ? (
-            <Link
-              href={`/track/${order.awb_code}`}
-              className="mt-4 w-full bg-[#FF6B2B] text-white py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#e55a1f]"
-            >
-              <Package size={16} /> Track this order →
-            </Link>
-          ) : (
-            <p className="mt-3 text-xs text-gray-500 leading-relaxed">
-              A tracking link will appear here as soon as the seller ships your order.
-              We'll also send it on WhatsApp & SMS.
-            </p>
-          )}
-        </section>
+        {/* Order timeline — live updates from order_status_events */}
+        <OrderTimeline orderId={order.id} />
+
+        {/* AWB tracking link once shipped */}
+        {order.awb_code && (
+          <Link
+            href={`/track/${order.awb_code}`}
+            className="w-full bg-white text-[#FF6B2B] border border-[#FF6B2B] py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-orange-50"
+          >
+            <Package size={16} /> Courier tracking →
+          </Link>
+        )}
 
         {/* Track on app CTA */}
         <div className="bg-[#1A1A1A] text-white rounded-3xl p-6 shadow-lg">
