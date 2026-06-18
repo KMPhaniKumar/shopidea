@@ -20,6 +20,7 @@ import {
   type StorePickupInput,
   type NdrActionItem,
 } from '../lib/nimbus'
+import { isLegacyConfigured, generateLabel } from '../lib/nimbusLegacy'
 import { estimateDeliveryDays } from '../lib/estimateDelivery'
 import { recordOrderEvent, syncTrackingToEvents } from '../lib/orderEvents'
 
@@ -159,6 +160,10 @@ const NdrActionItemSchema = z.discriminatedUnion('action', [
 ])
 
 const NdrActionSchema = z.array(NdrActionItemSchema).min(1).max(100, 'Max 100 NDR actions per request')
+
+const ShippingLabelSchema = z.object({
+  orderId: z.string().uuid('orderId must be a UUID'),
+})
 
 // ---- Routes ------------------------------------------------------------
 
@@ -359,6 +364,7 @@ deliveryRouter.post('/create-shipment', requireAuth, async (req: AuthRequest, re
       tracking_url: trackingUrl,
       label_url: labelUrl,
       courier_name: courierName,
+      nimbus_shipment_id: shipmentData?.shipment_id ? String(shipmentData.shipment_id) : null,
       status: 'shipped',
       shipped_at: new Date().toISOString(),
     }).eq('id', orderId)
@@ -491,6 +497,85 @@ deliveryRouter.post('/cancel-shipment', requireAuth, async (req: AuthRequest, re
     console.error('[delivery] cancel-shipment error', { orderId, awb: order.awb_code })
     handleNimbusError(err, res)
   }
+})
+
+// POST /api/delivery/shipping-label — seller fetches (or generates) the PDF
+// label for a shipped order. Decision flow:
+//   1. Order has label_url from booking  → return it immediately (source:'booking').
+//   2. label_url absent, NIMBUS_API_KEY set, nimbus_shipment_id present
+//      → call legacy label API, persist the URL, return it (source:'generated').
+//   3. No awb_code yet → 409 NOT_SHIPPED.
+//   4. Anything else  → 409 LABEL_UNAVAILABLE.
+deliveryRouter.post('/shipping-label', requireAuth, async (req: AuthRequest, res) => {
+  const parse = ShippingLabelSchema.safeParse(req.body)
+  if (!parse.success) {
+    return res.status(400).json({ success: false, error: parse.error.errors[0]?.message ?? 'Validation error', code: 'VALIDATION_ERROR' })
+  }
+  const { orderId } = parse.data
+  const userId = req.user!.id
+
+  const { data: order, error: orderErr } = await supabaseAdmin
+    .from('orders')
+    .select('id, store_id, awb_code, label_url, nimbus_shipment_id, order_number')
+    .eq('id', orderId)
+    .single()
+  if (orderErr || !order) {
+    return res.status(404).json({ success: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' })
+  }
+
+  // Ownership check — seller must own the order's store
+  const store = await requireOwnsStore(userId, order.store_id, res)
+  if (!store) return
+
+  // Guard: must have a booked shipment before a label is meaningful
+  if (!order.awb_code) {
+    return res.status(409).json({
+      success: false,
+      code: 'NOT_SHIPPED',
+      error: 'Order has no shipment yet — book it first',
+    })
+  }
+
+  // Fast path: label URL was captured at booking time
+  if (order.label_url) {
+    return res.json({ success: true, data: { url: order.label_url, source: 'booking' } })
+  }
+
+  // Legacy-API path: generate label on demand
+  if (isLegacyConfigured() && order.nimbus_shipment_id) {
+    try {
+      const { url } = await generateLabel([order.nimbus_shipment_id])
+      if (!url) {
+        return res.status(502).json({
+          success: false,
+          error: 'Courier returned no label URL',
+          code: 'LABEL_FAILED',
+        })
+      }
+      // Persist for future requests so we don't call the API again
+      await supabaseAdmin
+        .from('orders')
+        .update({ label_url: url })
+        .eq('id', orderId)
+      return res.json({ success: true, data: { url, source: 'generated' } })
+    } catch (err: unknown) {
+      // Never leak the API key — just log a safe identifier and return 502
+      const msg = err instanceof Error ? err.message : 'Label generation failed'
+      console.error('[delivery] shipping-label legacy error', { orderId, error: msg })
+      return res.status(502).json({
+        success: false,
+        error: 'Could not generate shipping label — courier service error',
+        code: 'LABEL_FAILED',
+      })
+    }
+  }
+
+  // No label available by any path
+  return res.status(409).json({
+    success: false,
+    code: 'LABEL_UNAVAILABLE',
+    error: 'Shipping label not available yet',
+  })
 })
 
 // POST /api/delivery/ndr/list — seller fetches NDR (failed delivery) records

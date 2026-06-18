@@ -173,7 +173,7 @@ export default function OrdersPage() {
     w.print()
   }
 
-  function printShippingLabel(order: any) {
+  function printFallbackLabel(order: any) {
     const addr = order.delivery_address ?? {}
     const items = order.items ?? []
     const itemsSummary = items.map((i: any) => `${i.qty} × ${i.name}${i.variant ? ' (' + i.variant + ')' : ''}`).join(', ')
@@ -220,6 +220,48 @@ export default function OrdersPage() {
     w.document.close()
     w.focus()
     w.print()
+  }
+
+  async function printShippingLabel(order: any) {
+    // Pre-ship: no AWB yet — just print the homemade packing slip
+    if (!order.awb_code) {
+      printFallbackLabel(order)
+      return
+    }
+
+    // Order has been shipped — try to fetch the official NimbusPost label PDF
+    const t = toast.loading('Fetching label…')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`${API_URL}/api/delivery/shipping-label`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ orderId: order.id }),
+      })
+      const json = await res.json()
+      if (json.success && json.data?.url) {
+        toast.dismiss(t)
+        const win = window.open(json.data.url, '_blank')
+        if (!win) {
+          toast('Label ready — allow popups to open it automatically, or click: ' + json.data.url, { duration: 8000 })
+        }
+      } else {
+        const code: string = json.code ?? ''
+        if (code === 'NOT_SHIPPED') {
+          toast.error('Book the shipment first', { id: t })
+        } else {
+          // LABEL_UNAVAILABLE, LABEL_FAILED, or any other backend error
+          toast.error('Official label not ready yet — printing a basic slip instead', { id: t })
+          printFallbackLabel(order)
+        }
+      }
+    } catch {
+      toast.error('Could not reach the server — printing a basic slip instead', { id: t })
+      printFallbackLabel(order)
+    }
   }
 
   function exportExcel() {
