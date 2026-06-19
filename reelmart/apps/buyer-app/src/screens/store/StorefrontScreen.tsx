@@ -11,6 +11,8 @@ import { getStoreBySlug, getStoreProducts, toggleFollowStore, CATEGORIES } from 
 import { getWishlist, toggleWishlist } from '../../services/profileService'
 import { getFirstImage, getImageUrl } from '../../lib/imageUrl'
 import { CartItem } from '../../services/orderService'
+import GstPincodeModal from '../../components/GstPincodeModal'
+import { isPincodeCleared } from '../../lib/interstateGst'
 
 type Props = {
   navigation: NativeStackNavigationProp<any>
@@ -29,6 +31,9 @@ export default function StorefrontScreen({ navigation, route }: Props) {
   const [cart, setCart] = useState<Record<string, CartEntry>>({})
   const [wishlist, setWishlist] = useState<Set<string>>(new Set())
   const [togglingWishlist, setTogglingWishlist] = useState<Set<string>>(new Set()) // keyed by productId
+  // GST interstate-selling gate
+  const [gstModalVisible, setGstModalVisible] = useState(false)
+  const [pendingProduct, setPendingProduct] = useState<any>(null)
 
   useEffect(() => {
     Promise.all([getStoreBySlug(slug), getStoreProducts('__placeholder__')]).then(([s]) => {
@@ -49,7 +54,8 @@ export default function StorefrontScreen({ navigation, route }: Props) {
     getStoreProducts(store?.id).then(setProducts)
   }, [])
 
-  function addToCart(product: any) {
+  /** Immediately insert a product into the in-session cart state (no GST check). */
+  function doAddToCart(product: any) {
     const key = product.id
     setCart(prev => ({
       ...prev,
@@ -66,6 +72,27 @@ export default function StorefrontScreen({ navigation, route }: Props) {
         qty: (prev[key]?.qty ?? 0) + 1,
       },
     }))
+  }
+
+  /**
+   * Gate entry to the cart through the GST pincode modal when:
+   *  - the store lacks admin-verified GST (`store.gst_verified !== true`), AND
+   *  - the store has a known state (`store.state`), AND
+   *  - this store hasn't been cleared yet this session.
+   */
+  function addToCart(product: any) {
+    const needsCheck =
+      store &&
+      store.gst_verified !== true &&
+      store.state &&
+      !isPincodeCleared(store.id)
+
+    if (needsCheck) {
+      setPendingProduct(product)
+      setGstModalVisible(true)
+      return
+    }
+    doAddToCart(product)
   }
 
   function removeFromCart(productId: string) {
@@ -134,6 +161,26 @@ export default function StorefrontScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
+      {/* GST interstate-selling gate modal */}
+      {store && store.gst_verified !== true && store.state && (
+        <GstPincodeModal
+          visible={gstModalVisible}
+          storeId={store.id}
+          storeState={store.state}
+          onSuccess={(_pin) => {
+            setGstModalVisible(false)
+            if (pendingProduct) {
+              doAddToCart(pendingProduct)
+              setPendingProduct(null)
+            }
+          }}
+          onClose={() => {
+            setGstModalVisible(false)
+            setPendingProduct(null)
+          }}
+        />
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>

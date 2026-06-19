@@ -13,6 +13,10 @@ export interface StoreCard {
   total_reviews: number
   total_orders: number
   is_verified: boolean
+  /** Admin-verified GST — drives the interstate-selling block. */
+  gst_verified?: boolean | null
+  /** Seller's registered state — compared against buyer's state for GST gating. */
+  state?: string | null
 }
 
 export interface ProductCard {
@@ -163,7 +167,7 @@ export async function getStoreBySlug(slug: string) {
   // directly by the anon client.
   const { data } = await supabase
     .from('stores')
-    .select('id, store_name, store_slug, category, logo_url, description, city, area, pincode, whatsapp_number, instagram_handle, rating_avg, total_reviews, total_orders, is_verified, is_active, created_at, public_user_names:seller_id(name)')
+    .select('id, store_name, store_slug, category, logo_url, description, city, area, state, pincode, whatsapp_number, instagram_handle, rating_avg, total_reviews, total_orders, is_verified, gst_verified, is_active, created_at, public_user_names:seller_id(name)')
     .eq('store_slug', slug)
     .eq('is_active', true)
     .single()

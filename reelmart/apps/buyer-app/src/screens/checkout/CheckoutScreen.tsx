@@ -14,6 +14,8 @@ import { useOrderStore } from '../../store/orderStore'
 import { getSavedAddresses, SavedAddress } from '../../lib/savedAddresses'
 import LocationPromptModal from '../../components/LocationPromptModal'
 import { supabase } from '../../lib/supabase'
+import { statesMatch } from '../../lib/pincode-state'
+import { fireInterstateDemand } from '../../lib/interstateGst'
 
 const ADDR_KEY = '@reelmart_default_address_id'
 const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/$/, '')
@@ -56,6 +58,8 @@ export default function CheckoutScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(false)
   const [addrModalVisible, setAddrModalVisible] = useState(false)
   const [storePincode, setStorePincode] = useState<string | null>(null)
+  const [storeGstVerified, setStoreGstVerified] = useState<boolean | null>(null)
+  const [storeState, setStoreState] = useState<string | null>(null)
   const [deliveryEstimate, setDeliveryEstimate] = useState<{
     days: number; deliverable: boolean; fetchedFor: string
     fee: number; commission: number
@@ -84,10 +88,14 @@ export default function CheckoutScreen({ navigation, route }: Props) {
 
   useEffect(() => { loadDefaultAddress() }, [])
 
-  // Pull seller's pickup pincode for the delivery-date estimate.
+  // Pull seller's pickup pincode, GST status, and state for delivery estimate + GST block.
   useEffect(() => {
-    supabase.from('stores').select('pincode').eq('id', storeId).maybeSingle()
-      .then(({ data }) => { if (data?.pincode) setStorePincode(data.pincode) })
+    supabase.from('stores').select('pincode, gst_verified, state').eq('id', storeId).maybeSingle()
+      .then(({ data }) => {
+        if (data?.pincode) setStorePincode(data.pincode)
+        setStoreGstVerified(data?.gst_verified ?? null)
+        setStoreState(data?.state ?? null)
+      })
   }, [storeId])
 
   // Compute cart weight in grams; minimum 50 g, fallback 500 g per unit for weightless products.
@@ -128,6 +136,13 @@ export default function CheckoutScreen({ navigation, route }: Props) {
   // NimbusPost-confirmed non-serviceable pincode → block checkout.
   const notDeliverable = !!deliveryEstimate && !deliveryEstimate.deliverable
 
+  // Interstate GST block: seller lacks admin-verified GST and buyer's state differs.
+  const interstateBlocked =
+    storeGstVerified !== true &&
+    storeState !== null &&
+    address.state.trim() !== '' &&
+    !statesMatch(address.state, storeState)
+
 function validateAddress(): string | null {
     if (!address.name.trim()) return 'Enter your name'
     if (!/^[6-9]\d{9}$/.test(address.phone)) return 'Enter a valid 10-digit phone number'
@@ -143,6 +158,13 @@ function validateAddress(): string | null {
     if (err) { Alert.alert('Incomplete address', err); return }
     if (deliveryEstimate && !deliveryEstimate.deliverable) {
       Alert.alert('Not deliverable', "We don't deliver to this pincode yet. Please choose a different address.")
+      return
+    }
+    if (interstateBlocked) {
+      Alert.alert(
+        'Not available in your state',
+        `This seller can't ship to ${address.state} yet. They currently deliver only within ${storeState}.`
+      )
       return
     }
     if (!session?.user) return
@@ -210,7 +232,21 @@ function validateAddress(): string | null {
         navigation.replace('OrderTracking', { orderId })
       }
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to place order.')
+      const msg: string = e?.message ?? ''
+      if (msg.includes('INTERSTATE_GST')) {
+        // Server-side DB trigger fired — fire demand signal then show friendly message.
+        if (storeState && address.state) {
+          fireInterstateDemand(storeId, address.state)
+        }
+        Alert.alert(
+          'Not available in your state',
+          storeState
+            ? `This seller can't ship to ${address.state} yet. They currently deliver only within ${storeState}.`
+            : "This seller doesn't ship to your state yet."
+        )
+      } else {
+        Alert.alert('Error', msg || 'Failed to place order.')
+      }
     } finally {
       setLoading(false)
     }
@@ -283,6 +319,13 @@ function validateAddress(): string | null {
             <View style={styles.etaBox}>
               <Text style={[styles.etaText, { color: '#E23744' }]}>
                 Sorry, we don't deliver to this pincode yet.
+              </Text>
+            </View>
+          )}
+          {interstateBlocked && (
+            <View style={styles.etaBox}>
+              <Text style={[styles.etaText, { color: '#E23744' }]}>
+                This seller can't ship to {address.state} yet. They deliver only within {storeState}.
               </Text>
             </View>
           )}
@@ -384,16 +427,18 @@ function validateAddress(): string | null {
           <Text style={styles.footerLabel}>{items.length} item{items.length !== 1 ? 's' : ''}</Text>
         </View>
         <TouchableOpacity
-          style={[styles.placeBtn, (loading || notDeliverable) && styles.placeBtnDisabled]}
+          style={[styles.placeBtn, (loading || notDeliverable || interstateBlocked) && styles.placeBtnDisabled]}
           onPress={handlePlaceOrder}
-          disabled={loading || notDeliverable}
+          disabled={loading || notDeliverable || interstateBlocked}
         >
           {loading
             ? <ActivityIndicator color={colors.white} />
             : <Text style={styles.placeBtnText}>
-                {notDeliverable
-                  ? 'Not deliverable to this pincode'
-                  : `${paymentMethod === 'cod' ? 'Place Order' : 'Proceed to Pay'} →`}
+                {interstateBlocked
+                  ? `Can't ship to ${address.state}`
+                  : notDeliverable
+                    ? 'Not deliverable to this pincode'
+                    : `${paymentMethod === 'cod' ? 'Place Order' : 'Proceed to Pay'} →`}
               </Text>
           }
         </TouchableOpacity>
