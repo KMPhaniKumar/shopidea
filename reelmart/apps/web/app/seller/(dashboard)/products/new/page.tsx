@@ -18,6 +18,10 @@ const schema = z.object({
   price: z.coerce.number().positive('Price must be > 0'),
   compare_price: z.coerce.number().optional(),
   category: z.string().optional(),
+  weight_grams: z.union([
+    z.literal('').transform(() => undefined),
+    z.coerce.number().int('Must be a whole number').min(1, 'Must be greater than 0'),
+  ]).optional(),
   track_stock: z.boolean().default(false),
   stock_quantity: z.coerce.number().int().min(0).optional(),
   low_stock_threshold: z.coerce.number().int().min(0).default(3),
@@ -105,6 +109,7 @@ export default function NewProductPage() {
       price: data.price,
       compare_price: data.compare_price || null,
       category: data.category,
+      weight_grams: data.weight_grams ?? null,
       stock_type: data.track_stock ? 'counted' : 'unlimited',
       stock_count: data.track_stock ? (data.stock_quantity ?? 0) : 0,
       low_stock_threshold: data.low_stock_threshold,
@@ -196,6 +201,19 @@ export default function NewProductPage() {
               <label className="block text-sm font-medium mb-1">Compare Price (₹)</label>
               <input {...register('compare_price')} type="number" step="0.01" className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="599 (optional)" />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Weight (grams)</label>
+            <input
+              {...register('weight_grams')}
+              type="number"
+              min="1"
+              step="1"
+              className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]"
+              placeholder="500"
+            />
+            {errors.weight_grams && <p className="text-xs text-[#E23744] mt-1">{(errors.weight_grams as { message?: string }).message}</p>}
+            <p className="text-xs text-[#AAAAAA] mt-1">Used to pick the cheapest courier and print the shipping label.</p>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Category</label>

@@ -100,6 +100,7 @@ export default function ProductsPage() {
       'Name': p.name,
       'Price (₹)': p.price,
       'Compare Price (₹)': p.compare_price ?? '',
+      'Weight (g)': p.weight_grams ?? '',
       'Stock': p.stock_type === 'unlimited' ? 'Unlimited' : p.stock_count,
       'Category': p.category ?? '',
       'Available': p.is_available ? 'Yes' : 'No',

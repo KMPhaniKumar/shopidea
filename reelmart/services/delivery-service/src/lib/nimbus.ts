@@ -296,6 +296,57 @@ export interface NdrActionResult {
   message: string
 }
 
+/**
+ * Pick the best courier from a serviceability response.
+ *
+ * Selection logic:
+ *   1. Drop any courier whose name (lowercased) contains a substring from `block`.
+ *      If blocking would eliminate the entire list, the block list is ignored
+ *      (never strand a booking because of an env misconfiguration).
+ *   2. If `prefer` is non-empty and at least one preferred courier remains,
+ *      restrict the pool to those preferred couriers.
+ *   3. From the remaining pool, pick the lowest `total_charges`.
+ *      Tie-break: lower `chargeable_weight`, then lexicographic `name`.
+ *
+ * Returns null when the input list is empty.
+ */
+export function selectCourier(
+  couriers: CourierRate[],
+  opts?: { prefer?: string[]; block?: string[] }
+): CourierRate | null {
+  if (couriers.length === 0) return null
+
+  const prefer = (opts?.prefer ?? []).map(s => s.toLowerCase())
+  const block  = (opts?.block  ?? []).map(s => s.toLowerCase())
+
+  // Step 1: apply block list, but only if it doesn't wipe the whole pool.
+  let pool = couriers
+  if (block.length > 0) {
+    const filtered = couriers.filter(
+      c => !block.some(b => c.name.toLowerCase().includes(b))
+    )
+    // Ignore the block list rather than strand the booking
+    if (filtered.length > 0) pool = filtered
+  }
+
+  // Step 2: restrict to preferred couriers when any are present.
+  if (prefer.length > 0) {
+    const preferred = pool.filter(
+      c => prefer.some(p => c.name.toLowerCase().includes(p))
+    )
+    if (preferred.length > 0) pool = preferred
+  }
+
+  // Step 3: pick lowest total_charges; tie-break on chargeable_weight then name.
+  return pool.slice().sort((a, b) => {
+    const costDiff = (a.total_charges ?? 0) - (b.total_charges ?? 0)
+    if (costDiff !== 0) return costDiff
+    const weightDiff = (a.chargeable_weight ?? 0) - (b.chargeable_weight ?? 0)
+    if (weightDiff !== 0) return weightDiff
+    return a.name.localeCompare(b.name)
+  })[0]
+}
+
 /** Book a new shipment. Returns the full NimbusPost shipment data. */
 export async function createShipment(payload: CreateShipmentPayload): Promise<ShipmentResult> {
   const resp = await npRequest('POST', '/shipments', payload)

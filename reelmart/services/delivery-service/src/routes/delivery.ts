@@ -7,6 +7,7 @@ import {
   isConfigured,
   NimbusError,
   rateServiceability,
+  selectCourier,
   createShipment,
   trackShipment,
   bulkTrack,
@@ -311,6 +312,90 @@ deliveryRouter.post('/create-shipment', requireAuth, async (req: AuthRequest, re
     .replace(/\D/g, '')
     .slice(0, 10)
 
+  // ---- Real package weight from products ---------------------------------
+  // items JSONB: [{ productId, name, price, qty, ... }]
+  // Per-product weight from products.weight_grams (INTEGER grams, nullable).
+  // Fallback: 500g per unit when weight_grams is null or productId missing.
+  let packageWeightGrams = 500
+  if (items.length > 0) {
+    const productIds = [...new Set(
+      items.map((it: any) => it.productId).filter(Boolean) as string[]
+    )]
+
+    const weightMap: Record<string, number> = {}
+    if (productIds.length > 0) {
+      const { data: productRows } = await supabaseAdmin
+        .from('products')
+        .select('id, weight_grams')
+        .in('id', productIds)
+      for (const row of productRows ?? []) {
+        if (row.id && row.weight_grams != null) {
+          weightMap[row.id] = row.weight_grams as number
+        }
+      }
+    }
+
+    const totalGrams = items.reduce((sum: number, it: any) => {
+      const perUnit = (it.productId && weightMap[it.productId] != null)
+        ? weightMap[it.productId]
+        : 500 // fallback when weight_grams is null or productId missing
+      return sum + (Number(it.qty) || 1) * perUnit
+    }, 0)
+
+    packageWeightGrams = Math.max(50, totalGrams)
+  }
+
+  // ---- Courier selection via serviceability ------------------------------
+  // Guard: origin pincode must be known before calling serviceability.
+  const originPincode = String(storeDetail?.pincode ?? '').trim()
+  if (!originPincode || !/^\d{6}$/.test(originPincode)) {
+    return res.status(422).json({
+      success: false,
+      code: 'PICKUP_INCOMPLETE',
+      error: 'Seller pickup pincode missing — complete pickup address',
+    })
+  }
+  const destPincode = String(addr?.pincode ?? '').trim()
+
+  // Initialized in the try block below; the catch always returns, so this is
+  // always set before the booking try block runs.
+  let courierId = ''
+  try {
+    const rates = await rateServiceability({
+      origin: originPincode,
+      destination: destPincode,
+      payment_type: paymentType,
+      order_amount: orderAmount,
+      weight: packageWeightGrams,
+    })
+
+    const prefer = (process.env.NIMBUS_PREFERRED_COURIERS ?? '')
+      .split(',').map(s => s.trim()).filter(Boolean)
+    const block = (process.env.NIMBUS_BLOCKED_COURIERS ?? '')
+      .split(',').map(s => s.trim()).filter(Boolean)
+
+    const chosen = selectCourier(rates, { prefer, block })
+    if (!chosen) {
+      console.error('[delivery] create-shipment: no serviceable courier', { orderId, originPincode, destPincode, packageWeightGrams })
+      return res.status(422).json({
+        success: false,
+        code: 'NOT_SERVICEABLE',
+        error: 'No courier available for this route/weight',
+      })
+    }
+
+    courierId = String(chosen.id)
+  } catch (rateErr) {
+    // Network or courier-service failure — don't book blindly
+    const msg = rateErr instanceof Error ? rateErr.message : 'unknown'
+    console.error('[delivery] create-shipment: serviceability failed', { orderId, error: msg })
+    return res.status(502).json({
+      success: false,
+      code: 'RATE_FAILED',
+      error: 'Could not retrieve courier rates — please retry',
+    })
+  }
+
   try {
     const shipmentData = await createShipment({
       order_number: order.order_number ?? orderId,
@@ -319,11 +404,12 @@ deliveryRouter.post('/create-shipment', requireAuth, async (req: AuthRequest, re
       cod_charges: codCharges,
       payment_type: paymentType,
       order_amount: orderAmount,
-      package_weight: 500, // grams; per-product weight is future work
+      package_weight: packageWeightGrams,
       package_length: 10,
       package_breadth: 10,
       package_height: 10,
       request_auto_pickup: 'yes',
+      courier_id: courierId,
       consignee: {
         name: addr?.name ?? '',
         address: [addr?.line1, addr?.area].filter(Boolean).join(', ') || (addr?.address ?? ''),
