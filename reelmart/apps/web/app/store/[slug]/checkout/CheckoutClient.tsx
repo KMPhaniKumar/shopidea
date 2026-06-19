@@ -10,7 +10,23 @@ import { CartItem, loadCart, saveCart, clearCart, cartTotal } from '@/lib/cart'
 import { saveAddress, searchPlaces, fetchPlaceDetails, type PlacePrediction, type AddressDraft } from '@/lib/saved-addresses'
 import { BuyerAddressForm } from '@/components/BuyerAddressForm'
 import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, preloadOtpWidget, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
-import { statesMatch } from '@/lib/pincode-state'
+import { statesMatch, stateForPincode } from '@/lib/pincode-state'
+
+/**
+ * Fire-and-forget interstate demand signal for CheckoutClient.
+ * Deduped per session per (store, state) pair.
+ */
+function recordInterstateDemand(storeId: string, buyerState: string) {
+  if (typeof window === 'undefined') return
+  const key = `idemand:${storeId}:${buyerState}`
+  if (sessionStorage.getItem(key)) return
+  sessionStorage.setItem(key, '1')
+  fetch('/api/store/interstate-demand', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ storeId, buyerState }),
+  }).catch(() => {})
+}
 
 interface Store {
   id: string
@@ -170,6 +186,20 @@ export default function CheckoutClient({ store }: { store: Store }) {
     !!selectedAddress?.state &&
     !!store.state &&
     !statesMatch(selectedAddress.state, store.state)
+
+  // Record interstate demand signal whenever the block becomes active.
+  // Resolves the buyer state from their delivery address pincode (more
+  // accurate than the address.state text which may be free-form).
+  useEffect(() => {
+    if (!interstateGstBlock) return
+    const buyerState =
+      (selectedAddress?.pincode
+        ? stateForPincode(selectedAddress.pincode)
+        : null) ?? selectedAddress?.state ?? null
+    if (buyerState) {
+      recordInterstateDemand(store.id, buyerState)
+    }
+  }, [interstateGstBlock, selectedAddress?.pincode, selectedAddress?.state, store.id])
 
   const notDeliverable = courierNotDeliverable || interstateGstBlock
 

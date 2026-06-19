@@ -199,10 +199,15 @@ export default function SettingsPage() {
 
     setSaving(true)
 
+    // Detect whether the seller is changing their GST number so we can reset
+    // gst_verified.  A new or edited GSTIN re-enters admin review.
+    const prevGst = (kycData?.gst_number ?? '').trim().toUpperCase()
+    const gstChanged = gst !== prevGst
+
     // NOTE: address, area, city, state, pincode are intentionally excluded here.
     // Those columns are REVOKED from the authenticated role (migration 022) and
     // must go through /api/seller/address-change instead.
-    const { error } = await supabase.from('stores').update({
+    const updatePayload: Record<string, unknown> = {
       store_name: data.store_name,
       store_slug: data.store_slug,
       description: data.description,
@@ -211,9 +216,21 @@ export default function SettingsPage() {
       instagram_handle: data.instagram_handle,
       pan_number: pan || null,
       gst_number: gst || null,
-    }).eq('id', store.id)
+    }
+
+    // If the seller added or edited a GST number, reset verification so the
+    // new value goes back through admin review before pan-India selling unlocks.
+    if (gstChanged) {
+      updatePayload.gst_verified = false
+    }
+
+    const { error } = await supabase.from('stores').update(updatePayload).eq('id', store.id)
     if (error) { toast.error(error.message); setSaving(false); return }
-    toast.success('Settings saved!')
+    toast.success(
+      gstChanged && gst
+        ? 'GST number saved — pending admin verification before pan-India selling unlocks.'
+        : 'Settings saved!'
+    )
     load()
     setSaving(false)
   }
@@ -419,7 +436,7 @@ export default function SettingsPage() {
         </div>
 
         {/* KYC / Verification */}
-        <div className="bg-white rounded-xl p-5 shadow-sm space-y-4">
+        <div id="gst" className="bg-white rounded-xl p-5 shadow-sm space-y-4 scroll-mt-6">
           <div>
             <h2 className="font-semibold text-[#1A1A1A]">Business Verification (KYC)</h2>
             <p className="text-xs text-[#AAAAAA] mt-0.5">Stored privately — only visible to our review team</p>
@@ -430,8 +447,19 @@ export default function SettingsPage() {
               <input {...register('pan_number')} maxLength={10} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] uppercase tracking-wider" placeholder="ABCDE1234F" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">GST Number <span className="text-[#AAAAAA] font-normal">(optional)</span></label>
-              <input {...register('gst_number')} maxLength={15} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] uppercase tracking-wider" placeholder="22ABCDE1234F1Z5" />
+              <label className="block text-sm font-medium mb-1">
+                GST Number{' '}
+                <span className="text-[#AAAAAA] font-normal">(optional)</span>
+              </label>
+              <input
+                {...register('gst_number')}
+                maxLength={15}
+                className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] uppercase tracking-wider"
+                placeholder="22ABCDE1234F1Z5"
+              />
+              <p className="text-xs text-[#AAAAAA] mt-1">
+                Required to sell outside {store?.state ?? 'your state'}. Adding or editing your GSTIN re-enters admin review.
+              </p>
             </div>
           </div>
         </div>

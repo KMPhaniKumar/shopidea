@@ -6,6 +6,23 @@ import { formatDeliveryDate } from '@/lib/delivery-date'
 import { stateForPincode, statesMatch } from '@/lib/pincode-state'
 import { useDeliveryCheckStore } from '@/store/deliveryCheckStore'
 
+/**
+ * Fire-and-forget: tell the server a buyer was blocked by the interstate-GST
+ * rule. Deduped per session per (store, state) pair so repeated pincode checks
+ * or re-renders don't spam the endpoint.
+ */
+function recordInterstateDemand(storeId: string, buyerState: string) {
+  if (typeof window === 'undefined') return
+  const key = `idemand:${storeId}:${buyerState}`
+  if (sessionStorage.getItem(key)) return
+  sessionStorage.setItem(key, '1')
+  fetch('/api/store/interstate-demand', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ storeId, buyerState }),
+  }).catch(() => {})
+}
+
 const PINCODE_LS_KEY = 'rm_delivery_pincode'
 
 interface DeliveryResult {
@@ -100,6 +117,8 @@ export default function DeliveryPincodeChecker({
             serviceable: false,
             interstateBlocked: true,
           })
+          // Record demand signal — fire-and-forget, deduped per session.
+          recordInterstateDemand(storeId, buyerState)
         }
         return
       }
