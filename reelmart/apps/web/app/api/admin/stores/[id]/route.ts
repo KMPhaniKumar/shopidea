@@ -38,6 +38,14 @@ export async function PUT(
 
   const action = new URL(req.url).searchParams.get('action')
 
+  // Parse body once — notes is only required for reject
+  let body: { notes?: string } = {}
+  try {
+    body = await req.json()
+  } catch {
+    // body may be empty for non-reject actions — that's fine
+  }
+
   let update: Record<string, unknown> | null = null
 
   if (action === 'activate') {
@@ -45,9 +53,17 @@ export async function PUT(
   } else if (action === 'deactivate') {
     update = { is_active: false }
   } else if (action === 'approve') {
-    update = { approval_status: 'approved', is_active: true }
+    // Clear any stale rejection notes when approving
+    update = { approval_status: 'approved', is_active: true, approval_notes: null }
   } else if (action === 'reject') {
-    update = { approval_status: 'rejected', is_active: false }
+    const notes = typeof body.notes === 'string' ? body.notes.trim() : ''
+    if (!notes) {
+      return NextResponse.json(
+        { success: false, error: 'Rejection comments are required' },
+        { status: 400 }
+      )
+    }
+    update = { approval_status: 'rejected', is_active: false, approval_notes: notes }
   }
 
   if (!update) {
@@ -58,7 +74,7 @@ export async function PUT(
     .from('stores')
     .update(update)
     .eq('id', params.id)
-    .select('id, store_name, is_active, approval_status')
+    .select('id, store_name, is_active, approval_status, approval_notes')
     .single()
 
   if (error) return NextResponse.json({ success: false, error: error.message }, { status: 400 })

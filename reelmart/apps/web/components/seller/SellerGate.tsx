@@ -19,9 +19,10 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useSellerStore } from '@/store/sellerStore'
-import { Clock, XCircle } from 'lucide-react'
+import { AlertCircle, Clock, XCircle } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Context — verification state shared with dashboard children
@@ -96,6 +97,7 @@ export function SellerGate({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [status, setStatus] = useState<GateStatus>('loading')
   const [suspendedReason, setSuspendedReason] = useState<string | null>(null)
+  const [rejectedNotes, setRejectedNotes] = useState<string | null>(null)
   const [verification, setVerification] = useState<SellerVerification | null>(null)
   const [verificationLoading, setVerificationLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
@@ -119,7 +121,7 @@ export function SellerGate({ children }: { children: React.ReactNode }) {
 
     const { data: store } = await supabase
       .from('stores')
-      .select('id, store_name, store_slug, is_open, approval_status, suspended, suspended_reason, state')
+      .select('id, store_name, store_slug, is_open, approval_status, approval_notes, suspended, suspended_reason, state')
       .eq('seller_id', user.id)
       .maybeSingle()
 
@@ -132,7 +134,11 @@ export function SellerGate({ children }: { children: React.ReactNode }) {
     setStore(store)
 
     // Hard blocks
-    if (store.approval_status === 'rejected') { setStatus('rejected'); return }
+    if (store.approval_status === 'rejected') {
+      setRejectedNotes((store as any).approval_notes ?? null)
+      setStatus('rejected')
+      return
+    }
     if ((store as any).suspended) {
       setSuspendedReason((store as any).suspended_reason ?? null)
       setStatus('suspended')
@@ -187,7 +193,7 @@ export function SellerGate({ children }: { children: React.ReactNode }) {
   }
 
   if (status === 'rejected') {
-    return <RejectedScreen />
+    return <RejectedScreen notes={rejectedNotes} />
   }
 
   // ── Soft pass — render dashboard with verification context ────────────────
@@ -240,30 +246,61 @@ function SuspendedScreen({ reason }: { reason: string | null }) {
   )
 }
 
-function RejectedScreen() {
+function RejectedScreen({ notes }: { notes: string | null }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-white px-6 py-12">
       <div className="w-full max-w-sm">
         <div className="flex justify-center mb-6">
           <Image src="/logo.png" alt="ReelMart" width={220} height={80} className="object-contain" />
         </div>
-        <div className="bg-white border border-border rounded-2xl shadow-lg px-8 py-10 text-center">
+
+        <div className="bg-white border border-border rounded-2xl shadow-lg px-8 py-10">
           <div className="flex justify-center mb-4">
             <XCircle size={48} className="text-error" />
           </div>
-          <h2 className="text-xl font-bold text-text mb-2">Application not approved</h2>
-          <p className="text-secondary text-sm leading-relaxed mb-6">
-            Unfortunately your store application was not approved. If you think this is a mistake,
-            please reach out and we will take another look.
+          <h2 className="text-xl font-bold text-text mb-1 text-center">
+            Changes required
+          </h2>
+          <p className="text-secondary text-sm leading-relaxed mb-5 text-center">
+            Your application needs a few updates before we can approve your store.
           </p>
-          <div className="flex items-center justify-center gap-1.5 mb-4">
-            <Clock size={14} className="text-muted" />
-            <span className="text-xs text-muted">You will be notified of any status updates.</span>
+
+          {notes ? (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6">
+              <div className="flex items-start gap-2">
+                <AlertCircle size={16} className="text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">
+                    Changes requested by our team
+                  </p>
+                  <p className="text-sm text-text leading-relaxed whitespace-pre-wrap">{notes}</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-surface border border-border rounded-xl p-4 mb-6">
+              <p className="text-sm text-secondary leading-relaxed">
+                Please review your registration details and resubmit for approval. Our team will be in
+                touch if further information is needed.
+              </p>
+            </div>
+          )}
+
+          <Link
+            href="/seller/register?mode=edit"
+            className="block w-full bg-primary text-white text-center py-3.5 rounded-btn font-semibold text-sm hover:bg-[#e55a1f] transition-colors shadow-sm mb-3"
+          >
+            Update details &amp; resubmit &rarr;
+          </Link>
+
+          <p className="text-xs text-muted text-center mb-1">
+            Questions? Contact us at support@reelmart.in
+          </p>
+          <div className="text-center">
+            <a href="/seller/login" className="text-xs text-primary font-medium hover:underline">
+              Back to login
+            </a>
           </div>
-          <p className="text-xs text-muted">Questions? Contact support at support@reelmart.in</p>
-          <a href="/seller/login" className="inline-block mt-4 text-sm text-primary font-medium hover:underline">
-            Back to login
-          </a>
         </div>
       </div>
     </div>

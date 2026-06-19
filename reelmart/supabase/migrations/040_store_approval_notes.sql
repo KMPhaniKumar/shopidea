@@ -1,0 +1,74 @@
+-- Migration 040: approval_notes on stores
+--
+-- Admin's comments when rejecting a seller's approval request ("what to fix").
+-- Shown to the seller on their rejected screen so they can revise + resubmit.
+ALTER TABLE public.stores ADD COLUMN IF NOT EXISTS approval_notes TEXT;
+
+-- ============================================================
+-- COLUMN GRANT — seller (authenticated) must be able to SELECT this column
+-- ============================================================
+-- Migration 024 did REVOKE SELECT ON stores FROM authenticated then issued an
+-- explicit column-level GRANT for a fixed list of columns. Any column added after
+-- that migration is NOT included in the existing grant and is therefore invisible
+-- to an authenticated JWT (even if RLS row policy "Sellers read own store"
+-- matches — the column grant is evaluated first by Postgres).
+--
+-- approval_notes is NOT sensitive to anon users (it carries admin review text,
+-- not PII), but it is also not meaningful to public/anon visitors. For
+-- consistency with the 024 pattern we add it only to the authenticated grant.
+-- Anon clients do not need it — the public storefront never shows rejection
+-- reasons. If a future requirement to show it anon arises, add the anon grant
+-- then.
+--
+-- Postgres column GRANTs are additive: this GRANT does not disturb the columns
+-- already granted in 024 / 026.
+GRANT SELECT (approval_notes) ON public.stores TO authenticated;
+
+-- UPDATE grant: intentionally NOT extended. approval_notes is written only by
+-- admin routes that use the service_role key (which bypasses Postgres column
+-- grants). Sellers must not be able to self-clear or self-write their rejection
+-- notes.
+
+-- ============================================================
+-- VERIFICATION NOTES
+-- ============================================================
+-- 1. Column exists:
+--    SELECT column_name, data_type, is_nullable
+--      FROM information_schema.columns
+--      WHERE table_schema='public' AND table_name='stores'
+--        AND column_name='approval_notes';
+--    → 1 row: approval_notes, text, YES
+--
+-- 2. authenticated SELECT grant includes the new column:
+--    SELECT column_name FROM information_schema.column_privileges
+--      WHERE table_schema='public' AND table_name='stores'
+--        AND grantee='authenticated' AND privilege_type='SELECT'
+--        AND column_name='approval_notes';
+--    → 1 row
+--
+-- 3. authenticated UPDATE grant does NOT include it:
+--    SELECT column_name FROM information_schema.column_privileges
+--      WHERE table_schema='public' AND table_name='stores'
+--        AND grantee='authenticated' AND privilege_type='UPDATE'
+--        AND column_name='approval_notes';
+--    → 0 rows
+--
+-- 4. anon SELECT grant does NOT include it (approval_notes not needed publicly):
+--    SELECT column_name FROM information_schema.column_privileges
+--      WHERE table_schema='public' AND table_name='stores'
+--        AND grantee='anon' AND privilege_type='SELECT'
+--        AND column_name='approval_notes';
+--    → 0 rows
+--
+-- ============================================================
+-- BACKEND / UI FOLLOW-UPS
+-- ============================================================
+-- • admin-service: the PATCH /api/admin/stores/:id/approve|reject route should
+--   write approval_notes (alongside approval_status) via service_role.
+--   Clear it (set to NULL) on approve, populate it on reject.
+-- • Seller dashboard: the rejection screen (where approval_status='rejected') should
+--   fetch approval_notes from the store row and display it so the seller knows what
+--   to fix before resubmitting. The authenticated Supabase client can now read it
+--   directly via supabase.from('stores').select('approval_status, approval_notes')
+--   — the "Sellers read own store" RLS row policy covers row access and the new
+--   column grant covers column access.

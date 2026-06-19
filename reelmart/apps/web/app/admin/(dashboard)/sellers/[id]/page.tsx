@@ -54,7 +54,7 @@ function VerifiedBadge({ verified, label }: { verified: boolean; label: string }
 export default async function SellerDetailPage({ params }: { params: { id: string } }) {
   const { data: store } = await supabaseAdmin()
     .from('stores')
-    .select('*, users:seller_id(name, full_name, phone)')
+    .select('*, approval_notes, users:seller_id(name, full_name, phone)')
     .eq('id', params.id)
     .single()
 
@@ -74,6 +74,7 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
   const suspended: boolean = (store as any).suspended ?? false
   const suspendedReason: string | null = (store as any).suspended_reason ?? null
   const suspendedAt: string | null = (store as any).suspended_at ?? null
+  const approvalNotes: string | null = (store as any).approval_notes ?? null
 
   return (
     <div className="max-w-3xl">
@@ -122,6 +123,19 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
                   Suspended at: {new Date(suspendedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection notes banner — shown when approval has been rejected with comments */}
+      {store.approval_status === 'rejected' && approvalNotes && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-4">
+          <div className="flex items-start gap-3">
+            <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-red-700 text-sm mb-1">Rejection comments (visible to seller)</div>
+              <div className="text-sm text-red-600">{approvalNotes}</div>
             </div>
           </div>
         </div>
