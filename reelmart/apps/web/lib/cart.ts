@@ -10,6 +10,7 @@ export interface CartItem {
   variant?: string
   variantId?: string
   qty: number
+  weight_grams?: number
 }
 
 const KEY_PREFIX = 'reelmart_cart_'

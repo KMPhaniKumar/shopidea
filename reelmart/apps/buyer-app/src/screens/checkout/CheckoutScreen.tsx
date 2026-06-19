@@ -30,8 +30,7 @@ type Props = {
   }, 'Checkout'>
 }
 
-const DELIVERY_FEE = 60
-const FREE_DELIVERY_THRESHOLD = 500
+const DELIVERY_FEE = 60 // fallback before a valid address/pincode is confirmed
 
 function stripPhone(raw?: string | null): string {
   if (!raw) return ''
@@ -59,6 +58,7 @@ export default function CheckoutScreen({ navigation, route }: Props) {
   const [storePincode, setStorePincode] = useState<string | null>(null)
   const [deliveryEstimate, setDeliveryEstimate] = useState<{
     days: number; deliverable: boolean; fetchedFor: string
+    fee: number; commission: number
   } | null>(null)
 
   async function loadDefaultAddress() {
@@ -90,7 +90,10 @@ export default function CheckoutScreen({ navigation, route }: Props) {
       .then(({ data }) => { if (data?.pincode) setStorePincode(data.pincode) })
   }, [storeId])
 
-  // Fetch ETA when both pincodes are known. Cached by pickup-delivery key.
+  // Compute cart weight in grams; minimum 50 g, fallback 500 g per unit for weightless products.
+  const cartWeightGrams = Math.max(50, items.reduce((g, it) => g + it.qty * (it.weight_grams ?? 500), 0))
+
+  // Fetch delivery fee + ETA when both pincodes are known. Cached by pickup-delivery key.
   useEffect(() => {
     if (!storePincode || !/^\d{6}$/.test(address.pincode)) return
     const key = `${storePincode}-${address.pincode}`
@@ -101,7 +104,7 @@ export default function CheckoutScreen({ navigation, route }: Props) {
       body: JSON.stringify({
         pickupPincode: storePincode,
         deliveryPincode: address.pincode,
-        weight: 0.5,
+        weight: cartWeightGrams,
         paymentType: paymentMethod,
         orderAmount: subtotal,
       }),
@@ -112,13 +115,15 @@ export default function CheckoutScreen({ navigation, route }: Props) {
         setDeliveryEstimate({
           days: json.data.estimatedDays ?? 3,
           deliverable: !!json.data.deliverable,
+          fee: json.data.fee ?? DELIVERY_FEE,
+          commission: json.data.commission ?? 0,
           fetchedFor: key,
         })
       })
       .catch(() => {})
-  }, [storePincode, address.pincode, paymentMethod, subtotal])
+  }, [storePincode, address.pincode, paymentMethod, subtotal, cartWeightGrams])
 
-  const deliveryFee = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE
+  const deliveryFee = deliveryEstimate?.fee ?? DELIVERY_FEE
   const total = subtotal + deliveryFee
   // NimbusPost-confirmed non-serviceable pincode → block checkout.
   const notDeliverable = !!deliveryEstimate && !deliveryEstimate.deliverable
@@ -257,12 +262,10 @@ function validateAddress(): string | null {
           </View>
           <View style={styles.feeRow}>
             <Text style={styles.feeLabel}>Delivery</Text>
-            <Text style={deliveryFee === 0 ? styles.feeValFree : styles.feeVal}>
-              {deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}
-            </Text>
+            <Text style={styles.feeVal}>₹{deliveryFee}</Text>
           </View>
-          {deliveryFee === 0 && (
-            <Text style={styles.freeDeliveryNote}>🎉 Free delivery on orders above ₹{FREE_DELIVERY_THRESHOLD}</Text>
+          {deliveryEstimate && deliveryEstimate.commission > 0 && (
+            <Text style={styles.commissionNote}>Incl. ₹{deliveryEstimate.commission} handling</Text>
           )}
           <View style={[styles.feeRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
@@ -499,8 +502,7 @@ const styles = StyleSheet.create({
   feeRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   feeLabel: { fontSize: 14, color: colors.textSecondary },
   feeVal: { fontSize: 14, fontWeight: '500', color: colors.textPrimary },
-  feeValFree: { fontSize: 14, fontWeight: '700', color: colors.success },
-  freeDeliveryNote: { fontSize: 12, color: colors.success, marginTop: 2, marginBottom: 4 },
+  commissionNote: { fontSize: 12, color: colors.textMuted, marginTop: 2, marginBottom: 4 },
 
   etaBox: {
     marginTop: 10,

@@ -22,6 +22,7 @@ import {
   type NdrActionItem,
 } from '../lib/nimbus'
 import { estimateDeliveryDays } from '../lib/estimateDelivery'
+import { commissionForWeight } from '../lib/commission'
 import { recordOrderEvent, syncTrackingToEvents } from '../lib/orderEvents'
 
 export const deliveryRouter = Router()
@@ -177,15 +178,17 @@ deliveryRouter.post('/rates', async (req, res) => {
   }
   const { pickupPincode, deliveryPincode, weight, paymentType, orderAmount } = parse.data
 
-  // Compute the heuristic EDD once — used in all response branches below.
+  // Compute the heuristic EDD and platform commission once — used in all branches.
   const estimatedDays = estimateDeliveryDays(pickupPincode, deliveryPincode)
+  const commission = await commissionForWeight(weight)
 
   if (!isConfigured()) {
     // Stub mode: NimbusPost token not set. Return a safe default with the
-    // heuristic EDD so the UI shows a real estimate rather than a constant.
+    // heuristic EDD and commission so the UI shows a real estimate.
+    const courierFee = 60
     return res.json({
       success: true,
-      data: { deliverable: true, fee: 60, estimatedDays, couriers: [] },
+      data: { deliverable: true, fee: courierFee + commission, courierFee, commission, estimatedDays, couriers: [] },
     })
   }
 
@@ -199,11 +202,14 @@ deliveryRouter.post('/rates', async (req, res) => {
     })
     const sorted = couriers.slice().sort((a, b) => (a.total_charges ?? 0) - (b.total_charges ?? 0))
     const cheapest = sorted[0]
+    const courierFee = cheapest?.total_charges ?? 60
     res.json({
       success: true,
       data: {
         deliverable: couriers.length > 0,
-        fee: cheapest?.total_charges ?? 60,
+        fee: courierFee + commission,
+        courierFee,
+        commission,
         estimatedDays,
         couriers: sorted.map(c => ({
           id: c.id,
@@ -217,9 +223,10 @@ deliveryRouter.post('/rates', async (req, res) => {
     // Degrade gracefully — buyer checkout must not break if courier is down.
     // Include estimatedDays so the UI still shows a sensible EDD even when
     // the NimbusPost call fails.
+    const courierFee = 60
     res.json({
       success: true,
-      data: { deliverable: true, fee: 60, estimatedDays, couriers: [] },
+      data: { deliverable: true, fee: courierFee + commission, courierFee, commission, estimatedDays, couriers: [] },
     })
   }
 })

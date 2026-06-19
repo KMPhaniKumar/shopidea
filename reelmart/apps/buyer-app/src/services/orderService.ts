@@ -9,6 +9,7 @@ export interface CartItem {
   image: string
   price: number
   compare_price?: number
+  weight_grams?: number
   variant?: string
   variantId?: string
   qty: number

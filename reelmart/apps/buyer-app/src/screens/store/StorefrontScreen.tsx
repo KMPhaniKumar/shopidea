@@ -60,6 +60,7 @@ export default function StorefrontScreen({ navigation, route }: Props) {
           image: product.images?.[0] ?? '',
           price: product.price,
           compare_price: product.compare_price ?? undefined,
+          weight_grams: product.weight_grams ?? undefined,
           qty: 1,
         },
         qty: (prev[key]?.qty ?? 0) + 1,

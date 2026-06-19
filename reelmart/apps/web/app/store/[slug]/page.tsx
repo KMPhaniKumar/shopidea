@@ -45,7 +45,7 @@ export default async function StorefrontPage({ params }: Props) {
 
   const { data: products, error: productsErr } = await supabase
     .from('products')
-    .select('id, name, description, price, compare_price, images, is_available, stock_type, stock_count')
+    .select('id, name, description, price, compare_price, images, is_available, stock_type, stock_count, weight_grams')
     .eq('store_id', store.id)
     .eq('is_available', true)
     .order('created_at', { ascending: false })

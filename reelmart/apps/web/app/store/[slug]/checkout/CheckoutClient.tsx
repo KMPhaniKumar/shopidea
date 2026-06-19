@@ -33,8 +33,9 @@ interface Address {
   is_default: boolean
 }
 
+// Default delivery fee shown before an address/pincode is selected.
+// Once /api/delivery/rates responds, the real fee (courier + commission) is used.
 const DELIVERY_FEE = 60
-const FREE_DELIVERY_THRESHOLD = 500
 
 type Step = 'cart' | 'phone' | 'otp' | 'address' | 'review'
 
@@ -70,6 +71,9 @@ export default function CheckoutClient({ store }: { store: Store }) {
   const [deliveryEstimate, setDeliveryEstimate] = useState<{
     days: number
     deliverable: boolean
+    fee: number
+    courierFee: number | null
+    commission: number | null
     fetchedFor: string // "pickup-delivery" key so we don't re-fetch unnecessarily
   } | null>(null)
   const [estimateLoading, setEstimateLoading] = useState(false)
@@ -137,7 +141,16 @@ export default function CheckoutClient({ store }: { store: Store }) {
   }
 
   const subtotal = cartTotal(cart)
-  const deliveryFee = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE
+  // Total weight in grams across all cart items. Fallback: 500 g per unit when
+  // a product was added without weight_grams (e.g. old cart entries in localStorage).
+  // Minimum 50 g so we always send a valid payload to the rates API.
+  const cartWeightGrams = Math.max(
+    50,
+    cart.reduce((g, it) => g + it.qty * (it.weight_grams ?? 500), 0),
+  )
+  // Use the real delivery fee from /api/delivery/rates once an address is chosen.
+  // Before that, show the DELIVERY_FEE default so the summary isn't blank.
+  const deliveryFee = deliveryEstimate?.fee ?? DELIVERY_FEE
   const total = subtotal + deliveryFee
   const selectedAddress = useMemo(
     () => addresses.find(a => a.id === selectedAddressId) ?? null,
@@ -165,7 +178,7 @@ export default function CheckoutClient({ store }: { store: Store }) {
       body: JSON.stringify({
         pickupPincode: pickup,
         deliveryPincode: delivery,
-        weight: 0.5,
+        weight: cartWeightGrams,
         paymentType: paymentMethod,
         orderAmount: subtotal,
       }),
@@ -176,12 +189,15 @@ export default function CheckoutClient({ store }: { store: Store }) {
         setDeliveryEstimate({
           days: json.data.estimatedDays ?? 3,
           deliverable: !!json.data.deliverable,
+          fee: json.data.fee ?? DELIVERY_FEE,
+          courierFee: json.data.courierFee ?? null,
+          commission: json.data.commission ?? null,
           fetchedFor: key,
         })
       })
       .catch(() => {})
       .finally(() => setEstimateLoading(false))
-  }, [store.pincode, selectedAddress?.pincode, paymentMethod, subtotal])
+  }, [store.pincode, selectedAddress?.pincode, paymentMethod, subtotal, cartWeightGrams])
 
   // Initialise the MSG91 widget as soon as the phone box is shown so its
   // captcha renders alongside the number input. Without this the first "Send
@@ -446,10 +462,14 @@ export default function CheckoutClient({ store }: { store: Store }) {
           ))}
           <div className="pt-3 mt-2 border-t border-gray-100 space-y-1.5">
             <Row label="Subtotal" value={`₹${subtotal}`} />
-            <Row label="Delivery" value={deliveryFee === 0 ? <span className="text-green-600 font-bold">FREE</span> : `₹${deliveryFee}`} />
-            {deliveryFee === 0 && (
-              <p className="text-xs text-green-600">🎉 Free delivery on orders above ₹{FREE_DELIVERY_THRESHOLD}</p>
-            )}
+            <div>
+              <Row label="Delivery" value={`₹${deliveryFee}`} />
+              {deliveryEstimate?.commission != null && deliveryEstimate.commission > 0 && (
+                <p className="text-[11px] text-gray-400 text-right mt-0.5">
+                  Incl. ₹{deliveryEstimate.commission} handling
+                </p>
+              )}
+            </div>
             <Row label={<span className="font-bold text-base">Total</span>} value={<span className="font-black text-base">₹{total}</span>} />
           </div>
           {(estimateLoading || deliveryEstimate) && (

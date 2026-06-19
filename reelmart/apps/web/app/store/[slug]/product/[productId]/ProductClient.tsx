@@ -32,6 +32,7 @@ interface Product {
   is_available: boolean
   stock_type: string
   stock_count: number | null
+  weight_grams: number | null
   stores: Store
 }
 
@@ -72,6 +73,7 @@ export default function ProductClient({ product, storeSlug }: { product: Product
           ? { compare_price: product.compare_price }
           : {}),
         qty: 1,
+        weight_grams: product.weight_grams ?? undefined,
       }]
     })
   }

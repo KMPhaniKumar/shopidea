@@ -42,7 +42,7 @@ export default async function ProductPage({ params }: Props) {
     .from('products')
     .select(`
       id, name, description, price, compare_price, images,
-      is_available, stock_type, stock_count,
+      is_available, stock_type, stock_count, weight_grams,
       store_id,
       stores!inner(id, store_name, store_slug, logo_url, city, area, pincode, is_verified, is_open, rating_avg, total_reviews, is_active)
     `)
