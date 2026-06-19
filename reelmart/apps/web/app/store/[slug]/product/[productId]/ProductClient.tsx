@@ -7,6 +7,8 @@ import { ChevronLeft, ShoppingBag, Plus, Minus, Share2, Store as StoreIcon, Down
 import toast, { Toaster } from 'react-hot-toast'
 import { CartItem, loadCart, saveCart, cartTotal, cartCount } from '@/lib/cart'
 import DeliveryPincodeChecker from '@/components/DeliveryPincodeChecker'
+import PincodeGateModal from '@/components/PincodeGateModal'
+import { useDeliveryCheckStore } from '@/store/deliveryCheckStore'
 
 interface Store {
   id: string
@@ -20,6 +22,8 @@ interface Store {
   is_open: boolean
   rating_avg: number
   total_reviews: number
+  gst_verified?: boolean
+  state?: string | null
 }
 
 interface Product {
@@ -42,6 +46,10 @@ export default function ProductClient({ product, storeSlug }: { product: Product
   const [cart, setCart] = useState<CartItem[]>([])
   const [hydrated, setHydrated] = useState(false)
   const [activeImage, setActiveImage] = useState(0)
+  const [showPincodeModal, setShowPincodeModal] = useState(false)
+
+  const getCheck = useDeliveryCheckStore(s => s.getCheck)
+  const checks = useDeliveryCheckStore(s => s.checks)
 
   useEffect(() => {
     setCart(loadCart(storeSlug))
@@ -52,6 +60,17 @@ export default function ProductClient({ product, storeSlug }: { product: Product
     if (hydrated) saveCart(storeSlug, cart)
   }, [cart, storeSlug, hydrated])
 
+  // When modal is open, auto-close and proceed when a serviceable check lands
+  useEffect(() => {
+    if (!showPincodeModal) return
+    const check = getCheck(store.id)
+    if (check && check.serviceable) {
+      doAddToCart()
+      setShowPincodeModal(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checks, showPincodeModal])
+
   const qty = cart.find(i => i.productId === product.id)?.qty ?? 0
   const subtotal = cartTotal(cart)
   const totalCount = cartCount(cart)
@@ -60,7 +79,8 @@ export default function ProductClient({ product, storeSlug }: { product: Product
     ? Math.round((1 - product.price / product.compare_price) * 100)
     : 0
 
-  function addToCart() {
+  /** Add without any gate check. */
+  function doAddToCart() {
     setCart(prev => {
       const existing = prev.find(i => i.productId === product.id)
       if (existing) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i)
@@ -76,6 +96,18 @@ export default function ProductClient({ product, storeSlug }: { product: Product
         weight_grams: product.weight_grams ?? undefined,
       }]
     })
+  }
+
+  /**
+   * Gated add-to-cart. If the store has a pickup pincode, we require a
+   * serviceable delivery check before adding. A previously successful check
+   * is remembered in the Zustand store so subsequent adds don't re-prompt.
+   */
+  function addToCart() {
+    if (!store.pincode) { doAddToCart(); return }
+    const check = getCheck(store.id)
+    if (check && check.serviceable) { doAddToCart(); return }
+    setShowPincodeModal(true)
   }
 
   function decrement() {
@@ -135,6 +167,21 @@ export default function ProductClient({ product, storeSlug }: { product: Product
   return (
     <div className="min-h-screen bg-[#F9F9F9]">
       <Toaster position="top-center" />
+
+      {/* Pincode gate modal */}
+      {showPincodeModal && store.pincode && (
+        <PincodeGateModal
+          storeId={store.id}
+          pickupPincode={store.pincode}
+          gstVerified={store.gst_verified}
+          storeState={store.state}
+          onClose={() => setShowPincodeModal(false)}
+          onServiceable={() => {
+            doAddToCart()
+            setShowPincodeModal(false)
+          }}
+        />
+      )}
 
       {/* App banner */}
       <div className="bg-[#FF6B2B] text-white px-4 py-2 flex items-center justify-between text-sm">
@@ -229,6 +276,9 @@ export default function ProductClient({ product, storeSlug }: { product: Product
                 <DeliveryPincodeChecker
                   pickupPincode={store.pincode}
                   orderAmount={product.price}
+                  storeId={store.id}
+                  gstVerified={store.gst_verified}
+                  storeState={store.state}
                 />
               </div>
             )}

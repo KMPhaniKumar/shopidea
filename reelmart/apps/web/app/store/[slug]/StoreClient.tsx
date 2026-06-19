@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Search, ShoppingBag, Plus, Minus, Download, Star, MapPin } from 'lucide-react'
 import { CartItem, loadCart, saveCart, cartTotal, cartCount } from '@/lib/cart'
 import DeliveryPincodeChecker from '@/components/DeliveryPincodeChecker'
+import PincodeGateModal from '@/components/PincodeGateModal'
+import { useDeliveryCheckStore } from '@/store/deliveryCheckStore'
 
 interface Store {
   id: string
@@ -21,6 +23,8 @@ interface Store {
   category: string
   rating_avg: number
   total_reviews: number
+  gst_verified?: boolean
+  state?: string | null
 }
 
 interface Product {
@@ -48,6 +52,13 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
   const [search, setSearch] = useState('')
   const [hydrated, setHydrated] = useState(false)
 
+  // Pincode gate: product pending add-to-cart while the modal is open
+  const [pendingProduct, setPendingProduct] = useState<Product | null>(null)
+  const [showPincodeModal, setShowPincodeModal] = useState(false)
+
+  const getCheck = useDeliveryCheckStore(s => s.getCheck)
+  const checks = useDeliveryCheckStore(s => s.checks)
+
   // Hydrate cart from localStorage after mount (avoids SSR mismatch)
   useEffect(() => {
     setCart(loadCart(storeSlug))
@@ -58,6 +69,19 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
   useEffect(() => {
     if (hydrated) saveCart(storeSlug, cart)
   }, [cart, storeSlug, hydrated])
+
+  // When the pincode modal is open, watch for a serviceable result to proceed
+  useEffect(() => {
+    if (!showPincodeModal || !pendingProduct) return
+    const check = getCheck(store.id)
+    if (check && check.serviceable) {
+      // Buyer confirmed a serviceable pincode — add the pending product
+      doAddToCart(pendingProduct)
+      setPendingProduct(null)
+      setShowPincodeModal(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checks, showPincodeModal, pendingProduct])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return products
@@ -71,7 +95,8 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
   const subtotal = cartTotal(cart)
   const count = cartCount(cart)
 
-  function addToCart(p: Product) {
+  /** Actually mutate the cart (no gate). */
+  function doAddToCart(p: Product) {
     setCart(prev => {
       const existing = prev.find(i => i.productId === p.id)
       if (existing) return prev.map(i => i.productId === p.id ? { ...i, qty: i.qty + 1 } : i)
@@ -87,6 +112,31 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
         weight_grams: p.weight_grams ?? undefined,
       }]
     })
+  }
+
+  /**
+   * Gated add-to-cart:
+   *  - If there is no pickup pincode on the store, add directly (no delivery
+   *    info available to check against).
+   *  - If a serviceable check already exists for this store, add directly.
+   *  - If the existing check is NOT serviceable (interstate block / courier),
+   *    open the modal so the buyer can try a different pincode.
+   *  - If no check at all, open the pincode gate modal first.
+   */
+  function addToCart(p: Product) {
+    if (!store.pincode) {
+      doAddToCart(p)
+      return
+    }
+    const check = getCheck(store.id)
+    if (check && check.serviceable) {
+      // Already verified — add immediately
+      doAddToCart(p)
+      return
+    }
+    // Need pincode verification (or re-verify after a failed check)
+    setPendingProduct(p)
+    setShowPincodeModal(true)
   }
 
   function decrement(productId: string) {
@@ -106,8 +156,31 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
     router.push(`/store/${storeSlug}/checkout`)
   }
 
+  function closePincodeModal() {
+    setPendingProduct(null)
+    setShowPincodeModal(false)
+  }
+
   return (
     <div className="min-h-screen bg-[#F9F9F9]">
+      {/* Pincode gate modal */}
+      {showPincodeModal && store.pincode && (
+        <PincodeGateModal
+          storeId={store.id}
+          pickupPincode={store.pincode}
+          gstVerified={store.gst_verified}
+          storeState={store.state}
+          onClose={closePincodeModal}
+          onServiceable={() => {
+            if (pendingProduct) {
+              doAddToCart(pendingProduct)
+              setPendingProduct(null)
+            }
+            setShowPincodeModal(false)
+          }}
+        />
+      )}
+
       {/* App install banner */}
       <div className="bg-[#FF6B2B] text-white px-4 py-2.5 flex items-center justify-between text-sm">
         <span className="flex items-center gap-2">📱 <span className="hidden sm:inline">Track orders, get rewards on the ReelMart app</span><span className="sm:hidden">Get the ReelMart app</span></span>
@@ -157,7 +230,12 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
           {/* Delivery pincode checker — compact placement in store header */}
           {store.pincode && (
             <div className="pb-5 max-w-sm">
-              <DeliveryPincodeChecker pickupPincode={store.pincode} />
+              <DeliveryPincodeChecker
+                pickupPincode={store.pincode}
+                storeId={store.id}
+                gstVerified={store.gst_verified}
+                storeState={store.state}
+              />
             </div>
           )}
         </div>

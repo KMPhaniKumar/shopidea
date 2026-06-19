@@ -10,12 +10,16 @@ import { CartItem, loadCart, saveCart, clearCart, cartTotal } from '@/lib/cart'
 import { saveAddress, searchPlaces, fetchPlaceDetails, type PlacePrediction, type AddressDraft } from '@/lib/saved-addresses'
 import { BuyerAddressForm } from '@/components/BuyerAddressForm'
 import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, preloadOtpWidget, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
+import { statesMatch } from '@/lib/pincode-state'
+
 interface Store {
   id: string
   store_name: string
   logo_url: string | null
   store_slug: string
   pincode: string | null
+  gst_verified?: boolean
+  state?: string | null
 }
 
 interface Address {
@@ -157,7 +161,22 @@ export default function CheckoutClient({ store }: { store: Store }) {
     [addresses, selectedAddressId],
   )
   // NimbusPost-confirmed non-serviceable pincode → block checkout.
-  const notDeliverable = !!deliveryEstimate && !deliveryEstimate.deliverable
+  const courierNotDeliverable = !!deliveryEstimate && !deliveryEstimate.deliverable
+
+  // Interstate GST block: if the store has no verified GST and the selected
+  // address is in a different state, block the order at checkout.
+  const interstateGstBlock =
+    store.gst_verified !== true &&
+    !!selectedAddress?.state &&
+    !!store.state &&
+    !statesMatch(selectedAddress.state, store.state)
+
+  const notDeliverable = courierNotDeliverable || interstateGstBlock
+
+  // Message shown in the "not deliverable" banner / CTA label.
+  const notDeliverableMessage = interstateGstBlock
+    ? `This seller can't ship to ${selectedAddress?.state} yet.`
+    : "We don't deliver to this pincode yet. Please choose a different address."
 
   // Fetch ETA when both pincodes are known. Cached by pickup-delivery key
   // so toggling between saved addresses doesn't re-hit the courier API.
@@ -300,8 +319,8 @@ export default function CheckoutClient({ store }: { store: Store }) {
 
   async function placeOrder() {
     if (!userId || !selectedAddress) return
-    if (deliveryEstimate && !deliveryEstimate.deliverable) {
-      toast.error("We don't deliver to this pincode yet. Please choose a different address.")
+    if (notDeliverable) {
+      toast.error(notDeliverableMessage)
       return
     }
     setPlacing(true)
@@ -315,7 +334,19 @@ export default function CheckoutClient({ store }: { store: Store }) {
         status: 'pending',
         payment_status: 'pending',
       }).select('id, order_number').single()
-      if (error || !data) { setPlacing(false); toast.error(error?.message ?? 'Order failed'); return }
+      if (error || !data) {
+        setPlacing(false)
+        // The DB trigger raises INTERSTATE_GST when the seller has no verified
+        // GST and the buyer's state differs. Show a clear user-facing message.
+        if (error?.message?.includes('INTERSTATE_GST')) {
+          toast.error(
+            `This seller delivers only within their state — please use a delivery address in ${store.state ?? 'the seller\'s state'}.`
+          )
+        } else {
+          toast.error(error?.message ?? 'Order failed')
+        }
+        return
+      }
       notifyOrderPlaced(data.id)
       clearCart(store.store_slug)
       router.push(`/order/${data.id}`)
@@ -487,7 +518,12 @@ export default function CheckoutClient({ store }: { store: Store }) {
                 )}
                 {deliveryEstimate && !deliveryEstimate.deliverable && (
                   <span className="text-red-600 font-semibold">
-                    Sorry, we don't deliver to this pincode yet.
+                    Sorry, we don&apos;t deliver to this pincode yet.
+                  </span>
+                )}
+                {!deliveryEstimate && interstateGstBlock && (
+                  <span className="text-amber-700 font-semibold">
+                    {notDeliverableMessage}
                   </span>
                 )}
               </div>
@@ -630,7 +666,9 @@ export default function CheckoutClient({ store }: { store: Store }) {
               disabled={notDeliverable}
               className="flex-1 bg-[#FF6B2B] text-white py-3 px-6 rounded-full font-bold text-sm disabled:opacity-50 disabled:bg-gray-300 hover:bg-[#e55a1f]"
             >
-              {notDeliverable ? 'Not deliverable here' : 'Continue →'}
+              {notDeliverable
+                ? (interstateGstBlock ? 'Not available in your state' : 'Not deliverable here')
+                : 'Continue →'}
             </button>
           )}
           {step === 'review' && selectedAddress && !showNewForm && (
@@ -642,7 +680,7 @@ export default function CheckoutClient({ store }: { store: Store }) {
               {placing
                 ? <Loader2 className="animate-spin" size={18} />
                 : notDeliverable
-                ? 'Not deliverable to this pincode'
+                ? (interstateGstBlock ? 'Not available in your state' : 'Not deliverable to this pincode')
                 : `${paymentMethod === 'cod' ? 'Place Order' : 'Pay & Place Order'} →`}
             </button>
           )}

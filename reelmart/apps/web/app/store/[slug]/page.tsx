@@ -36,7 +36,7 @@ export default async function StorefrontPage({ params }: Props) {
 
   const { data: store } = await supabase
     .from('stores')
-    .select('id, store_name, description, logo_url, city, area, pincode, whatsapp_number, is_verified, is_open, category, rating_avg, total_reviews')
+    .select('id, store_name, description, logo_url, city, area, pincode, whatsapp_number, is_verified, is_open, category, rating_avg, total_reviews, gst_verified, state')
     .eq('store_slug', params.slug)
     .eq('is_active', true)
     .maybeSingle()

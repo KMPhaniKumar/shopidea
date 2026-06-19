@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/seller/Sidebar'
 import { TopBar } from '@/components/seller/TopBar'
 import { SellerNotifier } from '@/components/seller/SellerNotifier'
 import { SellerGate, useSellerVerification } from '@/components/seller/SellerGate'
+import { GstBanner } from '@/components/seller/GstBanner'
 
 // Inner layout reads features_unlocked from the context that SellerGate provides.
 function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -24,7 +25,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <TopBar onMenuClick={() => setMenuOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-3 md:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-3 md:p-6">
+          <GstBanner />
+          {children}
+        </main>
       </div>
     </div>
   )

@@ -341,6 +341,11 @@ export default function SellerRegister() {
                     {gstNumber.length === 15 && !isValidGst(gstNumber) && (
                       <p className="text-xs text-[#E23744] mt-1">Invalid GSTIN format</p>
                     )}
+                    {gstNumber.length === 0 && (
+                      <p className="text-xs text-[#AAAAAA] mt-1.5 leading-relaxed">
+                        Without GST you can sell only within your state. You can add GST anytime from settings to unlock pan-India selling.
+                      </p>
+                    )}
                   </div>
 
                   {/* Password */}

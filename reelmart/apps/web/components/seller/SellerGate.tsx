@@ -119,7 +119,7 @@ export function SellerGate({ children }: { children: React.ReactNode }) {
 
     const { data: store } = await supabase
       .from('stores')
-      .select('id, store_name, store_slug, is_open, approval_status, suspended, suspended_reason')
+      .select('id, store_name, store_slug, is_open, approval_status, suspended, suspended_reason, state')
       .eq('seller_id', user.id)
       .maybeSingle()
 

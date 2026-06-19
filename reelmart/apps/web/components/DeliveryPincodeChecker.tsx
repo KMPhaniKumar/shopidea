@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Loader2, MapPin, CheckCircle2, XCircle } from 'lucide-react'
 import { formatDeliveryDate } from '@/lib/delivery-date'
+import { stateForPincode, statesMatch } from '@/lib/pincode-state'
+import { useDeliveryCheckStore } from '@/store/deliveryCheckStore'
 
 const PINCODE_LS_KEY = 'rm_delivery_pincode'
 
@@ -17,16 +19,37 @@ interface Props {
   pickupPincode: string
   /** Product price or cart subtotal used for COD surcharge calculation. */
   orderAmount?: number
+  /**
+   * When provided, the interstate-GST rule is enforced:
+   * if the store is NOT gst_verified AND the buyer is in a different state,
+   * the check is blocked regardless of courier serviceability.
+   */
+  storeId?: string
+  gstVerified?: boolean
+  storeState?: string | null
 }
 
-export default function DeliveryPincodeChecker({ pickupPincode, orderAmount }: Props) {
+export default function DeliveryPincodeChecker({
+  pickupPincode,
+  orderAmount,
+  storeId,
+  gstVerified,
+  storeState,
+}: Props) {
   const [pincode, setPincode] = useState('')
   const [result, setResult] = useState<DeliveryResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** When true, this specific check is blocked by the interstate-GST rule. */
+  const [interstateBlocked, setInterstateBlocked] = useState(false)
+  const [resolvedBuyerState, setResolvedBuyerState] = useState<string | null>(null)
+
   // Track which pickup+delivery combo the result belongs to so stale results
   // from a previous pincode are not shown after a new one is entered.
   const resultKeyRef = useRef<string | null>(null)
+
+  const setCheck = useDeliveryCheckStore(s => s.setCheck)
+  const clearCheck = useDeliveryCheckStore(s => s.clearCheck)
 
   // On mount: prefill from localStorage and auto-check if we already have a pincode.
   useEffect(() => {
@@ -56,8 +79,31 @@ export default function DeliveryPincodeChecker({ pickupPincode, orderAmount }: P
     setLoading(true)
     setError(null)
     setResult(null)
+    setInterstateBlocked(false)
+    setResolvedBuyerState(null)
     const key = `${pickup}-${deliveryPincode}`
     resultKeyRef.current = key
+
+    // ── Interstate GST check (client-side, fast) ─────────────────────────
+    if (gstVerified !== true) {
+      const buyerState = stateForPincode(deliveryPincode)
+      if (buyerState && storeState && !statesMatch(buyerState, storeState)) {
+        // Buyer is in a different state and the store has no verified GST.
+        if (resultKeyRef.current !== key) { setLoading(false); return }
+        setResolvedBuyerState(buyerState)
+        setInterstateBlocked(true)
+        setLoading(false)
+        if (storeId) {
+          setCheck(storeId, {
+            pincode: deliveryPincode,
+            buyerState,
+            serviceable: false,
+            interstateBlocked: true,
+          })
+        }
+        return
+      }
+    }
 
     try {
       const res = await fetch(`${apiUrl}/api/delivery/rates`, {
@@ -86,11 +132,23 @@ export default function DeliveryPincodeChecker({ pickupPincode, orderAmount }: P
         return
       }
 
+      const deliverable = !!json.data.deliverable
+      const buyerState = stateForPincode(deliveryPincode)
+      setResolvedBuyerState(buyerState)
       setResult({
-        deliverable: !!json.data.deliverable,
+        deliverable,
         fee: json.data.fee ?? 0,
         estimatedDays: json.data.estimatedDays ?? 3,
       })
+
+      if (storeId) {
+        setCheck(storeId, {
+          pincode: deliveryPincode,
+          buyerState,
+          serviceable: deliverable,
+          interstateBlocked: false,
+        })
+      }
     } catch {
       if (resultKeyRef.current === key) {
         setError('Network error. Please try again.')
@@ -114,6 +172,17 @@ export default function DeliveryPincodeChecker({ pickupPincode, orderAmount }: P
     if (e.key === 'Enter') handleCheck()
   }
 
+  function handlePincodeChange(val: string) {
+    setPincode(val)
+    // Clear stale result when the user types a new pincode
+    if (result || error || interstateBlocked) {
+      setResult(null)
+      setError(null)
+      setInterstateBlocked(false)
+      if (storeId) clearCheck(storeId)
+    }
+  }
+
   const isValid = /^\d{6}$/.test(pincode)
 
   return (
@@ -130,15 +199,7 @@ export default function DeliveryPincodeChecker({ pickupPincode, orderAmount }: P
             type="tel"
             inputMode="numeric"
             value={pincode}
-            onChange={e => {
-              const val = e.target.value.replace(/\D/g, '').slice(0, 6)
-              setPincode(val)
-              // Clear stale result when the user types a new pincode
-              if (result || error) {
-                setResult(null)
-                setError(null)
-              }
-            }}
+            onChange={e => handlePincodeChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
             onKeyDown={handleKeyDown}
             placeholder="Enter 6-digit pincode"
             maxLength={6}
@@ -160,8 +221,19 @@ export default function DeliveryPincodeChecker({ pickupPincode, orderAmount }: P
         </button>
       </div>
 
-      {/* Result / error */}
-      {!loading && result && (
+      {/* Interstate GST block */}
+      {!loading && interstateBlocked && (
+        <div className="mt-3 flex items-start gap-2 rounded-btn px-3 py-2.5 text-sm bg-amber-50 border border-amber-200">
+          <XCircle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+          <span className="text-amber-800 font-semibold">
+            This seller delivers only within {storeState}.
+            Not available for your location{resolvedBuyerState ? ` (${resolvedBuyerState})` : ''}.
+          </span>
+        </div>
+      )}
+
+      {/* Courier result */}
+      {!loading && !interstateBlocked && result && (
         <div className={`mt-3 flex items-start gap-2 rounded-btn px-3 py-2.5 text-sm ${
           result.deliverable
             ? 'bg-green-50 border border-green-100'

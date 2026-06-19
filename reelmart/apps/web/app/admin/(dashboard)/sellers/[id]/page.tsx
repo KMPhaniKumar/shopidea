@@ -188,6 +188,11 @@ export default async function SellerDetailPage({ params }: { params: { id: strin
         ) : (
           <div className="text-sm text-gray-400">No GST number provided by seller.</div>
         )}
+        {!gstVerified && (
+          <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            GST not verified — interstate orders are blocked for this seller until GST is approved.
+          </p>
+        )}
       </div>
 
       {/* Pickup address — verified automatically via NimbusPost (read-only) */}
