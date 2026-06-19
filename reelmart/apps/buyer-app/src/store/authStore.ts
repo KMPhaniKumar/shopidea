@@ -23,6 +23,11 @@ function formatPhone(phone: string): string {
   return digits.startsWith('91') ? `+${digits}` : `+91${digits}`
 }
 
+const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/$/, '')
+
+const OTP_SEND_URL = `${API_BASE}/api/admin/auth/otp/send`
+const OTP_VERIFY_URL = `${API_BASE}/api/admin/auth/otp/verify`
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   profile: null,
@@ -52,24 +57,52 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   sendOTP: async (phone) => {
     const formatted = formatPhone(phone)
-    const { error } = await supabase.auth.signInWithOtp({ phone: formatted })
-    return { error: error?.message ?? null }
+    try {
+      const res = await fetch(OTP_SEND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: formatted }),
+      })
+      const json = await res.json()
+      if (json.success) return { error: null }
+      const code: string = json.code ?? ''
+      if (code === 'OTP_NOT_CONFIGURED') return { error: 'OTP service is not available right now' }
+      if (code === 'RATE_LIMITED') return { error: 'Too many attempts — please wait a minute' }
+      return { error: json.error ?? "Couldn't send OTP" }
+    } catch {
+      return { error: "Couldn't send OTP" }
+    }
   },
 
   verifyOTP: async (phone, token) => {
     const formatted = formatPhone(phone)
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone: formatted,
-      token,
-      type: 'sms',
-    })
-    if (error) return { error: error.message, isNewUser: false }
-    const { data: profile } = await supabase
-      .from('users')
-      .select('name')
-      .eq('id', data.user!.id)
-      .single()
-    return { error: null, isNewUser: !profile?.name }
+    try {
+      const res = await fetch(OTP_VERIFY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: formatted, otp: token, role: 'buyer' }),
+      })
+      const json = await res.json()
+      if (!json.success) {
+        const code: string = json.code ?? ''
+        if (code === 'OTP_INVALID') return { error: 'Incorrect or expired OTP', isNewUser: false }
+        return { error: json.error ?? 'OTP verification failed', isNewUser: false }
+      }
+      const session: { access_token: string; refresh_token: string } = json.data.session
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      })
+      if (sessionError) return { error: 'Could not start session', isNewUser: false }
+      const { data: profile } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', json.data.userId)
+        .maybeSingle()
+      return { error: null, isNewUser: !profile?.name }
+    } catch {
+      return { error: 'OTP verification failed', isNewUser: false }
+    }
   },
 
   updateProfile: async (data) => {
