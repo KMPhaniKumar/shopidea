@@ -22,6 +22,7 @@ import {
   type PlaceDetails,
   type AddressDraft,
 } from '@/lib/saved-addresses'
+import { lookupPincode } from '@/lib/pincode-lookup'
 
 type Draft = {
   label: 'Home' | 'Work' | 'Other'
@@ -58,9 +59,34 @@ export function BuyerAddressForm({
   const [predictions, setPredictions] = useState<PlacePrediction[]>([])
   const [searching, setSearching] = useState(false)
   const [locating, setLocating] = useState(false)
+  // Pincode-driven city/state lookup. `failed` un-locks the fields for manual
+  // entry when the lookup can't resolve the pincode.
+  const [pinLookup, setPinLookup] = useState<{ loading: boolean; failed: boolean }>({ loading: false, failed: false })
+  const lastLookedUp = useRef<string>('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const set = <K extends keyof Draft>(k: K) => (v: Draft[K]) => setDraft(d => ({ ...d, [k]: v }))
+
+  // Whenever the pincode reaches 6 digits (typed, from search, or from current
+  // location) resolve city + state and lock them — pincode is the source of truth.
+  useEffect(() => {
+    const pin = draft.pincode
+    if (!/^\d{6}$/.test(pin)) { setPinLookup({ loading: false, failed: false }); return }
+    if (pin === lastLookedUp.current) return
+    lastLookedUp.current = pin
+    let cancelled = false
+    setPinLookup({ loading: true, failed: false })
+    lookupPincode(pin).then(({ city, state, ok }) => {
+      if (cancelled) return
+      if (ok && state) {
+        setDraft(d => ({ ...d, city: city ?? d.city, state }))
+        setPinLookup({ loading: false, failed: !city })
+      } else {
+        setPinLookup({ loading: false, failed: true })
+      }
+    })
+    return () => { cancelled = true }
+  }, [draft.pincode])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -190,7 +216,7 @@ export function BuyerAddressForm({
       </div>
 
       {/* Area / Locality — holds the full searched / detected address */}
-      <Field label="Area / Locality">
+      <Field label="Area / Locality" required>
         <textarea
           value={draft.area}
           onChange={e => set('area')(e.target.value)}
@@ -200,20 +226,20 @@ export function BuyerAddressForm({
         />
       </Field>
 
-      <Field label="Flat / Home / Building No.">
+      <Field label="Flat / Home / Building No." required>
         <input value={draft.line1} onChange={e => set('line1')(e.target.value)}
           placeholder="e.g. B-403, Aparna Cyber Commune"
           className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-[#FF6B2B] transition" />
       </Field>
 
-      <Field label="Full Name">
+      <Field label="Full Name" required>
         <input value={draft.name} onChange={e => set('name')(e.target.value)}
           placeholder="Recipient's name"
           className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-[#FF6B2B] transition" />
       </Field>
 
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Mobile Number">
+        <Field label="Mobile Number" required>
           <div className="flex border border-gray-200 rounded-xl overflow-hidden focus-within:border-[#FF6B2B] transition">
             <span className="px-2.5 bg-gray-50 flex items-center text-xs text-gray-600 border-r border-gray-200">+91</span>
             <input value={draft.phone} onChange={e => set('phone')(e.target.value.replace(/\D/g, '').slice(0, 10))}
@@ -221,12 +247,35 @@ export function BuyerAddressForm({
               className="flex-1 px-2.5 py-2.5 text-sm outline-none" />
           </div>
         </Field>
-        <Field label="Pincode">
-          <input value={draft.pincode} onChange={e => set('pincode')(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            inputMode="numeric" placeholder="500019"
-            className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-[#FF6B2B] transition" />
+        <Field label="Pincode" required>
+          <div className="relative">
+            <input value={draft.pincode} onChange={e => set('pincode')(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              inputMode="numeric" placeholder="500019"
+              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-[#FF6B2B] transition" />
+            {pinLookup.loading && <Loader2 className="animate-spin text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" size={14} />}
+          </div>
         </Field>
       </div>
+
+      {/* City + State — auto-filled from pincode and locked (editable only if the
+          lookup couldn't resolve the pincode). */}
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="City" required>
+          <input value={draft.city} onChange={e => set('city')(e.target.value)}
+            readOnly={!pinLookup.failed}
+            placeholder="Auto-filled from pincode"
+            className={`w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-[#FF6B2B] transition ${!pinLookup.failed ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`} />
+        </Field>
+        <Field label="State" required>
+          <input value={draft.state} onChange={e => set('state')(e.target.value)}
+            readOnly={!pinLookup.failed}
+            placeholder="Auto-filled from pincode"
+            className={`w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-[#FF6B2B] transition ${!pinLookup.failed ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`} />
+        </Field>
+      </div>
+      {pinLookup.failed && (
+        <p className="text-xs text-[#E2A03F] -mt-1">Couldn&apos;t auto-detect city &amp; state for this pincode — please enter them.</p>
+      )}
 
       <div className="flex gap-2 pt-1">
         {onCancel && (
@@ -244,10 +293,12 @@ export function BuyerAddressForm({
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="block text-xs font-semibold text-gray-600 mb-1">{label}</span>
+      <span className="block text-xs font-semibold text-gray-600 mb-1">
+        {label}{required && <span className="text-[#E23744]"> *</span>}
+      </span>
       {children}
     </label>
   )

@@ -9,6 +9,7 @@ import debounce from 'lodash/debounce'
 import { SITE_URL, SITE_HOST } from '@/lib/site-url'
 import { isValidPan, isValidGst } from '@/lib/kyc'
 import { BUSINESS_TYPES } from '@/lib/businessCategories'
+import { lookupPincode } from '@/lib/pincode-lookup'
 
 // Safe (non-KYC) columns accessible to the authenticated role after migration
 // 024. KYC columns (pan_number, gst_number, kyc_submitted_at, aadhaar_url) are
@@ -86,8 +87,31 @@ export default function SettingsPage() {
   // address requires admin approval, so we confirm via a modal first.
   const [addressEditing, setAddressEditing] = useState(false)
   const [showApprovalModal, setShowApprovalModal] = useState(false)
+  // Pincode-driven city/state lookup. While `loading`, the spinner shows; when
+  // `failed` (API + offline map both miss), we un-lock city/state so the seller
+  // can type them manually instead of dead-ending.
+  const [pinLookup, setPinLookup] = useState<{ loading: boolean; failed: boolean }>({ loading: false, failed: false })
   const { register, handleSubmit, watch, reset } = useForm()
   const { register: registerAddr, handleSubmit: handleSubmitAddr, reset: resetAddr, setValue: setAddrValue, formState: { errors: errorsAddr } } = useForm()
+
+  // Resolve city + state from the pincode and lock those fields.
+  async function handlePincodeLookup(raw: string) {
+    const pincode = raw.replace(/\D/g, '').slice(0, 6)
+    if (pincode.length !== 6) {
+      setPinLookup({ loading: false, failed: false })
+      return
+    }
+    setPinLookup({ loading: true, failed: false })
+    const { city, state, ok } = await lookupPincode(pincode)
+    if (ok && state) {
+      setAddrValue('city', city ?? '', { shouldValidate: true })
+      setAddrValue('state', state, { shouldValidate: true })
+      // City may be null on the offline-fallback path — let the seller type it.
+      setPinLookup({ loading: false, failed: !city })
+    } else {
+      setPinLookup({ loading: false, failed: true })
+    }
+  }
   const slugValue = watch('store_slug')
 
   useEffect(() => { load() }, [])
@@ -596,23 +620,58 @@ export default function SettingsPage() {
             />
           </div>
 
+          {/* Pincode drives city + state: we look them up and lock them so the
+              seller can't enter mismatched values (NimbusPost pickup + GST rely
+              on a correct state). */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Pincode <span className="text-[#E23744]">*</span>
+              {pinLookup.loading && <span className="ml-2 text-xs text-[#999999]">Detecting city &amp; state…</span>}
+            </label>
+            <input
+              {...registerAddr('pincode', {
+                required: 'Pincode is required',
+                pattern: { value: /^\d{6}$/, message: 'Pincode must be 6 digits' },
+                onChange: (e) => handlePincodeLookup(e.target.value),
+              })}
+              maxLength={6}
+              inputMode="numeric"
+              className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]"
+              placeholder="560034"
+            />
+            {errorsAddr.pincode && <p className="text-xs text-[#E23744] mt-0.5">{String(errorsAddr.pincode.message)}</p>}
+            {pinLookup.failed && (
+              <p className="text-xs text-[#E2A03F] mt-0.5">Couldn&apos;t auto-detect for this pincode — enter city &amp; state manually.</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Area / Locality</label>
-              <input {...registerAddr('area')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="Koramangala" />
+              <label className="block text-sm font-medium mb-1">City <span className="text-[#E23744]">*</span></label>
+              <input
+                {...registerAddr('city', { required: 'City is required' })}
+                readOnly={!pinLookup.failed}
+                className={`w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] ${!pinLookup.failed ? 'bg-[#F5F5F5] text-[#666666] cursor-not-allowed' : ''}`}
+                placeholder="Auto-filled from pincode"
+              />
+              {errorsAddr.city && <p className="text-xs text-[#E23744] mt-0.5">{String(errorsAddr.city.message)}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">City</label>
-              <input {...registerAddr('city')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="Bengaluru" />
+              <label className="block text-sm font-medium mb-1">State <span className="text-[#E23744]">*</span></label>
+              <input
+                {...registerAddr('state', { required: 'State is required' })}
+                readOnly={!pinLookup.failed}
+                className={`w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] ${!pinLookup.failed ? 'bg-[#F5F5F5] text-[#666666] cursor-not-allowed' : ''}`}
+                placeholder="Auto-filled from pincode"
+              />
+              {errorsAddr.state && <p className="text-xs text-[#E23744] mt-0.5">{String(errorsAddr.state.message)}</p>}
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">State</label>
-              <input {...registerAddr('state')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="Karnataka" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Pincode</label>
-              <input {...registerAddr('pincode')} maxLength={6} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="560034" />
-            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Area / Locality <span className="text-[#E23744]">*</span></label>
+            <input {...registerAddr('area', { required: 'Area / locality is required' })} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="Koramangala" />
+            {errorsAddr.area && <p className="text-xs text-[#E23744] mt-0.5">{String(errorsAddr.area.message)}</p>}
           </div>
 
           <div className="flex gap-2">

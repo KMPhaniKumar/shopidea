@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, radius, spacing } from '../constants/theme'
 import { getSavedAddresses, saveAddress, removeAddress, SavedAddress } from '../lib/savedAddresses'
 import { detectCurrentAddress } from '../lib/geocode'
+import { lookupPincode } from '../lib/pincode-lookup'
 
 const CITY_KEY = '@reelmart_city'
 const ADDR_KEY = '@reelmart_default_address_id'
@@ -52,15 +53,15 @@ function getComponent(components: any[], ...types: string[]): string {
 }
 
 function SimpleInput({
-  placeholder, value, onChangeText, keyboardType, maxLength, autoFocus,
+  placeholder, value, onChangeText, keyboardType, maxLength, autoFocus, editable = true,
 }: {
   placeholder: string; value: string; onChangeText: (v: string) => void
-  keyboardType?: any; maxLength?: number; autoFocus?: boolean
+  keyboardType?: any; maxLength?: number; autoFocus?: boolean; editable?: boolean
 }) {
   const [focused, setFocused] = useState(false)
   return (
     <TextInput
-      style={[formStyles.input, focused && formStyles.inputFocused]}
+      style={[formStyles.input, focused && formStyles.inputFocused, !editable && formStyles.inputLocked]}
       placeholder={placeholder}
       placeholderTextColor="#AAAAAA"
       value={value}
@@ -68,6 +69,7 @@ function SimpleInput({
       keyboardType={keyboardType ?? 'default'}
       maxLength={maxLength}
       autoFocus={autoFocus}
+      editable={editable}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
     />
@@ -85,7 +87,31 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
   const [searching, setSearching] = useState(false)
   const [draft, setDraft] = useState<DraftAddress>(EMPTY_DRAFT)
   const [locating, setLocating] = useState(false)
+  // Pincode-driven city/state lookup; `failed` un-locks the fields for manual entry.
+  const [pinLookup, setPinLookup] = useState<{ loading: boolean; failed: boolean }>({ loading: false, failed: false })
+  const lastLookedUp = useRef<string>('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Pincode is the source of truth for city + state — resolve and lock them
+  // whenever it reaches 6 digits (typed, searched, or from current location).
+  useEffect(() => {
+    const pin = draft.pincode
+    if (!/^\d{6}$/.test(pin)) { setPinLookup({ loading: false, failed: false }); return }
+    if (pin === lastLookedUp.current) return
+    lastLookedUp.current = pin
+    let cancelled = false
+    setPinLookup({ loading: true, failed: false })
+    lookupPincode(pin).then(({ city, state, ok }) => {
+      if (cancelled) return
+      if (ok && state) {
+        setDraft(d => ({ ...d, city: city ?? d.city, state }))
+        setPinLookup({ loading: false, failed: !city })
+      } else {
+        setPinLookup({ loading: false, failed: true })
+      }
+    })
+    return () => { cancelled = true }
+  }, [draft.pincode])
 
   // "Use current location" — GPS + reverse geocode → prefill the form. The
   // searched/detected address goes into Area/Locality; pincode stays editable.
@@ -131,6 +157,8 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
       setQuery('')
       setPredictions([])
       setDraft(EMPTY_DRAFT)
+      setPinLookup({ loading: false, failed: false })
+      lastLookedUp.current = ''
     }
   }, [visible])
 
@@ -193,6 +221,7 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
     if (!draft.name.trim()) { Alert.alert('Add address', 'Enter the full name.'); return }
     if (!/^[6-9]\d{9}$/.test(draft.phone.replace(/\D/g, ''))) { Alert.alert('Add address', 'Enter a valid 10-digit mobile number.'); return }
     if (!/^\d{6}$/.test(draft.pincode)) { Alert.alert('Add address', 'Enter a valid 6-digit pincode.'); return }
+    if (!draft.city.trim() || !draft.state.trim()) { Alert.alert('Add address', 'City & state could not be detected — check the pincode or enter them manually.'); return }
     const city = draft.city || draft.area
     try {
     const saved = await saveAddress({
@@ -419,7 +448,8 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
                   autoFocus
                 />
 
-                {/* Area — read-only display (from Google) or editable fields (manual) */}
+                {/* Area — editable fields (manual) or read-only display (from Google).
+                    City + State are auto-filled from the pincode and locked. */}
                 {isManual ? (
                   <>
                     <SimpleInput
@@ -427,29 +457,33 @@ export default function LocationPromptModal({ visible, onClose, onCitySet }: Pro
                       value={draft.area}
                       onChangeText={v => setDraft(p => ({ ...p, area: v }))}
                     />
+                    <SimpleInput
+                      placeholder="Pincode *"
+                      value={draft.pincode}
+                      onChangeText={v => setDraft(p => ({ ...p, pincode: v.replace(/\D/g, '').slice(0, 6) }))}
+                      keyboardType="numeric"
+                      maxLength={6}
+                    />
+                    {pinLookup.loading && <Text style={formStyles.lookupHint}>Detecting city & state…</Text>}
+                    {pinLookup.failed && <Text style={formStyles.lookupWarn}>Couldn't auto-detect — enter city & state below.</Text>}
                     <View style={formStyles.twoCol}>
                       <View style={{ flex: 1 }}>
                         <SimpleInput
                           placeholder="City *"
                           value={draft.city}
                           onChangeText={v => setDraft(p => ({ ...p, city: v }))}
+                          editable={pinLookup.failed}
                         />
                       </View>
                       <View style={{ flex: 1 }}>
                         <SimpleInput
-                          placeholder="Pincode"
-                          value={draft.pincode}
-                          onChangeText={v => setDraft(p => ({ ...p, pincode: v }))}
-                          keyboardType="numeric"
-                          maxLength={6}
+                          placeholder="State *"
+                          value={draft.state}
+                          onChangeText={v => setDraft(p => ({ ...p, state: v }))}
+                          editable={pinLookup.failed}
                         />
                       </View>
                     </View>
-                    <SimpleInput
-                      placeholder="State"
-                      value={draft.state}
-                      onChangeText={v => setDraft(p => ({ ...p, state: v }))}
-                    />
                   </>
                 ) : (
                   <View style={formStyles.areaBox}>
@@ -556,6 +590,10 @@ const formStyles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   inputFocused: { borderColor: colors.primary },
+  inputLocked: { backgroundColor: '#F2F2F2', color: '#777777' },
+
+  lookupHint: { fontSize: 12, color: '#999999', marginTop: -6, marginBottom: 10, marginLeft: 4 },
+  lookupWarn: { fontSize: 12, color: '#E2A03F', marginTop: -6, marginBottom: 10, marginLeft: 4 },
 
   areaBox: {
     flexDirection: 'row', alignItems: 'center',
