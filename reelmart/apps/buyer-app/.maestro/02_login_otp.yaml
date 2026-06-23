@@ -1,0 +1,74 @@
+# Flow 2 — Phone → OTP login with the configured MSG91 TEST credentials.
+#
+# Uses the dev test number 9999999999 / OTP 123456 (the ONLY number wired in the
+# MSG91 dashboard — see tests/fixtures/users.ts DEV_ACCOUNTS.seller). This sends
+# a REAL OTP request to the dev admin-service bridge, but to the *test* number,
+# which MSG91 short-circuits to the fixed code 123456 — no SMS is delivered to a
+# real handset. Do NOT substitute any other phone number here.
+#
+# Screen text from PhoneScreen.tsx + OTPScreen.tsx:
+#   PhoneScreen: "Continue →", DEV banner fills 9999999999
+#   OTPScreen:   "Enter OTP", DEV banner fills 123456, "Verify & Continue →"
+# After verify, an EXISTING user (the seeded seller account also exists as a
+# buyer row) is taken straight to the Home tab; a brand-new number would hit
+# ProfileSetup ("What's your name?") first.
+appId: in.reelmart.buyer
+tags:
+  - smoke
+  - auth
+---
+- clearState
+- launchApp:
+    clearKeychain: true
+- assertVisible: "Login / Sign Up 👋"
+
+# --- Phone step -------------------------------------------------------------
+# Prefer the DEV banner one-tap fill (keeps the canonical test number in one
+# place); fall back to typing it if the banner text changes.
+- runFlow:
+    when:
+      visible:
+        text: ".*DEV.*9999999999.*"
+    commands:
+      - tapOn:
+          text: ".*DEV.*9999999999.*"
+- runFlow:
+    when:
+      notVisible:
+        text: ".*DEV.*9999999999.*"
+    commands:
+      - tapOn: "98765 43210"      # the phone TextInput placeholder
+      - inputText: "9999999999"
+- tapOn: "Continue →"
+
+# --- OTP step ---------------------------------------------------------------
+- assertVisible: "Enter OTP"
+- runFlow:
+    when:
+      visible:
+        text: ".*DEV.*123456.*"
+    commands:
+      - tapOn:
+          text: ".*DEV.*123456.*"
+- runFlow:
+    when:
+      notVisible:
+        text: ".*DEV.*123456.*"
+    commands:
+      - tapOn:
+          text: "• • • • • •"     # the OTP TextInput placeholder
+      - inputText: "123456"
+- tapOn: "Verify & Continue →"
+
+# --- Landed in the app ------------------------------------------------------
+# Brand-new numbers see ProfileSetup first; complete it if shown.
+- runFlow:
+    when:
+      visible: "What's your name?"
+    commands:
+      - tapOn: "e.g. Arjun Kumar"
+      - inputText: "Test Buyer"
+      - tapOn: "Start Shopping →"
+# Home tab is the authenticated landing surface (TabNavigator → Home).
+- assertVisible: "Home"
+- takeScreenshot: login_success

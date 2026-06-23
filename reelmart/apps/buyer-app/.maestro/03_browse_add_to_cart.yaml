@@ -1,0 +1,37 @@
+# Flow 3 — Browse a store → open a product → add to cart.
+#
+# Search for the dedicated dev store "Blue Whale" (slug blue-whale, an approved
+# COD store — see DEV_ACCOUNTS.codStore), open its storefront, add the first
+# product, and confirm the cart footer total / qty stepper appears.
+#
+# Screen text from HomeScreen.tsx (search bar "Search stores or products...",
+# StoreRow), StorefrontScreen.tsx ("Add", "Proceed to Checkout →"),
+# TabNavigator (the "Cart" tab + its badge).
+appId: in.reelmart.buyer
+tags:
+  - cart
+---
+# Reuse the login flow so this is self-contained on a fresh emulator.
+- runFlow: 02_login_otp.yaml
+
+# --- Find the store via search ---------------------------------------------
+- assertVisible: "Home"
+- tapOn: "Search stores or products..."
+- inputText: "Blue Whale"
+- assertVisible:
+    text: "Blue Whale"
+    timeout: 8000
+- tapOn: "Blue Whale"
+
+# --- Storefront: add the first product to cart ------------------------------
+# Products header proves the grid rendered, then tap the first "Add" button.
+- assertVisible:
+    text: "Products \\(.*\\)"
+    timeout: 8000
+- tapOn:
+    text: "Add"
+    index: 0
+# Add swaps the button for a qty stepper showing "1" and reveals the footer CTA.
+- assertVisible: "1"
+- assertVisible: "Proceed to Checkout →"
+- takeScreenshot: cart_added

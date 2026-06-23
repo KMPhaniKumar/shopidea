@@ -801,9 +801,11 @@ describe('CALC-6 — payout summary: totalEarned formula correctness', () => {
       .query({ storeId: STORE.id })
 
     expect(res.status).toBe(200)
-    expect(res.body.data.totalEarned).toBe(950)
+    // After BUG-TCS-001 fix: net = gross × (1 − 0.05 − 0.01) = 1000 × 0.94 = 940
+    // (previously 950 before TCS was applied — test updated to match corrected formula)
+    expect(res.body.data.totalEarned).toBe(940)
     expect(res.body.data.totalPaid).toBe(200)
-    expect(res.body.data.pending).toBe(750)
+    expect(res.body.data.pending).toBe(740)
   })
 })
 

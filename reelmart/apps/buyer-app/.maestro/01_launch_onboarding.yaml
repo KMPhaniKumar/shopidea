@@ -1,0 +1,26 @@
+# Flow 1 — Launch → onboarding (first run lands on the login screen).
+#
+# The buyer-app has no separate carousel onboarding; the RootNavigator sends an
+# unauthenticated user straight to PhoneScreen (the "Login / Sign Up" screen).
+# This flow proves a cold launch with cleared state lands there.
+#
+# Screen text asserted comes from src/screens/auth/PhoneScreen.tsx:
+#   "Login / Sign Up 👋", sub copy, the +91 prefix, the DEV banner.
+appId: in.reelmart.buyer
+tags:
+  - smoke
+  - onboarding
+---
+# Clear any persisted SecureStore session so we always start at the login gate.
+- clearState
+- launchApp:
+    clearKeychain: true
+- assertVisible: "Login / Sign Up 👋"
+- assertVisible: "Discover and shop from local sellers near you"
+- assertVisible: "+91"
+# DEV builds surface a one-tap test-number banner; assert it so we know this is
+# a dev/debug build (the Maestro target). On a production build this line fails,
+# which is the intended signal that you pointed Maestro at the wrong binary.
+- assertVisible:
+    text: ".*DEV.*9999999999.*"
+- takeScreenshot: launch_onboarding

@@ -1,0 +1,46 @@
+# Flow 5 — View order history → open an order's tracking timeline.
+#
+# Logs in, opens the Orders tab, and (if any orders exist) opens the most recent
+# one to confirm the tracking screen + status timeline render. If the account
+# has no orders yet, asserts the empty-state instead so the flow is still green
+# on a clean DB.
+#
+# Screen text from OrderHistoryScreen.tsx (status badges via STATUS_LABELS) and
+# OrderTrackingScreen.tsx ("← Orders" back, "Items", "Price details",
+# "Delivery details") + OrderTimeline ("ALL UPDATES").
+appId: in.reelmart.buyer
+tags:
+  - smoke
+  - orders
+---
+- runFlow: 02_login_otp.yaml
+
+# --- Open the Orders tab ----------------------------------------------------
+- tapOn: "Orders"
+
+# --- Branch: has orders vs empty --------------------------------------------
+- runFlow:
+    when:
+      visible:
+        text: "Order Placed|Confirmed|Packed|Shipped|Delivered|Rejected|Cancelled"
+    commands:
+      # Open the newest order (top of the list) and verify the tracking screen.
+      - tapOn:
+          text: "Order Placed|Confirmed|Packed|Shipped|Delivered|Rejected|Cancelled"
+          index: 0
+      - assertVisible:
+          text: "Items"
+          timeout: 8000
+      - assertVisible: "Price details"
+      - assertVisible: "Delivery details"
+      - assertVisible: "ALL UPDATES"
+      - takeScreenshot: order_tracking
+- runFlow:
+    when:
+      notVisible:
+        text: "Order Placed|Confirmed|Packed|Shipped|Delivered|Rejected|Cancelled"
+    commands:
+      # Empty history empty-state copy (OrderHistoryScreen).
+      - assertVisible:
+          text: ".*No orders.*|.*orders yet.*"
+      - takeScreenshot: orders_empty

@@ -1,0 +1,66 @@
+# Flow 4 — Checkout a cart with Cash on Delivery → order placed.
+#
+# Continues from browse+add-to-cart, proceeds to the Checkout modal, selects a
+# delivery address (adding one if none saved), chooses Cash on Delivery, and
+# places the order. blue-whale is gst_verified=true so the interstate-GST gate
+# never blocks "Place Order" regardless of the buyer's address state
+# (see DEV_ACCOUNTS.codStore rationale).
+#
+# Screen text from CheckoutScreen.tsx:
+#   "Checkout", "Delivery Address", "Select Delivery Address",
+#   "Cash on Delivery", "Place Order →".
+#
+# NOTE: this places a REAL order row in the dev DB. The order is left for the
+# view-orders flow to assert; clean it up afterward (cancel from the app or
+# delete the row) so the dev data stays tidy.
+appId: in.reelmart.buyer
+tags:
+  - checkout
+---
+- runFlow: 03_browse_add_to_cart.yaml
+
+# --- Open checkout ----------------------------------------------------------
+- tapOn: "Proceed to Checkout →"
+- assertVisible:
+    text: "Checkout"
+    timeout: 8000
+- assertVisible: "Delivery Address"
+
+# --- Ensure a delivery address is selected ----------------------------------
+# If no address is saved, the screen prompts to add one; open that flow and
+# fill a Bapatla AP address (same state as the store — always deliverable).
+- runFlow:
+    when:
+      visible: "Select Delivery Address"
+    commands:
+      - tapOn: "Select Delivery Address"
+      # The add-address sheet reuses LocationPromptModal; field labels vary by
+      # build, so fall back to scrolling for the save CTA.
+      - scrollUntilVisible:
+          element:
+            text: ".*Save.*|.*Use this address.*"
+          direction: DOWN
+          timeout: 8000
+      - tapOn:
+          text: ".*Save.*|.*Use this address.*"
+
+# --- Pick Cash on Delivery --------------------------------------------------
+- scrollUntilVisible:
+    element:
+      text: "Cash on Delivery"
+    direction: DOWN
+    timeout: 8000
+- tapOn: "Cash on Delivery"
+
+# --- Place the order --------------------------------------------------------
+- scrollUntilVisible:
+    element:
+      text: "Place Order →"
+    direction: DOWN
+    timeout: 8000
+- tapOn: "Place Order →"
+# Order confirmation navigates to OrderTracking with the order number header.
+- assertVisible:
+    text: "RM.*|.*Order.*placed.*|.*Order Placed.*"
+    timeout: 12000
+- takeScreenshot: order_placed

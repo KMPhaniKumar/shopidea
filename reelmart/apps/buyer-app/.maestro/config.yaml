@@ -1,0 +1,22 @@
+# Maestro workspace config for the ReelMart buyer-app device-e2e flows.
+#
+# Shared across every flow in this folder. The app id matches app.json
+# (ios.bundleIdentifier / android.package = in.reelmart.buyer).
+#
+# Flows are tagged so CI / a local run can select a subset, e.g.
+#   maestro test --include-tags=smoke .maestro
+#
+# IMPORTANT — these flows DO NOT run headless in this CI/sandbox. They need a
+# booted Android emulator or iOS simulator AND an installed *dev* build of the
+# app (Expo dev client or a debug APK/IPA). See .maestro/README.md for the
+# exact build + run commands.
+appId: in.reelmart.buyer
+---
+# Default execution order when running the whole suite (`maestro test .maestro`).
+# Login must run first because every downstream flow assumes a signed-in session.
+flows:
+  - "01_launch_onboarding.yaml"
+  - "02_login_otp.yaml"
+  - "03_browse_add_to_cart.yaml"
+  - "04_checkout_cod.yaml"
+  - "05_view_orders.yaml"
