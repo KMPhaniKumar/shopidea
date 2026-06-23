@@ -13,7 +13,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: '.',
-  testMatch: ['tests/e2e/**/*.spec.ts', 'tests/ui/**/*.spec.ts'],
+  testMatch: ['e2e/**/*.spec.ts', 'ui/**/*.spec.ts'],
   fullyParallel: false, // mobile-first — sequential avoids flakiness on OTP flows
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

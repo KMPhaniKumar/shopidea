@@ -1,0 +1,5 @@
+# Playwright / Vitest run artifacts — not source
+test-results/
+playwright-report/
+coverage/
+.last-run.json

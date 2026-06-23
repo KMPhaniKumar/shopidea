@@ -64,9 +64,10 @@ export default function SellerRegister() {
         }
 
         if (store.approval_status === 'pending') {
-          // Not yet reviewed — show pending screen.
-          setStep('pending')
-          setInitLoading(false)
+          // Already registered and under review — send them to the dashboard
+          // (which shows real status) rather than the post-submit "Application
+          // Submitted!" screen, which would imply a fresh submission.
+          router.replace('/seller/dashboard')
           return
         }
 
@@ -178,17 +179,18 @@ export default function SellerRegister() {
         .maybeSingle()
 
       if (existingStore) {
-        if (existingStore.approval_status === 'approved') {
-          toast.success('Welcome back!')
-          router.push('/seller/dashboard')
-          return
-        }
         if (existingStore.approval_status === 'rejected') {
+          // Returning rejected seller — let them edit & resubmit.
           await enterEditMode(userId, existingStore.id, (existingStore as any).approval_notes ?? null)
           return
         }
-        // pending or other — show the pending screen
-        setStep('pending')
+        // pending or approved → this number is ALREADY a registered seller, so
+        // this is not a new registration. Say so clearly and route to the real
+        // dashboard (which reflects true approval status) instead of re-showing
+        // the "Application Submitted!" screen, which falsely implies a fresh
+        // submission.
+        toast.error('This number is already registered as a seller. Taking you to your dashboard.')
+        router.push('/seller/dashboard')
         return
       }
 
