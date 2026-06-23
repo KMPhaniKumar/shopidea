@@ -46,7 +46,7 @@ function Header() {
             href="/seller/register"
             className="inline-flex h-10 px-5 items-center rounded-btn bg-primary text-white text-sm font-medium hover:opacity-90 transition"
           >
-            Get started
+            Start selling
           </Link>
         </nav>
       </div>
@@ -229,7 +229,7 @@ function Footer() {
         </div>
         <nav className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-secondary">
           <Link href="/seller/login" className="hover:text-primary">Seller login</Link>
-          <Link href="/seller/register" className="hover:text-primary">Get started</Link>
+          <Link href="/seller/register" className="hover:text-primary">Start selling</Link>
           <Link href="/" className="hover:text-primary">Shop on ReelMart</Link>
           <a href="mailto:support@reelmart.in" className="hover:text-primary">Contact</a>
         </nav>
