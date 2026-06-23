@@ -53,7 +53,7 @@ export function Sidebar({ open, onClose, featuresUnlocked = true }: SidebarProps
       >
         <div className="p-6 border-b border-gray-100 flex items-start justify-between">
           <div>
-            <Link href="/" aria-label="ReelMart home">
+            <Link href="/seller/dashboard" aria-label="ReelMart seller dashboard">
               <Image src="/logo.png" alt="ReelMart" width={140} height={48} className="object-contain" />
             </Link>
             <div className="text-xs text-gray-400 mt-1">Seller Panel</div>
