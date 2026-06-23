@@ -159,7 +159,7 @@ describe('POST /api/payouts/process (admin-only)', () => {
     expect(res.body.data.totalAmount).toBe(0)
   })
 
-  it('processes eligible orders and applies 5% platform fee', async () => {
+  it('processes eligible orders and applies 5% platform fee + 1% TCS (CALC-8)', async () => {
     authAsAdmin()
 
     // Two delivered+paid orders for the same store, no payout yet
@@ -168,7 +168,9 @@ describe('POST /api/payouts/process (admin-only)', () => {
       { id: 'ord-2', store_id: STORE.id, total_amount: 560, delivery_fee: 60 },
     ]
     // gross for STORE.id = (1060-60) + (560-60) = 1000 + 500 = 1500
-    // net = 1500 * 0.95 = 1425
+    // platform fee = 1500 * 0.05 = 75
+    // TCS (Sec 194-O) = 1500 * 0.01 = 15
+    // net = 1500 - 75 - 15 = 1410  (= 1500 * 0.94)
 
     const insertedPayouts: any[] = []
     let ordersHit = false
@@ -228,12 +230,16 @@ describe('POST /api/payouts/process (admin-only)', () => {
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
     expect(res.body.data.processed).toBe(1) // one store processed
-    // Net = 1500 * 0.95 = 1425
-    expect(res.body.data.totalAmount).toBe(1425)
+    // CALC-8: gross=1500, fee=75 (5%), TCS=15 (1%) → net = 1500 * 0.94 = 1410
+    expect(res.body.data.totalAmount).toBe(1410)
 
     if (insertedPayouts.length > 0) {
       expect(insertedPayouts[0].store_id).toBe(STORE.id)
-      expect(insertedPayouts[0].amount).toBeCloseTo(1425, 0)
+      // net = 1500 * 0.94 = 1410
+      expect(insertedPayouts[0].amount).toBeCloseTo(1410, 0)
+      // platform_fee and tcs_amount must be stored as separate line items
+      expect(insertedPayouts[0].platform_fee).toBeCloseTo(75, 0)   // 1500 * 0.05
+      expect(insertedPayouts[0].tcs_amount).toBeCloseTo(15, 0)     // 1500 * 0.01
       expect(insertedPayouts[0].status).toBe('pending')
     }
   })
@@ -443,16 +449,20 @@ describe('POST /api/payouts/bank-account (create/update)', () => {
   })
 })
 
-// ── GET /api/payouts/summary — TCS/commission deduction math ─────────────────
+// ── GET /api/payouts/summary — TCS/commission deduction math (CALC-8) ─────────
 
 describe('GET /api/payouts/summary — deduction math', () => {
   /**
    * Platform fee = 5% (PLATFORM_FEE_PCT = 0.05)
-   * Formula: totalEarned = Σ (total_amount - delivery_fee) * 0.95
+   * TCS (Sec 194-O) = 1% (TCS_PCT = 0.01)
+   * Formula: gross = Σ (total_amount - delivery_fee)
+   *          totalEarned = gross × (1 − 0.05 − 0.01) = gross × 0.94
+   *          totalPlatformFee = gross × 0.05
+   *          totalTcs = gross × 0.01
    *          pending = totalEarned - totalPaid
    */
 
-  it('calculates correct net after 5% platform fee with multiple orders', async () => {
+  it('calculates correct net after 5% platform fee + 1% TCS with multiple orders (CALC-8)', async () => {
     authAs(SELLER)
 
     mockFrom.mockImplementation((table: string) => {
@@ -490,12 +500,17 @@ describe('GET /api/payouts/summary — deduction math', () => {
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
 
-    // totalEarned = (1000 + 500) * 0.95 = 1425
-    expect(res.body.data.totalEarned).toBe(1425)
+    // gross = 1000 + 500 = 1500
+    // CALC-8: totalEarned = 1500 * 0.94 = 1410
+    expect(res.body.data.totalEarned).toBe(1410)
+    // platform fee line item = 1500 * 0.05 = 75
+    expect(res.body.data.totalPlatformFee).toBe(75)
+    // TCS line item = 1500 * 0.01 = 15
+    expect(res.body.data.totalTcs).toBe(15)
     // totalPaid = 950 (status=done)
     expect(res.body.data.totalPaid).toBe(950)
-    // pending = 1425 - 950 = 475
-    expect(res.body.data.pending).toBe(475)
+    // pending = 1410 - 950 = 460
+    expect(res.body.data.pending).toBe(460)
   })
 
   it('excludes non-done payouts from totalPaid', async () => {
@@ -532,12 +547,16 @@ describe('GET /api/payouts/summary — deduction math', () => {
       .query({ storeId: STORE.id })
 
     expect(res.status).toBe(200)
-    // totalEarned = 1000 * 0.95 = 950
-    expect(res.body.data.totalEarned).toBe(950)
+    // gross = 1000; CALC-8: totalEarned = 1000 * 0.94 = 940
+    expect(res.body.data.totalEarned).toBe(940)
+    // platform fee = 1000 * 0.05 = 50
+    expect(res.body.data.totalPlatformFee).toBe(50)
+    // TCS = 1000 * 0.01 = 10
+    expect(res.body.data.totalTcs).toBe(10)
     // totalPaid = 500 (only done payouts)
     expect(res.body.data.totalPaid).toBe(500)
-    // pending = 950 - 500 = 450
-    expect(res.body.data.pending).toBe(450)
+    // pending = 940 - 500 = 440
+    expect(res.body.data.pending).toBe(440)
   })
 
   it('returns zeros when store has no paid orders', async () => {

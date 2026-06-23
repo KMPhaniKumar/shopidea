@@ -48,7 +48,14 @@ ordersRouter.post('/', requireAuth, async (req, res) => {
     return res.status(403).json({ success: false, error: 'This store is currently unavailable', code: 'STORE_SUSPENDED' })
   }
 
-  const total = parsed.data.subtotal + parsed.data.delivery_fee - parsed.data.discount
+  // CALC-1 / BUG-ORDER-SUBTOTAL-001: Recompute subtotal server-side from items.
+  // Never trust the client-supplied subtotal — a manipulated value would flow
+  // into the order total and downstream financial records.
+  const computedSubtotal = parsed.data.items.reduce(
+    (sum, item) => sum + item.price * item.qty,
+    0,
+  )
+  const total = computedSubtotal + parsed.data.delivery_fee - parsed.data.discount
   const orderNumber = `RM${Date.now().toString(36).toUpperCase()}`
 
   const { data, error } = await supabaseAdmin.from('orders').insert({
@@ -56,7 +63,7 @@ ordersRouter.post('/', requireAuth, async (req, res) => {
     store_id: parsed.data.store_id,
     order_number: orderNumber,
     items: parsed.data.items,
-    subtotal: parsed.data.subtotal,
+    subtotal: computedSubtotal,
     delivery_fee: parsed.data.delivery_fee,
     discount: parsed.data.discount,
     coupon_code: parsed.data.coupon_code,

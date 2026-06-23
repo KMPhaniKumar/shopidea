@@ -47,17 +47,20 @@ notificationsRouter.post('/register-token', requireAuth, async (req, res) => {
 })
 
 // POST /api/notifications/push — internal
+// NOTIF-BUG-01: use allSettled so a single FCM token throw cannot prevent
+// the response being sent (which would hang the connection until timeout).
 notificationsRouter.post('/push', requireInternalKey, async (req, res) => {
   const { userId, title, body, data } = req.body
   const { data: tokens } = await supabaseAdmin.from('fcm_tokens').select('token').eq('user_id', userId)
-  await Promise.all((tokens ?? []).map(t => sendPush(t.token, title, body, data)))
+  await Promise.allSettled((tokens ?? []).map(t => sendPush(t.token, title, body, data)))
   res.json({ success: true, data: { sent: tokens?.length ?? 0 } })
 })
 
 // POST /api/notifications/whatsapp — internal
+// NOTIF-BUG-02: wrap in allSettled so a Gupshup throw cannot hang the request.
 notificationsRouter.post('/whatsapp', requireInternalKey, async (req, res) => {
   const { phone, message } = req.body
-  await sendWhatsApp(phone, message)
+  await Promise.allSettled([sendWhatsApp(phone, message)])
   res.json({ success: true })
 })
 
@@ -123,16 +126,30 @@ notificationsRouter.post('/order-placed', async (req, res) => {
 })
 
 // POST /api/notifications/order-update — called by order-service
+// NOTIF-BUG-03: use allSettled so a provider throw (FCM or Gupshup) cannot
+// prevent res.json() from being called, which would hang the connection.
 notificationsRouter.post('/order-update', requireInternalKey, async (req, res) => {
   const { orderId, status, buyerPhone, storeName, buyerId } = req.body
   const msgs = ORDER_MESSAGES[status]
   if (!msgs) return res.json({ success: true })
 
-  await Promise.all([
-    buyerId && supabaseAdmin.from('fcm_tokens').select('token').eq('user_id', buyerId).then(({ data: tokens }) =>
-      Promise.all((tokens ?? []).map(t => sendPush(t.token, msgs.title, `${msgs.body} — ${storeName}`)))
-    ),
-    buyerPhone && sendWhatsApp(buyerPhone, `*ReelMart* — ${storeName}\n\n${msgs.whatsapp}`),
+  await Promise.allSettled([
+    buyerId
+      ? supabaseAdmin
+          .from('fcm_tokens')
+          .select('token')
+          .eq('user_id', buyerId)
+          .then(({ data: tokens }) =>
+            Promise.allSettled(
+              (tokens ?? []).map(t =>
+                sendPush(t.token, msgs.title, `${msgs.body} — ${storeName}`),
+              ),
+            ),
+          )
+      : Promise.resolve(),
+    buyerPhone
+      ? sendWhatsApp(buyerPhone, `*ReelMart* — ${storeName}\n\n${msgs.whatsapp}`)
+      : Promise.resolve(),
   ])
 
   res.json({ success: true })

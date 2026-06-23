@@ -5,6 +5,9 @@ import { requireAuth, requireAdmin } from '../middleware/auth'
 export const payoutsRouter = Router()
 
 const PLATFORM_FEE_PCT = 0.05
+// TCS (Tax Collected at Source) under Section 194-O of the Income Tax Act.
+// Applicable to e-commerce operators paying sellers: 1% of gross order value.
+const TCS_PCT = 0.01
 
 // GET /api/payouts?storeId= — seller lists own payouts
 payoutsRouter.get('/', requireAuth, async (req, res) => {
@@ -43,10 +46,24 @@ payoutsRouter.get('/summary', requireAuth, async (req, res) => {
     supabaseAdmin.from('payouts').select('amount, status').eq('store_id', storeId as string),
   ])
 
-  const totalEarned = (ordersRes.data ?? []).reduce((s, o) => s + (o.total_amount - o.delivery_fee) * (1 - PLATFORM_FEE_PCT), 0)
+  const grossOrders = (ordersRes.data ?? []).reduce((s, o) => s + (o.total_amount - o.delivery_fee), 0)
+  // Deduct platform fee (5%) and TCS (1% of gross, Sec 194-O) from each order.
+  // net = gross × (1 − PLATFORM_FEE_PCT − TCS_PCT) = gross × 0.94
+  const totalEarned = grossOrders * (1 - PLATFORM_FEE_PCT - TCS_PCT)
+  const totalPlatformFee = grossOrders * PLATFORM_FEE_PCT
+  const totalTcs = grossOrders * TCS_PCT
   const totalPaid = (payoutsRes.data ?? []).filter(p => p.status === 'done').reduce((s, p) => s + p.amount, 0)
 
-  res.json({ success: true, data: { totalEarned: Math.round(totalEarned), totalPaid: Math.round(totalPaid), pending: Math.round(totalEarned - totalPaid) } })
+  res.json({
+    success: true,
+    data: {
+      totalEarned: Math.round(totalEarned),
+      totalPlatformFee: Math.round(totalPlatformFee),
+      totalTcs: Math.round(totalTcs),
+      totalPaid: Math.round(totalPaid),
+      pending: Math.round(totalEarned - totalPaid),
+    },
+  })
 })
 
 // POST /api/payouts/process — admin triggers weekly payout
@@ -84,10 +101,20 @@ payoutsRouter.post('/process', requireAdmin, async (req, res) => {
         console.info(`payout-service: skipping suspended store ${storeId} (${orderIds.length} orders)`)
         continue
       }
-      const netAmount = gross * (1 - PLATFORM_FEE_PCT)
+      // Deduct platform fee (5%) and TCS (1% of gross, Sec 194-O).
+      // net = gross × (1 − PLATFORM_FEE_PCT − TCS_PCT) = gross × 0.94
+      const platformFeeAmount = gross * PLATFORM_FEE_PCT
+      const tcsAmount = gross * TCS_PCT
+      const netAmount = gross - platformFeeAmount - tcsAmount
       const { data: payout } = await supabaseAdmin.from('payouts').insert({
-        store_id: storeId, amount: netAmount, order_count: orderIds.length,
-        status: 'pending', period_start: sevenDaysAgo, period_end: new Date().toISOString(),
+        store_id: storeId,
+        amount: netAmount,
+        platform_fee: platformFeeAmount,
+        tcs_amount: tcsAmount,
+        order_count: orderIds.length,
+        status: 'pending',
+        period_start: sevenDaysAgo,
+        period_end: new Date().toISOString(),
       }).select('id').single()
       if (!payout) continue
       await supabaseAdmin.from('orders').update({ payout_id: payout.id }).in('id', orderIds)

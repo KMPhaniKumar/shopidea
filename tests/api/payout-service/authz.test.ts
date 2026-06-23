@@ -203,10 +203,10 @@ describe('GET /api/payouts/summary', () => {
     expect(res.body.data).toHaveProperty('totalEarned')
     expect(res.body.data).toHaveProperty('totalPaid')
     expect(res.body.data).toHaveProperty('pending')
-    // Quick math: gross = 1060 - 60 = 1000; net = 1000 * 0.95 = 950; paid = 200; pending = 750
-    expect(res.body.data.totalEarned).toBe(950)
+    // CALC-8: gross = 1060 - 60 = 1000; net = 1000 * 0.94 = 940 (5% fee + 1% TCS); paid = 200; pending = 740
+    expect(res.body.data.totalEarned).toBe(940)
     expect(res.body.data.totalPaid).toBe(200)
-    expect(res.body.data.pending).toBe(750)
+    expect(res.body.data.pending).toBe(740)
   })
 })
 

@@ -177,3 +177,87 @@ describe('POST /api/notifications/push — x-internal-key gating', () => {
     expect(res.body.success).toBe(true)
   })
 })
+
+// ── NOTIF-BUG-01/02/03: provider throws must not hang the request ─────────────
+
+describe('Provider-throws resilience (NOTIF-BUG-01/02/03)', () => {
+  /**
+   * If sendPush / sendWhatsApp throws synchronously or rejects, the request
+   * must still return a 200 JSON response. Prior to the fix, Promise.all()
+   * would propagate the rejection past res.json(), leaving the connection open
+   * until the 10-second timeout.
+   */
+
+  it('NOTIF-BUG-01: POST /push returns 200 even when sendPush rejects for every token', async () => {
+    // Mock sendPush from the already-registered vi.mock to throw
+    const { sendPush: sendPushMock } = await import(
+      '/Users/murali/Documents/GitHub/shopidea/reelmart/services/notification-service/src/lib/fcm'
+    )
+    ;(sendPushMock as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('FCM unavailable'))
+
+    // Provide two tokens so there are two rejects in the allSettled batch
+    mockFrom.mockImplementation(makeQueryBuilder({
+      fcm_tokens: {
+        data: [{ token: 'tok-a' }, { token: 'tok-b' }],
+        error: null,
+      },
+    }))
+
+    const res = await request(app)
+      .post('/api/notifications/push')
+      .set('x-internal-key', process.env.INTERNAL_API_KEY ?? 'test-internal-key')
+      .send({ userId: BUYER.id, title: 'Test', body: 'Hello' })
+
+    // Must NOT hang / timeout — allSettled absorbs individual failures
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    // sent count = number of tokens attempted (regardless of outcome)
+    expect(res.body.data.sent).toBe(2)
+  })
+
+  it('NOTIF-BUG-02: POST /whatsapp returns 200 even when sendWhatsApp rejects', async () => {
+    const { sendWhatsApp: sendWhatsAppMock } = await import(
+      '/Users/murali/Documents/GitHub/shopidea/reelmart/services/notification-service/src/lib/gupshup'
+    )
+    ;(sendWhatsAppMock as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Gupshup down'))
+
+    const res = await request(app)
+      .post('/api/notifications/whatsapp')
+      .set('x-internal-key', process.env.INTERNAL_API_KEY ?? 'test-internal-key')
+      .send({ phone: '+919999900001', message: 'Your order is ready' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+  })
+
+  it('NOTIF-BUG-03: POST /order-update returns 200 even when both push and WhatsApp reject', async () => {
+    const { sendPush: sendPushMock } = await import(
+      '/Users/murali/Documents/GitHub/shopidea/reelmart/services/notification-service/src/lib/fcm'
+    )
+    const { sendWhatsApp: sendWhatsAppMock } = await import(
+      '/Users/murali/Documents/GitHub/shopidea/reelmart/services/notification-service/src/lib/gupshup'
+    )
+    ;(sendPushMock as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('FCM timeout'))
+    ;(sendWhatsAppMock as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Gupshup error'))
+
+    // Return one FCM token so the inner push path is exercised
+    mockFrom.mockImplementation(makeQueryBuilder({
+      fcm_tokens: { data: [{ token: 'tok-buyer' }], error: null },
+    }))
+
+    const res = await request(app)
+      .post('/api/notifications/order-update')
+      .set('x-internal-key', process.env.INTERNAL_API_KEY ?? 'test-internal-key')
+      .send({
+        orderId: 'cccccccc-0001-4000-8000-000000000001',
+        status: 'shipped',
+        buyerPhone: '+919999900001',
+        storeName: 'Test Store',
+        buyerId: BUYER.id,
+      })
+
+    // Both providers threw — response must still arrive (allSettled, not all)
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+  })
+})

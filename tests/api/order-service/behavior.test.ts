@@ -226,7 +226,15 @@ describe('POST /api/orders (create COD order)', () => {
     expect(res.body.data.payment_status).toBe('pending')
   })
 
-  it('calculates total_amount correctly (subtotal + delivery_fee - discount)', async () => {
+  it('CALC-1: recomputes subtotal server-side from items (ignores client subtotal)', async () => {
+    /**
+     * BUG-ORDER-SUBTOTAL-001 regression guard.
+     * items: [{ price: 500, qty: 2 }] → server-computed subtotal = 1000
+     * delivery_fee = 60, discount = 50 → total = 1000 + 60 - 50 = 1010
+     *
+     * Client sends subtotal: 1 (tampered). Server must ignore it and use
+     * the item-derived subtotal (1000) instead.
+     */
     authAs(BUYER)
 
     const insertedData: any[] = []
@@ -240,7 +248,7 @@ describe('POST /api/orders (create COD order)', () => {
         select: () => builder,
         insert: (d: any) => { insertedData.push(d); return builder },
         eq: () => builder,
-        single: () => ({ data: { ...ORDER, total_amount: 1000 + 60 - 50, stores: {} }, error: null }),
+        single: () => ({ data: { ...ORDER, total_amount: 1010, stores: {} }, error: null }),
         then: (fn: any) => Promise.resolve({ data: { total_amount: 1010 }, error: null }).then(fn),
       }
       return builder
@@ -249,11 +257,16 @@ describe('POST /api/orders (create COD order)', () => {
     await request(app)
       .post('/api/orders')
       .set('Authorization', bearerToken(BUYER))
-      .send({ ...VALID_ORDER_BODY, subtotal: 1000, delivery_fee: 60, discount: 50 })
+      // Client sends tampered subtotal (1) — server must override it
+      .send({ ...VALID_ORDER_BODY, subtotal: 1, delivery_fee: 60, discount: 50 })
 
-    // The inserted row should have total_amount = 1000 + 60 - 50 = 1010
     const inserted = insertedData[0]
-    if (inserted) expect(inserted.total_amount).toBe(1010)
+    if (inserted) {
+      // Server-computed subtotal from items: 500 × 2 = 1000
+      expect(inserted.subtotal).toBe(1000)
+      // total_amount = 1000 + 60 - 50 = 1010
+      expect(inserted.total_amount).toBe(1010)
+    }
   })
 })
 

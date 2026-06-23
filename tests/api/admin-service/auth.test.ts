@@ -88,13 +88,17 @@ beforeAll(async () => {
 // matching Origin header return 403.
 const ALLOWED_ORIGIN = 'https://dev.reelmart.in'
 
-/** Intercept fetch globally; returns a factory that resolves to a JSON body */
+/** Intercept fetch globally; returns a factory that resolves to a JSON body.
+ *  Reuses the single persistent fetchSpy (declared in beforeAll) so that
+ *  vi.restoreAllMocks() cannot inadvertently un-spy fetch mid-suite.
+ */
 function mockFetch(body: object, ok = true, status = 200) {
-  return vi.spyOn(global, 'fetch').mockResolvedValue({
+  fetchSpy.mockResolvedValue({
     ok,
     status,
     json: async () => body,
   } as Response)
+  return fetchSpy
 }
 
 /** Return a Supabase from()-builder that resolves to result for the given table */
@@ -153,15 +157,28 @@ function userRoleIs(userId: string, role: string) {
   })
 }
 
+// Install the fetch spy once before any test runs and keep it alive for the
+// entire file. vi.restoreAllMocks() in an afterEach would un-spy it between
+// tests, leaving a window where real fetch could escape into the next test's
+// beforeEach before the spy is re-established — the root cause of the
+// "requireAdmin SELLER token → 403" flake under full parallel vitest run.
+let fetchSpy: ReturnType<typeof vi.spyOn>
+
+beforeAll(() => {
+  fetchSpy = vi.spyOn(global, 'fetch').mockRejectedValue(
+    new Error('fetch must be mocked in each test'),
+  )
+})
+
+afterAll(() => {
+  fetchSpy.mockRestore()
+})
+
 beforeEach(() => {
   vi.clearAllMocks()
   authFail()
-  // Default: no real fetch should escape — fail loudly if it does
-  vi.spyOn(global, 'fetch').mockRejectedValue(new Error('fetch must be mocked in each test'))
-})
-
-afterEach(() => {
-  vi.restoreAllMocks()
+  // Reset the fetch spy default (clearAllMocks zeroed its impl; restore default guard)
+  fetchSpy.mockRejectedValue(new Error('fetch must be mocked in each test'))
 })
 
 // =============================================================================
