@@ -15,7 +15,6 @@ export default function SellerLandingPage() {
       <Hero />
       <Features />
       <HowItWorks />
-      <Testimonials />
       <FinalCTA />
       <Footer />
     </main>
@@ -31,22 +30,16 @@ function Header() {
         </Link>
         <nav className="flex items-center gap-3">
           <Link
-            href="/"
-            className="hidden sm:inline-flex h-10 px-4 items-center text-sm font-medium text-secondary hover:text-primary"
-          >
-            Shop on ReelMart
-          </Link>
-          <Link
             href="/seller/login"
             className="hidden sm:inline-flex h-10 px-4 items-center text-sm font-medium text-text hover:text-primary"
           >
-            Seller login
+            Login
           </Link>
           <Link
             href="/seller/register"
             className="inline-flex h-10 px-5 items-center rounded-btn bg-primary text-white text-sm font-medium hover:opacity-90 transition"
           >
-            Start selling
+            Signup
           </Link>
         </nav>
       </div>
@@ -69,21 +62,6 @@ function Hero() {
           Set up your storefront in 60 seconds. Share the link in your bio, status, or DMs.
           Accept UPI and card payments, manage orders, and ship across India — all from one dashboard.
         </p>
-        <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
-          <Link
-            href="/seller/register"
-            className="inline-flex h-12 px-7 items-center justify-center rounded-btn bg-primary text-white font-medium hover:opacity-90 transition"
-          >
-            Start your store
-          </Link>
-          <Link
-            href="/seller/login"
-            className="inline-flex h-12 px-7 items-center justify-center rounded-btn bg-white border border-border text-text font-medium hover:bg-surface transition"
-          >
-            I already have an account
-          </Link>
-        </div>
-        <p className="mt-4 text-sm text-muted">Set up in minutes. Start selling today.</p>
       </div>
     </section>
   )
@@ -174,34 +152,6 @@ function HowItWorks() {
   )
 }
 
-function Testimonials() {
-  const quotes = [
-    { name: 'Priya S.', city: 'Hyderabad', role: 'Saree boutique', body: 'Set up my store between two WhatsApp orders. My bio link finally does the work for me.' },
-    { name: 'Rahul M.', city: 'Pune', role: 'Home bakery', body: 'Buyers pay upfront now. No more chasing UPI screenshots after midnight.' },
-    { name: 'Anjali K.', city: 'Jaipur', role: 'Handmade jewellery', body: 'Courier pickups happen on their own. I just print labels and pack.' },
-  ]
-  return (
-    <section className="bg-surface border-y border-border px-6 py-20">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-14">
-          <h2 className="text-3xl sm:text-4xl font-bold">Loved by sellers across India</h2>
-        </div>
-        <div className="grid sm:grid-cols-3 gap-6">
-          {quotes.map((q) => (
-            <figure key={q.name} className="bg-white rounded-card border border-border p-7 shadow-card">
-              <blockquote className="text-text leading-relaxed">&ldquo;{q.body}&rdquo;</blockquote>
-              <figcaption className="mt-5 pt-5 border-t border-border">
-                <div className="font-semibold">{q.name}</div>
-                <div className="text-sm text-secondary">{q.role} · {q.city}</div>
-              </figcaption>
-            </figure>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
 function FinalCTA() {
   return (
     <section className="px-6 py-20">
@@ -212,7 +162,7 @@ function FinalCTA() {
           href="/seller/register"
           className="mt-8 inline-flex h-12 px-8 items-center justify-center rounded-btn bg-primary text-white font-medium hover:opacity-90 transition"
         >
-          Create my store
+          Signup
         </Link>
       </div>
     </section>
@@ -228,9 +178,9 @@ function Footer() {
           <span className="text-sm text-muted">© 2026 ReelMart™</span>
         </div>
         <nav className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-secondary">
-          <Link href="/seller/login" className="hover:text-primary">Seller login</Link>
-          <Link href="/seller/register" className="hover:text-primary">Start selling</Link>
-          <Link href="/" className="hover:text-primary">Shop on ReelMart</Link>
+          <a href="/legal/terms.html" className="hover:text-primary">Terms &amp; Conditions</a>
+          <a href="/legal/privacy-policy.html" className="hover:text-primary">Privacy Policy</a>
+          <a href="/legal/refund-return.html" className="hover:text-primary">Refund &amp; Returns</a>
           <a href="mailto:support@reelmart.in" className="hover:text-primary">Contact</a>
         </nav>
       </div>
