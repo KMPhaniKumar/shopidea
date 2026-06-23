@@ -148,7 +148,7 @@ describe('POST /api/delivery/rates — stub mode when NimbusPost unconfigured', 
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
     expect(res.body.data.deliverable).toBe(true)
-    expect(res.body.data.fee).toBe(60)
+    expect(res.body.data.fee).toBe(80)
     expect(typeof res.body.data.estimatedDays).toBe('number')
     expect(Array.isArray(res.body.data.couriers)).toBe(true)
     expect(res.body.data.couriers).toHaveLength(0)

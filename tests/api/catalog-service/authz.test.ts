@@ -194,14 +194,18 @@ describe('DELETE /api/catalog/products/:id — CRIT-4 ownership', () => {
 
   it('allows owning seller to delete their product — CRIT-4 fix', async () => {
     authAs(SELLER)
-    let callCount = 0
+    let productsOwnershipDone = false
     mockFrom.mockImplementation((table: string) => {
-      if (table === 'products' && callCount === 0) {
-        callCount++
-        // Ownership check
+      if (table === 'products' && !productsOwnershipDone) {
+        productsOwnershipDone = true
+        // First products call: ownership check (getProductStore)
         return makeQueryBuilder({ products: { data: OWNED_PRODUCT, error: null } })(table)
       }
-      // Delete call — return no error
+      if (table === 'stores') {
+        // isStoreSuspended() calls .from('stores').select('suspended').eq(...).single()
+        return makeQueryBuilder({ stores: { data: { suspended: false }, error: null } })(table)
+      }
+      // Second products call: the actual delete — return no error
       const builder: any = {
         delete: () => builder,
         eq: () => builder,
@@ -412,9 +416,20 @@ describe('GET /api/catalog/stores/:slug — HIGH-6: no KYC leak', () => {
 
 describe('GET /api/catalog/stores/:id/products — HIGH-6: no KYC leak', () => {
   it('returns 200 with product list (no KYC in product rows)', async () => {
-    mockFrom.mockImplementation(makeQueryBuilder({
-      products: { data: [OWNED_PRODUCT], error: null },
-    }))
+    // The handler first validates the store (stores query), then fetches products.
+    // The mock must handle both tables in call-sequence order.
+    let storesHit = false
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'stores' && !storesHit) {
+        storesHit = true
+        return makeQueryBuilder({
+          stores: { data: { id: STORE.id, approval_status: 'approved', is_active: true, suspended: false }, error: null },
+        })(table)
+      }
+      return makeQueryBuilder({
+        products: { data: [OWNED_PRODUCT], error: null },
+      })(table)
+    })
     const res = await request(app).get(`/api/catalog/stores/${STORE.id}/products`)
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)

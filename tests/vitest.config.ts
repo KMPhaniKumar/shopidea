@@ -37,7 +37,12 @@ export default defineConfig({
       RAZORPAY_KEY_SECRET: 'test_razorpay_secret_16chr',
       RAZORPAY_WEBHOOK_SECRET: 'test_webhook_secret',
       ALLOWED_ORIGINS: 'https://dev.reelmart.in',
+      AUTH_BRIDGE_ALLOWED_ORIGINS: 'https://dev.reelmart.in',
       INTERNAL_API_KEY: 'test-internal-key',
+      // admin-service auth bridge — needed so the module-level constants are non-empty
+      MSG91_WIDGET_AUTHKEY: 'test-msg91-authkey',
+      MSG91_OTP_TEMPLATE_ID: 'test-otp-template',
+      AUTH_BRIDGE_SECRET: 'test-auth-bridge-secret-32-chars!!',
     },
     // Per-test timeout (ms)
     testTimeout: 10000,
