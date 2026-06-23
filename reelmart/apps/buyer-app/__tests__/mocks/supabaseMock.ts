@@ -119,4 +119,16 @@ export const supabase = {
   },
 
   from: jest.fn((table: string) => makeQueryBuilder(table)),
+
+  // Realtime: a no-op channel whose chainable surface (.on().subscribe())
+  // matches what the order screens wire up. No real websocket is opened.
+  channel: jest.fn((_name: string) => {
+    const ch: any = {
+      on: jest.fn(() => ch),
+      subscribe: jest.fn(() => ch),
+      unsubscribe: jest.fn(),
+    };
+    return ch;
+  }),
+  removeChannel: jest.fn(),
 };

@@ -8,6 +8,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:api": "vitest run api",
+    "test:web-api": "vitest run --config vitest.web-api.config.ts",
     "test:db": "vitest run db",
     "test:ui": "playwright test ui",
     "test:e2e": "playwright test e2e",

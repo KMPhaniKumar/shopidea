@@ -8,6 +8,13 @@ export default defineConfig({
     environment: 'node',
     // Fail loudly — never silence. Any test that errors is a fail.
     bail: 0,
+    // Exclude web-api/ — those tests require next/server and run under
+    // vitest.web-api.config.ts (npm run test:web-api).
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      'web-api/**',
+    ],
     // Coverage via v8 (fast, no instrumentation needed)
     coverage: {
       provider: 'v8',
