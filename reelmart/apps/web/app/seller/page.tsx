@@ -29,12 +29,6 @@ function Header() {
           <Image src="/logo.png" alt="ReelMart" width={140} height={50} priority className="object-contain" />
         </Link>
         <nav className="flex items-center gap-3">
-          <a
-            href="mailto:support@reelmart.in"
-            className="hidden sm:inline-flex h-10 px-4 items-center text-sm font-medium text-secondary hover:text-primary"
-          >
-            contact: support@reelmart.in
-          </a>
           <Link
             href="/seller/login"
             className="hidden sm:inline-flex h-10 px-4 items-center text-sm font-medium text-text hover:text-primary"
@@ -47,6 +41,12 @@ function Header() {
           >
             Signup
           </Link>
+          <a
+            href="mailto:support@reelmart.in"
+            className="hidden sm:inline-flex h-10 px-4 items-center text-sm font-medium text-secondary hover:text-primary"
+          >
+            contact: support@reelmart.in
+          </a>
         </nav>
       </div>
     </header>
