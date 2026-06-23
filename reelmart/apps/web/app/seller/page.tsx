@@ -33,7 +33,7 @@ function Header() {
             href="mailto:support@reelmart.in"
             className="hidden sm:inline-flex h-10 px-4 items-center text-sm font-medium text-secondary hover:text-primary"
           >
-            support@reelmart.in
+            contact: support@reelmart.in
           </a>
           <Link
             href="/seller/login"
