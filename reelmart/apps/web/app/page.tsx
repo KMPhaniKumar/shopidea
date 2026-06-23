@@ -36,17 +36,9 @@ function Header() {
           </Link>
           <BrowseMenu />
         </div>
-        {/* Right: auth, then Sell on ReelMart pinned to the far right */}
+        {/* Right: auth control (renders "Sell on ReelMart" only when signed out) */}
         <nav className="flex items-center gap-1.5 sm:gap-3">
           <BuyerAuthNav />
-          <Link
-            href="/seller"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden sm:inline-flex h-10 px-5 items-center rounded-btn border border-border text-primary text-sm font-medium hover:bg-surface transition"
-          >
-            Sell on ReelMart →
-          </Link>
         </nav>
       </div>
     </header>

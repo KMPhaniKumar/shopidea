@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast, { Toaster } from 'react-hot-toast'
-import { Loader2, Package, ShoppingBag, Smartphone, Apple } from 'lucide-react'
+import { Loader2, Package, ShoppingBag, Smartphone, Apple, ArrowLeft } from 'lucide-react'
 import { sendOtp as msg91Send, verifyOtp as msg91Verify, exchangeForSupabaseSession, CAPTCHA_CONTAINER_ID } from '@/lib/msg91-otp'
 interface Order {
   id: string
@@ -37,6 +38,7 @@ type AuthStep = 'loading' | 'phone' | 'otp' | 'ready'
 
 export default function OrdersClient() {
   const supabase = createClient()
+  const router = useRouter()
   const [authStep, setAuthStep] = useState<AuthStep>('loading')
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
@@ -179,7 +181,16 @@ export default function OrdersClient() {
       <Toaster position="top-center" />
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="font-bold text-[#1A1A1A]">My Orders</h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.back()}
+              aria-label="Go back"
+              className="-ml-1 p-1 rounded-full text-gray-600 hover:bg-gray-100 transition"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <h1 className="font-bold text-[#1A1A1A]">My Orders</h1>
+          </div>
           <Link href="/" className="text-xs text-[#FF6B2B] font-semibold">Home</Link>
         </div>
       </header>

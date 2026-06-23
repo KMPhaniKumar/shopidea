@@ -127,6 +127,18 @@ export default function BuyerAuthNav() {
         </div>
       )}
 
+      {/* Only buyers who aren't signed in see the seller entry point. */}
+      {ready && !loggedIn && (
+        <Link
+          href="/seller"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hidden sm:inline-flex h-10 px-5 items-center rounded-btn border border-border text-primary text-sm font-medium hover:bg-surface transition"
+        >
+          Sell on ReelMart →
+        </Link>
+      )}
+
       <BuyerLoginModal
         open={modalMode !== null}
         mode={modalMode ?? 'login'}
