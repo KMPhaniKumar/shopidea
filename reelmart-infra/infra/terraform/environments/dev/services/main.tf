@@ -51,7 +51,7 @@ locals {
     PORT     = tostring(var.container_port)
     # Explicit browser-origin allow-list (NOT "*", which reflects any Origin with
     # Access-Control-Allow-Credentials). Mirrors AUTH_BRIDGE_ALLOWED_ORIGINS.
-    ALLOWED_ORIGINS          = "http://localhost:3000,https://dev.reelmart.in,https://reelmart.in,https://shopidea.vercel.app"
+    ALLOWED_ORIGINS          = "http://localhost:3000,https://dev.reelmart.in,https://reelmart.in,https://seller.dev.reelmart.in,https://admin.dev.reelmart.in,https://seller.reelmart.in,https://admin.reelmart.in,https://shopidea.vercel.app"
     PAYMENT_SERVICE_URL      = "${local.base_url}/api/payments"
     NOTIFICATION_SERVICE_URL = "${local.base_url}/api/notifications"
   }
@@ -149,7 +149,7 @@ locals {
       max_capacity  = 1
       extra_secrets = local.msg91_secrets
       extra_env = {
-        AUTH_BRIDGE_ALLOWED_ORIGINS = "http://localhost:3000,https://dev.reelmart.in,https://reelmart.in,https://shopidea.vercel.app"
+        AUTH_BRIDGE_ALLOWED_ORIGINS = "http://localhost:3000,https://dev.reelmart.in,https://reelmart.in,https://seller.dev.reelmart.in,https://admin.dev.reelmart.in,https://seller.reelmart.in,https://admin.reelmart.in,https://shopidea.vercel.app"
         SITE_URL                    = "https://dev.reelmart.in"
       }
     }

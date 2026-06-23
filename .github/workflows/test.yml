@@ -51,7 +51,7 @@ jobs:
           RAZORPAY_KEY_ID: rzp_test_key
           RAZORPAY_KEY_SECRET: test_razorpay_secret_16chr
           RAZORPAY_WEBHOOK_SECRET: test_webhook_secret
-          ALLOWED_ORIGINS: https://dev.reelmart.in
+          ALLOWED_ORIGINS: https://dev.reelmart.in,https://seller.dev.reelmart.in,https://admin.dev.reelmart.in
           INTERNAL_API_KEY: test-internal-key
 
       - name: Upload coverage report
