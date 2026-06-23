@@ -8,12 +8,17 @@ export default defineConfig({
     environment: 'node',
     // Fail loudly — never silence. Any test that errors is a fail.
     bail: 0,
-    // Exclude web-api/ — those tests require next/server and run under
-    // vitest.web-api.config.ts (npm run test:web-api).
+    // Exclude:
+    //  - web-api/ — needs next/server, runs under vitest.web-api.config.ts.
+    //  - e2e/ and ui/ — Playwright specs (.spec.ts); they use @playwright/test
+    //    and must run via `playwright test`, not Vitest. A bare `vitest run`
+    //    would otherwise try to execute them and fail.
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
       'web-api/**',
+      'e2e/**',
+      'ui/**',
     ],
     // Coverage via v8 (fast, no instrumentation needed)
     coverage: {

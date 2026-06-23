@@ -43,7 +43,10 @@ jobs:
           (cd ../reelmart/services/order-service && npm ci || npm install)
           (cd ../reelmart/services/payout-service && npm ci || npm install)
 
-      - name: Run API tests
+      # Bare `vitest run` runs the Node suites: api/** + db/**. web-api/, e2e/
+      # and ui/ are excluded in vitest.config.ts (web-api needs next/server and
+      # runs below; e2e/ui are Playwright specs run via `playwright test`).
+      - name: Run API + DB tests
         run: npx vitest run --reporter=verbose
         env:
           SUPABASE_URL: https://test.supabase.co
@@ -51,6 +54,16 @@ jobs:
           RAZORPAY_KEY_ID: rzp_test_key
           RAZORPAY_KEY_SECRET: test_razorpay_secret_16chr
           RAZORPAY_WEBHOOK_SECRET: test_webhook_secret
+          ALLOWED_ORIGINS: https://dev.reelmart.in,https://seller.dev.reelmart.in,https://admin.dev.reelmart.in
+          INTERNAL_API_KEY: test-internal-key
+
+      # Next.js API route handlers — need the next/server runtime, so a separate
+      # vitest config (jsdom-free node env with next mocks).
+      - name: Run web-api route tests
+        run: npx vitest run --config vitest.web-api.config.ts --reporter=verbose
+        env:
+          SUPABASE_URL: https://test.supabase.co
+          SUPABASE_SERVICE_KEY: test-service-key
           ALLOWED_ORIGINS: https://dev.reelmart.in,https://seller.dev.reelmart.in,https://admin.dev.reelmart.in
           INTERNAL_API_KEY: test-internal-key
 
@@ -89,35 +102,41 @@ jobs:
         working-directory: reelmart/services/${{ matrix.service }}
         run: npm ci || npm install && npm run build
 
-  # ── E2E / UI (placeholder — see work-breakdown) ────────────────────────────
-  # NOTE: Playwright e2e and k6 perf tests are not yet implemented.
-  # They slot in as additional jobs here once the specialists build them.
-  # Uncomment when ready:
-  #
-  # e2e-tests:
-  #   name: E2E (Playwright)
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '20'
-  #     - run: npm ci
-  #       working-directory: tests
-  #     - run: npx playwright install --with-deps
-  #     - run: npx playwright test tests/e2e
-  #       working-directory: tests
-  #       env:
-  #         BASE_URL: https://dev.reelmart.in
-  #         TEST_PHONE: '9999999999'
-  #         TEST_OTP: '123456'
+  # ── Mobile (buyer-app) unit/component tests — Jest + jest-expo ──────────────
+  mobile-tests:
+    name: Mobile buyer-app (Jest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reelmart/apps/buyer-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # The app pins exact RN/React versions; react-test-renderer peer ranges
+      # conflict otherwise, so install with --legacy-peer-deps (same constraint
+      # the app already lives with).
+      - name: Install buyer-app deps
+        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+      - name: Run Jest
+        run: npx jest --ci
+
+  # ── E2E / UI (Playwright) + perf (k6) — intentionally NOT in the blocking gate ─
+  # The Playwright e2e/ui specs (tests/e2e, tests/ui) run against the LIVE dev
+  # site, which is scaled to zero overnight (22:00–08:00 IST) for cost — so
+  # gating every push on them would produce false failures. Run them manually:
+  #   cd tests && npx playwright test e2e ui
+  # (webkit needs `npx playwright install webkit`). k6 perf likewise runs on
+  # demand, not per-push. Wire as a scheduled/manual workflow when the dev site
+  # has guaranteed uptime.
 
   # ── Summary gate ────────────────────────────────────────────────────────────
   # Add this job as the required check on the branch protection rule so a single
   # job name covers both the matrix and the api tests.
   all-tests-pass:
     name: All tests pass
-    needs: [api-tests, typecheck-services]
+    needs: [api-tests, typecheck-services, mobile-tests]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -129,6 +148,10 @@ jobs:
           fi
           if [ "${{ needs.typecheck-services.result }}" != "success" ]; then
             echo "typecheck-services failed"
+            exit 1
+          fi
+          if [ "${{ needs.mobile-tests.result }}" != "success" ]; then
+            echo "mobile-tests failed"
             exit 1
           fi
           echo "All checks passed"
