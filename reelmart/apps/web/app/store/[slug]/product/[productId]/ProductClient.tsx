@@ -137,6 +137,7 @@ export default function ProductClient({ product, storeSlug }: { product: Product
         <button
           onClick={addToCart}
           disabled={outOfStock}
+          data-testid="add-to-cart"
           className="flex-1 bg-[#FF6B2B] text-white py-3 px-6 rounded-full font-bold text-sm hover:bg-[#e55a1f] disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
         >
           <ShoppingBag size={16} /> Add to Cart · ₹{product.price}
@@ -145,12 +146,12 @@ export default function ProductClient({ product, storeSlug }: { product: Product
     }
     return (
       <>
-        <div className="flex items-center gap-2 bg-gray-100 rounded-full px-1 py-1">
-          <button onClick={decrement} className="w-9 h-9 rounded-full bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]">
+        <div className="flex items-center gap-2 bg-gray-100 rounded-full px-1 py-1" data-testid="qty-control">
+          <button onClick={decrement} aria-label="Decrease quantity" data-testid="qty-minus" className="w-9 h-9 rounded-full bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]">
             <Minus size={14} />
           </button>
-          <span className="text-sm font-bold w-6 text-center">{qty}</span>
-          <button onClick={addToCart} className="w-9 h-9 rounded-full bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]">
+          <span className="text-sm font-bold w-6 text-center" data-testid="qty-value">{qty}</span>
+          <button onClick={addToCart} aria-label="Increase quantity" data-testid="qty-plus" className="w-9 h-9 rounded-full bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]">
             <Plus size={14} />
           </button>
         </div>

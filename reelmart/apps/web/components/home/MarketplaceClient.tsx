@@ -149,6 +149,7 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
+      data-testid="category-pill"
       className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition ${
         active ? 'bg-primary text-white border-primary' : 'bg-white text-secondary border-border hover:border-primary/50 hover:text-primary'
       }`}
@@ -176,6 +177,7 @@ function SellerCard({ s }: { s: MSeller }) {
   return (
     <Link
       href={`/store/${s.store_slug}`}
+      data-testid="seller-card"
       className="bg-white rounded-card border border-border p-4 flex items-center gap-3 hover:shadow-hover hover:-translate-y-0.5 transition"
     >
       {s.logo_url ? (
@@ -197,7 +199,7 @@ function SellerCard({ s }: { s: MSeller }) {
 
 function ProductGridCard({ p }: { p: MProduct }) {
   return (
-    <div className="bg-white rounded-2xl border border-border overflow-hidden flex flex-col hover:shadow-hover transition">
+    <div data-testid="product-card" className="bg-white rounded-2xl border border-border overflow-hidden flex flex-col hover:shadow-hover transition">
       <Link href={`/store/${p.store_slug}/product/${p.id}`} className="block aspect-square bg-surface overflow-hidden">
         {p.image
           ? <img src={p.image} alt={p.name} className="w-full h-full object-cover" />

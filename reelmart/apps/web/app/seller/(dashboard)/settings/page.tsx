@@ -421,25 +421,25 @@ export default function SettingsPage() {
         <div className="bg-white rounded-xl p-5 shadow-sm space-y-4">
           <h2 className="font-semibold text-[#1A1A1A]">Store Information</h2>
           <div>
-            <label className="block text-sm font-medium mb-1">Store Name</label>
-            <input {...register('store_name')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" />
+            <label htmlFor="store-name" className="block text-sm font-medium mb-1">Store Name</label>
+            <input id="store-name" {...register('store_name')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Store URL</label>
+            <label htmlFor="store-slug" className="block text-sm font-medium mb-1">Store URL</label>
             <div className="flex items-center border border-[#EEEEEE] rounded-lg overflow-hidden focus-within:border-[#FF6B2B]">
               <span className="px-3 text-sm text-[#AAAAAA] bg-[#F9F9F9] border-r border-[#EEEEEE] py-2">{SITE_HOST}/store/</span>
-              <input {...register('store_slug')} className="flex-1 px-3 py-2 text-sm outline-none" />
+              <input id="store-slug" {...register('store_slug')} className="flex-1 px-3 py-2 text-sm outline-none" />
             </div>
             {slugAvailable === true && <p className="text-xs text-[#25D366] mt-1">Available</p>}
             {slugAvailable === false && <p className="text-xs text-[#E23744] mt-1">Already taken</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
-            <textarea {...register('description')} rows={3} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] resize-none" />
+            <label htmlFor="store-description" className="block text-sm font-medium mb-1">Description</label>
+            <textarea id="store-description" {...register('description')} rows={3} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] resize-none" />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Business Type *</label>
-            <select {...register('category')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] bg-white">
+            <label htmlFor="store-category" className="block text-sm font-medium mb-1">Business Type *</label>
+            <select id="store-category" {...register('category')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] bg-white">
               <option value="">Select your business type</option>
               {BUSINESS_TYPES.map(t => (
                 <option key={t} value={t}>{t}</option>
@@ -449,12 +449,12 @@ export default function SettingsPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">WhatsApp Number</label>
-              <input {...register('whatsapp_number')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="+91XXXXXXXXXX" />
+              <label htmlFor="store-whatsapp" className="block text-sm font-medium mb-1">WhatsApp Number</label>
+              <input id="store-whatsapp" {...register('whatsapp_number')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="+91XXXXXXXXXX" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Instagram Handle</label>
-              <input {...register('instagram_handle')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="@yourhandle" />
+              <label htmlFor="store-instagram" className="block text-sm font-medium mb-1">Instagram Handle</label>
+              <input id="store-instagram" {...register('instagram_handle')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" placeholder="@yourhandle" />
             </div>
           </div>
         </div>
@@ -467,15 +467,16 @@ export default function SettingsPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">PAN Number</label>
-              <input {...register('pan_number')} maxLength={10} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] uppercase tracking-wider" placeholder="ABCDE1234F" />
+              <label htmlFor="kyc-pan" className="block text-sm font-medium mb-1">PAN Number</label>
+              <input id="kyc-pan" {...register('pan_number')} maxLength={10} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] uppercase tracking-wider" placeholder="ABCDE1234F" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label htmlFor="kyc-gst" className="block text-sm font-medium mb-1">
                 GST Number{' '}
                 <span className="text-[#AAAAAA] font-normal">(optional)</span>
               </label>
               <input
+                id="kyc-gst"
                 {...register('gst_number')}
                 maxLength={15}
                 className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] uppercase tracking-wider"

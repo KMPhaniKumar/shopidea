@@ -276,7 +276,7 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
                 ? Math.round((1 - p.price / p.compare_price) * 100)
                 : 0
               return (
-                <div key={p.id} className="group bg-white rounded-2xl border border-gray-100 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition">
+                <div key={p.id} data-testid="product-card" className="group bg-white rounded-2xl border border-gray-100 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition">
                   <Link href={`/store/${storeSlug}/product/${p.id}`} className="block aspect-square bg-gray-50 relative overflow-hidden">
                     {p.images?.[0] ? (
                       <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
@@ -309,17 +309,19 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
                       ) : qty === 0 ? (
                         <button
                           onClick={() => addToCart(p)}
+                          data-testid="add-to-cart"
+                          aria-label={`Add ${p.name} to cart`}
                           className="w-full bg-[#FF6B2B] text-white text-sm font-bold py-2 rounded-lg hover:bg-[#e55a1f] active:scale-[0.98] transition flex items-center justify-center gap-1.5"
                         >
                           <Plus size={15} /> Add
                         </button>
                       ) : (
-                        <div className="flex items-center justify-between bg-orange-50 rounded-lg p-1">
-                          <button onClick={() => decrement(p.id)} className="w-8 h-8 rounded-md bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]">
+                        <div className="flex items-center justify-between bg-orange-50 rounded-lg p-1" data-testid="qty-control">
+                          <button onClick={() => decrement(p.id)} aria-label="Decrease quantity" data-testid="qty-minus" className="w-8 h-8 rounded-md bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]">
                             <Minus size={14} />
                           </button>
-                          <span className="text-sm font-bold text-[#1A1A1A]">{qty}</span>
-                          <button onClick={() => addToCart(p)} className="w-8 h-8 rounded-md bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]">
+                          <span className="text-sm font-bold text-[#1A1A1A]" data-testid="qty-value">{qty}</span>
+                          <button onClick={() => addToCart(p)} aria-label="Increase quantity" data-testid="qty-plus" className="w-8 h-8 rounded-md bg-[#FF6B2B] text-white flex items-center justify-center hover:bg-[#e55a1f]">
                             <Plus size={14} />
                           </button>
                         </div>
@@ -335,11 +337,11 @@ export default function StoreClient({ store, products, storeSlug }: Props) {
 
       {/* Sticky cart footer */}
       {count > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl">
+        <div data-testid="cart-footer" className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs text-gray-500">{count} item{count !== 1 ? 's' : ''} in cart</p>
-              <p className="text-lg font-black text-[#1A1A1A]">₹{subtotal}</p>
+              <p data-testid="cart-total" className="text-lg font-black text-[#1A1A1A]">₹{subtotal}</p>
             </div>
             <button
               onClick={goToCheckout}

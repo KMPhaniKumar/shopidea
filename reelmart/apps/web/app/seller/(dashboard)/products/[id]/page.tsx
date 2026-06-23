@@ -183,22 +183,22 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
           <h2 className="font-semibold text-[#1A1A1A]">Product Details</h2>
           <div>
             <label className="block text-sm font-medium mb-1">Name *</label>
-            <input {...register('name')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" />
+            <input {...register('name')} placeholder="e.g. Chocolate Truffle Cake" className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" />
             {errors.name && <p className="text-xs text-[#E23744] mt-1">{errors.name.message}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Description</label>
-            <textarea {...register('description')} rows={3} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] resize-none" />
+            <textarea {...register('description')} rows={3} placeholder="Describe your product..." className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] resize-none" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Price (₹) *</label>
-              <input {...register('price')} type="number" step="0.01" className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" />
+              <input {...register('price')} type="number" step="0.01" placeholder="499" className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" />
               {errors.price && <p className="text-xs text-[#E23744] mt-1">{errors.price.message}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Compare Price (₹)</label>
-              <input {...register('compare_price')} type="number" step="0.01" className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" />
+              <input {...register('compare_price')} type="number" step="0.01" placeholder="599 (optional)" className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B]" />
             </div>
           </div>
           <div>
@@ -215,8 +215,8 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
             <p className="text-xs text-[#AAAAAA] mt-1">Used to pick the cheapest courier and print the shipping label.</p>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Category</label>
-            <select {...register('category')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] bg-white">
+            <label htmlFor="product-category" className="block text-sm font-medium mb-1">Category</label>
+            <select id="product-category" {...register('category')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] bg-white">
               <option value="">Select category</option>
               {productCategories.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>

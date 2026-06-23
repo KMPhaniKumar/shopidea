@@ -128,7 +128,7 @@ export default function NewProductPage() {
 
       {/* Gate notice — shown until store is verified */}
       {!featuresUnlocked && (
-        <div className="flex items-start gap-3 bg-orange-50 border border-[#FF6B2B]/20 rounded-xl px-4 py-4 mb-6">
+        <div data-testid="verification-locked-notice" className="flex items-start gap-3 bg-orange-50 border border-[#FF6B2B]/20 rounded-xl px-4 py-4 mb-6">
           <Lock size={18} className="text-[#FF6B2B] mt-0.5 shrink-0" />
           <div>
             <p className="text-sm font-semibold text-[#FF6B2B] mb-0.5">Store not yet approved</p>
@@ -216,8 +216,8 @@ export default function NewProductPage() {
             <p className="text-xs text-[#AAAAAA] mt-1">Used to pick the cheapest courier and print the shipping label.</p>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Category</label>
-            <select {...register('category')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] bg-white">
+            <label htmlFor="product-category" className="block text-sm font-medium mb-1">Category</label>
+            <select id="product-category" {...register('category')} className="w-full border border-[#EEEEEE] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#FF6B2B] bg-white">
               <option value="">Select category</option>
               {productCategories.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>

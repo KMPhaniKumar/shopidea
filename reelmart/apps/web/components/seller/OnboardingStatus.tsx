@@ -324,7 +324,7 @@ function OnboardingContent({
 
       {/* Locked-features notice at bottom when not unlocked */}
       {!v.features_unlocked && (
-        <div className="mx-5 mb-5 mt-4 bg-orange-50 border border-primary/20 rounded-card px-4 py-3">
+        <div data-testid="verification-locked-notice" className="mx-5 mb-5 mt-4 bg-orange-50 border border-primary/20 rounded-card px-4 py-3">
           <p className="text-xs font-semibold text-primary mb-0.5">Selling features locked</p>
           <p className="text-xs text-secondary leading-relaxed">
             Adding products unlocks once your store is reviewed and admin approval is complete.
