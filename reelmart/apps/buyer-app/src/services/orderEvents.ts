@@ -175,7 +175,11 @@ export function formatIndianDateTime(iso: string): string {
 export function formatIndianDate(iso: string): string {
   try {
     const [y, m, d] = iso.split('-').map(Number)
-    return new Date(y, m - 1, d).toLocaleDateString('en-IN', {
+    // Guard against NaN values produced by malformed or non-date strings
+    if (isNaN(y) || isNaN(m) || isNaN(d)) return iso
+    const date = new Date(y, m - 1, d)
+    if (isNaN(date.getTime())) return iso
+    return date.toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',

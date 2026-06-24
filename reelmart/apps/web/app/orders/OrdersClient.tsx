@@ -217,6 +217,7 @@ export default function OrdersClient() {
           <Link
             key={order.id}
             href={`/order/${order.id}`}
+            data-testid="order-card"
             className="block bg-white rounded-2xl border border-gray-200 p-4 hover:border-gray-300 transition"
           >
             <div className="flex items-start gap-3">

@@ -95,7 +95,7 @@ export default function CustomersPage() {
           </thead>
           <tbody>
             {filtered.map(c => (
-              <tr key={c.buyer_id} className="border-b border-[#EEEEEE] hover:bg-[#F9F9F9]">
+              <tr key={c.buyer_id} data-testid="customer-row" className="border-b border-[#EEEEEE] hover:bg-[#F9F9F9]">
                 <td className="px-4 py-3 text-sm font-medium">{c.name}</td>
                 <td className="px-4 py-3 text-sm text-[#666666] font-mono">{maskPhone(c.phone)}</td>
                 <td className="px-4 py-3 text-sm">{c.totalOrders}</td>
@@ -103,6 +103,7 @@ export default function CustomersPage() {
                 <td className="px-4 py-3 text-sm text-[#666666]">{format(new Date(c.lastOrder), 'dd/MM/yyyy')}</td>
                 <td className="px-4 py-3">
                   <a href={`https://wa.me/${c.phone?.replace(/\D/g, '')}`} target="_blank" rel="noreferrer"
+                    data-testid="customer-wa-link"
                     className="p-1.5 hover:bg-[#EEEEEE] rounded inline-block">
                     <MessageCircle size={14} className="text-[#25D366]" />
                   </a>

@@ -82,8 +82,11 @@ export async function getSavedAddresses(): Promise<SavedAddress[]> {
 export async function saveAddress(addr: Omit<SavedAddress, 'id' | 'usedAt'>): Promise<SavedAddress> {
   const userId = await getCurrentUserId()
   if (!userId) {
-    // Guest path: write to AsyncStorage with generated id
-    const local: SavedAddress = { ...addr, id: Date.now().toString(), usedAt: Date.now() }
+    // Guest path: write to AsyncStorage with generated id.
+    // Append a short random suffix so two adds within the same millisecond
+    // produce distinct ids and removeAddress(id) only removes one entry.
+    const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const local: SavedAddress = { ...addr, id: uniqueId, usedAt: Date.now() }
     const list = await getSavedAddresses()
     const filtered = list.filter(a => !(a.line1 === addr.line1 && a.pincode === addr.pincode))
     const updated = [local, ...filtered].slice(0, 5)

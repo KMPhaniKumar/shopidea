@@ -24,3 +24,8 @@ export function setSession(phone: string, session: BotSession) {
 export function clearSession(phone: string) {
   sessions.delete(phone)
 }
+
+/** Test-support only: remove all sessions. Does not affect production paths. */
+export function resetAllSessions() {
+  sessions.clear()
+}

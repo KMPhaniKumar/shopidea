@@ -72,7 +72,7 @@ export default async function TrackPage({ params }: Props) {
 
   if (!order) {
     return (
-      <main className="min-h-screen bg-[#F9F9F9] flex flex-col items-center justify-center px-6 text-center">
+      <main data-testid="track-not-found" className="min-h-screen bg-[#F9F9F9] flex flex-col items-center justify-center px-6 text-center">
         <AlertCircle size={44} className="text-orange-500 mb-3" />
         <h1 className="text-xl font-black text-[#1A1A1A] mb-1">Tracking number not found</h1>
         <p className="text-sm text-gray-500 max-w-sm">
@@ -103,7 +103,7 @@ export default async function TrackPage({ params }: Props) {
 
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-3 pb-12">
         {/* Order summary card */}
-        <section className="bg-white rounded-2xl border border-gray-200 p-5">
+        <section data-testid="track-order-summary" className="bg-white rounded-2xl border border-gray-200 p-5">
           <div className="flex items-center gap-3 pb-3 border-b border-gray-100 mb-3">
             {order.stores?.logo_url ? (
               <img src={order.stores.logo_url} alt="" className="w-10 h-10 rounded-xl object-cover" />
@@ -144,7 +144,7 @@ export default async function TrackPage({ params }: Props) {
 
         {/* Courier scan data (NimbusPost) */}
         {!trackingFailed && (
-          <section className="bg-white rounded-2xl border border-gray-200 p-5">
+          <section data-testid="track-courier-scans" className="bg-white rounded-2xl border border-gray-200 p-5">
             <h2 className="font-bold text-[#1A1A1A] mb-4 text-sm">Courier scans</h2>
             {trackingFailed && (
               <p className="text-xs text-orange-600 bg-orange-50 border border-orange-100 rounded-lg p-2 mb-4">

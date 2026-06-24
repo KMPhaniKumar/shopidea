@@ -147,7 +147,7 @@ export default function MarketingPage() {
             <h2 className="font-semibold text-[#1A1A1A]">Share Your Store</h2>
           </div>
           <div className="flex items-center gap-2 bg-[#F9F9F9] rounded-lg p-3">
-            <code className="text-sm text-[#FF6B2B] flex-1 truncate">{SITE_HOST}/store/{store.store_slug}</code>
+            <code data-testid="marketing-store-url" className="text-sm text-[#FF6B2B] flex-1 truncate">{SITE_HOST}/store/{store.store_slug}</code>
             <button onClick={copyLink} className="p-1.5 hover:bg-[#EEEEEE] rounded shrink-0" title="Copy link">
               <Copy size={14} className="text-[#666666]" />
             </button>
@@ -157,7 +157,7 @@ export default function MarketingPage() {
             </a>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={downloadQR} className="flex items-center gap-2 px-3 py-2 border border-[#EEEEEE] rounded-lg text-sm hover:bg-[#F9F9F9]">
+            <button onClick={downloadQR} data-testid="marketing-qr-download" className="flex items-center gap-2 px-3 py-2 border border-[#EEEEEE] rounded-lg text-sm hover:bg-[#F9F9F9]">
               📷 Download QR Code
             </button>
             <a
@@ -226,7 +226,7 @@ export default function MarketingPage() {
               </thead>
               <tbody>
                 {coupons.map(c => (
-                  <tr key={c.id} className="border-b border-[#EEEEEE]">
+                  <tr key={c.id} data-testid="coupon-row" className="border-b border-[#EEEEEE]">
                     <td className="py-2 pr-3 text-sm font-mono font-bold text-[#FF6B2B]">{c.code}</td>
                     <td className="py-2 pr-3 text-sm">{c.discount_type === 'percentage' ? `${c.discount_value}%` : `₹${c.discount_value}`} off</td>
                     <td className="py-2 pr-3 text-sm">{c.min_order_amount > 0 ? `₹${c.min_order_amount}` : '—'}</td>

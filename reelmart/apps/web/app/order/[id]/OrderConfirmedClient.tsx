@@ -165,6 +165,7 @@ export default function OrderConfirmedClient({ orderId }: { orderId: string }) {
         {order.awb_code && (
           <Link
             href={`/track/${order.awb_code}`}
+            data-testid="track-shipment-link"
             className="w-full bg-white text-[#FF6B2B] border border-[#FF6B2B] py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-orange-50"
           >
             <Package size={16} /> Courier tracking →
