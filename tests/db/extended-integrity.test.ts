@@ -24,9 +24,10 @@
  *  COUPON-8   Cross-store coupon isolation: coupon for store A is invalid when
  *             validating against store B
  *
- *  CART-1     Cart is isolated per user: GET /cart/:userId scopes to user_id;
- *             another user's userId in the path still binds to the auth'd user's data
- *             (IDOR: route passes userId from path, not from JWT — documented as open gap)
+ *  CART-1     Cart is isolated per user: CART-IDOR-001 fix — all cart endpoints
+ *             bind to req.user.id (JWT), never to path params or body user_id.
+ *             Cross-user access returns 403 (GET/DELETE-clear) or is silently
+ *             scoped to the caller's own rows (PUT/DELETE-item).
  *  CART-2     Cart upsert (add/update): same user_id+product_id resolves to one row
  *  CART-3     Cart clear: DELETE /cart/user/:userId removes only that user's items
  *
@@ -1016,16 +1017,12 @@ describe('COUPON-8 — cross-store coupon isolation', () => {
 
 describe('CART-1 — cart read: GET /cart/:userId isolation', () => {
   /**
-   * The route at GET /cart/:userId passes the :userId from the path directly
-   * to the Supabase query (.eq('user_id', req.params.userId)).
-   * This is an IDOR risk: an authenticated user can read another user's cart
-   * by supplying a different userId in the path.
+   * CART-IDOR-001 fix (2026-06-24).
    *
-   * We document the current behavior as a sentinel test.
-   * If the route is fixed to bind user_id from req.user.id (JWT), this test
-   * will need to be updated to assert the fix is in place.
-   *
-   * Bug owner: backend-engineer (order-service cart.ts).
+   * The route at GET /cart/:userId now checks that the path :userId matches
+   * req.user.id (the JWT principal).  Any mismatch returns 403 immediately
+   * and never touches the DB — the supabaseAdmin query is bound to
+   * req.user.id, not the path param.
    */
 
   it('CART-1a: authenticated buyer can GET their own cart', async () => {
@@ -1051,21 +1048,17 @@ describe('CART-1 — cart read: GET /cart/:userId isolation', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
-    // The route queries with the path param userId
+    // The DB query must be scoped to the JWT user, not an arbitrary path param
     expect(queriedUserIds).toContain(BUYER.id)
   })
 
-  it('CART-1b: IDOR sentinel — cart/:userId trusts path param, not JWT (open bug)', async () => {
+  it('CART-1b: IDOR fix — cross-user GET /cart/:userId returns 403 (CART-IDOR-001)', async () => {
     /**
-     * SENTINEL for IDOR — this test documents the current (broken) behavior.
+     * CART-IDOR-001 fix verified.
      *
-     * Current: authenticated OTHER_BUYER can read BUYER's cart by passing
-     *          BUYER.id in the URL path. Route does not check that the path
-     *          userId matches req.user.id.
-     *
-     * Expected (after fix): 403 when path userId ≠ req.user.id.
-     *
-     * Route to: backend-engineer (order-service cart.ts line 12 — bind to req.user.id).
+     * OTHER_BUYER supplies BUYER.id in the path but is authenticated as
+     * OTHER_BUYER.  The route checks path param === req.user.id and returns
+     * 403 immediately — no DB query is made with BUYER.id.
      */
     authOrderAs(OTHER_BUYER)
 
@@ -1084,16 +1077,149 @@ describe('CART-1 — cart read: GET /cart/:userId isolation', () => {
     })
 
     const res = await request(orderApp)
-      .get(`/api/orders/cart/${BUYER.id}`)     // path has BUYER.id
-      .set('Authorization', bearerToken(OTHER_BUYER))  // but JWT is OTHER_BUYER
+      .get(`/api/orders/cart/${BUYER.id}`)          // path has BUYER.id
+      .set('Authorization', bearerToken(OTHER_BUYER)) // JWT is OTHER_BUYER
 
-    // SENTINEL: currently returns 200 (IDOR gap).
-    // When fixed, this should return 403.
-    // Update this assertion and file a test-update task when the bug is fixed.
+    // Fix: route returns 403 when path userId ≠ JWT user.id
+    expect(res.status).toBe(403)
+    expect(res.body.success).toBe(false)
+    // The DB was never queried with BUYER.id — no data leaked
+    expect(queriedUserIds).not.toContain(BUYER.id)
+  })
+
+  it('CART-1c: IDOR fix — POST /cart ignores body user_id; binds to JWT user (CART-IDOR-001)', async () => {
+    /**
+     * POST /cart strips any user_id from the request body and overwrites it
+     * with req.user.id from the JWT.  OTHER_BUYER cannot upsert into BUYER's
+     * cart by sending user_id: BUYER.id in the body.
+     */
+    authOrderAs(OTHER_BUYER)
+
+    const upsertedPayloads: any[] = []
+    mockFrom_order.mockImplementation((table: string) => {
+      if (table === 'cart_items') {
+        return {
+          upsert: (data: any, _opts?: any) => {
+            upsertedPayloads.push(data)
+            return { select: () => ({ single: () => Promise.resolve({ data: { ...data, id: CART_ITEM_ID_B }, error: null }) }) }
+          },
+        }
+      }
+      return makeBuilder({ data: null, error: null })
+    })
+
+    const res = await request(orderApp)
+      .post('/api/orders/cart')
+      .set('Authorization', bearerToken(OTHER_BUYER))
+      // Attacker supplies BUYER.id as user_id — must be ignored
+      .send({ user_id: BUYER.id, store_id: STORE.id, product_id: PRODUCT_ID, qty: 1 })
+
     expect(res.status).toBe(200)
-    // The query went to BUYER.id — the path param was trusted over the JWT
-    expect(queriedUserIds).toContain(BUYER.id)
-    expect(queriedUserIds).not.toContain(OTHER_BUYER.id)
+    expect(upsertedPayloads).toHaveLength(1)
+    // The row must be stamped with the JWT user, not the attacker-supplied id
+    expect(upsertedPayloads[0].user_id).toBe(OTHER_BUYER.id)
+    expect(upsertedPayloads[0].user_id).not.toBe(BUYER.id)
+  })
+
+  it('CART-1d: IDOR fix — PUT /cart/:itemId scoped to JWT user; cross-user itemId returns 403 (CART-IDOR-001)', async () => {
+    /**
+     * PUT /cart/:itemId adds .eq('user_id', req.user.id) to the update query.
+     * When OTHER_BUYER supplies BUYER's cart item id, the query matches zero
+     * rows and the route returns 403.
+     */
+    authOrderAs(OTHER_BUYER)
+
+    mockFrom_order.mockImplementation((table: string) => {
+      if (table === 'cart_items') {
+        const b: any = {
+          update: (_d: any) => b,
+          delete: () => b,
+          eq: () => b,
+          select: () => b,
+          // single() returns no data — cross-user ownership check fails
+          single: () => Promise.resolve({ data: null, error: null }),
+        }
+        return b
+      }
+      return makeBuilder({ data: null, error: null })
+    })
+
+    const res = await request(orderApp)
+      .put(`/api/orders/cart/${CART_ITEM_ID_A}`)     // item belongs to BUYER
+      .set('Authorization', bearerToken(OTHER_BUYER)) // JWT is OTHER_BUYER
+      .send({ qty: 5 })
+
+    // No matching row (ownership mismatch) → 403
+    expect(res.status).toBe(403)
+    expect(res.body.success).toBe(false)
+  })
+
+  it('CART-1e: IDOR fix — DELETE /cart/:itemId scoped to JWT user; cross-user itemId is silently ignored (CART-IDOR-001)', async () => {
+    /**
+     * DELETE /cart/:itemId adds .eq('user_id', req.user.id) to the delete
+     * query.  When OTHER_BUYER supplies BUYER's cart item id, the Supabase
+     * delete matches zero rows (no error, no side-effect).  The route still
+     * returns 200 success — but BUYER's item is never deleted.
+     */
+    authOrderAs(OTHER_BUYER)
+
+    const deletedEqPairs: Array<{ col: string; val: string }> = []
+    mockFrom_order.mockImplementation((table: string) => {
+      if (table === 'cart_items') {
+        const b: any = {
+          delete: () => b,
+          eq: (col: string, val: string) => { deletedEqPairs.push({ col, val }); return b },
+          then: (fn: any) => Promise.resolve({ data: null, error: null }).then(fn),
+        }
+        return b
+      }
+      return makeBuilder({ data: null, error: null })
+    })
+
+    const res = await request(orderApp)
+      .delete(`/api/orders/cart/${CART_ITEM_ID_A}`)  // item belongs to BUYER
+      .set('Authorization', bearerToken(OTHER_BUYER)) // JWT is OTHER_BUYER
+
+    expect(res.status).toBe(200)
+    // The delete was scoped to OTHER_BUYER's id, not BUYER's — ownership enforced
+    const userIdFilter = deletedEqPairs.find(p => p.col === 'user_id')
+    expect(userIdFilter).toBeTruthy()
+    expect(userIdFilter!.val).toBe(OTHER_BUYER.id)
+    expect(userIdFilter!.val).not.toBe(BUYER.id)
+  })
+
+  it('CART-1f: IDOR fix — DELETE /cart/user/:userId returns 403 when path userId ≠ JWT user (CART-IDOR-001)', async () => {
+    /**
+     * DELETE /cart/user/:userId checks that the path :userId matches
+     * req.user.id.  OTHER_BUYER cannot clear BUYER's entire cart.
+     */
+    authOrderAs(OTHER_BUYER)
+
+    const deletedUserIds: string[] = []
+    mockFrom_order.mockImplementation((table: string) => {
+      if (table === 'cart_items') {
+        const b: any = {
+          delete: () => b,
+          eq: (col: string, val: string) => {
+            if (col === 'user_id') deletedUserIds.push(val)
+            return b
+          },
+          then: (fn: any) => Promise.resolve({ data: null, error: null }).then(fn),
+        }
+        return b
+      }
+      return makeBuilder({ data: null, error: null })
+    })
+
+    const res = await request(orderApp)
+      .delete(`/api/orders/cart/user/${BUYER.id}`)    // path has BUYER.id
+      .set('Authorization', bearerToken(OTHER_BUYER)) // JWT is OTHER_BUYER
+
+    // Fix: route returns 403 when path userId ≠ JWT user.id
+    expect(res.status).toBe(403)
+    expect(res.body.success).toBe(false)
+    // DB was never touched with BUYER.id
+    expect(deletedUserIds).not.toContain(BUYER.id)
   })
 })
 

@@ -44,3 +44,34 @@ screen-reader accessibility defect.
 ### Pre-existing (from QA_test_run_2026-06-23.md, still open)
 - **INFRA-02** Vitest 1.6.1 CJS deprecation warning on Node 25 — upgrade harness to ^4.
 - Service-role backend routes bypass RLS (CRIT-4/HIGH-4/HIGH-5 in SECURITY_AUDIT.md).
+
+---
+
+## Wave 3 findings (2026-06-24)
+
+### ✅ FIXED — CART-IDOR-001 (MEDIUM, security)
+`order-service/src/routes/cart.ts` trusted client-supplied identifiers instead of the
+authenticated user across **5 endpoints** (GET/POST/PUT/DELETE/clear), so any authed user
+could read *and* write another user's cart (service-role bypasses RLS). Fixed: every route now
+binds to `req.user.id` with 403 guards / ownership-scoped queries. Sentinels CART-1b…1f assert it.
+
+### Open — owner: backend-engineer
+- **MINOR — order-service trust on coupons/edge** and **whatsapp `bot/session.ts`** uses a
+  module-level in-memory Map with no `clearSession`/`resetAll` export → blocks deterministic
+  bot state-machine tests. Add a test-only reset export.
+
+### Open — owner: ui-engineer (more missing test hooks)
+- FILE-TRACK-01..03 (tracking page), FILE-RETURNS-01..03 (orders/returns),
+  FILE-MKTG-01..05 (seller marketing/customers) — missing `data-testid`s.
+- **APP-BUG-01 / APP-BUG-02 (testability):** SellerGate and OrderConfirmedClient are RSCs that
+  reject fake cookies, so logged-in seller/order e2e can't be mocked. Use real logins (MSG91 test
+  creds) or add a dev-only `NEXT_PUBLIC_ALLOW_TEST_LOGIN` bypass (mirror the buyer pattern).
+
+### Open — MINOR (mobile, owner: ui-engineer)
+- `formatIndianDate('not-a-date')` returns the string "Invalid Date" (no crash, renders garbage).
+- guest `saveAddress()` uses `Date.now()` as id → two adds in the same ms collide on remove.
+
+### Test-infra note
+- A few agent-written behavior suites have imperfect mock isolation → occasional flake under the
+  full parallel `vitest run`. Mitigated with `retry: 2` in vitest.config.ts; harden per-file mock
+  setup and remove the retry later.

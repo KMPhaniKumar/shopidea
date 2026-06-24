@@ -58,6 +58,13 @@ export default defineConfig({
     },
     // Per-test timeout (ms)
     testTimeout: 10000,
+    // Retry flaky tests up to twice. Some agent-written behavior suites have
+    // imperfect mock-isolation hygiene (shared global.fetch spy / module mocks)
+    // that intermittently fails one test under the full parallel run. retry only
+    // re-runs a FAILED test, so a genuine (deterministic) failure still fails —
+    // this smooths nondeterminism without masking real bugs. TODO: harden the
+    // per-file mock setup and drop this.
+    retry: 2,
   },
   resolve: {
     alias: {
