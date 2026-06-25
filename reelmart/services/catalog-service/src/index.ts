@@ -5,6 +5,7 @@ import helmet from 'helmet'
 import { storesRouter } from './routes/stores'
 import { productsRouter } from './routes/products'
 import { reviewsRouter } from './routes/reviews'
+import { imagesRouter } from './routes/images'
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -18,6 +19,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'catalog-ser
 app.use('/api/catalog', storesRouter)
 app.use('/api/catalog', productsRouter)
 app.use('/api/catalog', reviewsRouter)
+app.use('/api/catalog', imagesRouter)
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err)
