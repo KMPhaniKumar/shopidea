@@ -1,5 +1,26 @@
 'use client'
-import { useState, useEffect } from 'react'
+/**
+ * New Product page — two-step creation flow (Design Option B):
+ *
+ * Step 1 (draft):  Seller fills the product form and selects images via
+ *                  ProductImageUploader. Because the uploader needs a productId
+ *                  to call the backend image API, we create the product as a
+ *                  draft (is_available = false) the first time an image is
+ *                  dropped. The uploader is disabled until the store loads.
+ *
+ * Step 2 (save):   "Add Product" submit UPDATEs the draft row with all the
+ *                  form fields and sets is_available per the seller's toggle,
+ *                  then navigates to /seller/products. Images are already
+ *                  persisted on the server — no extra step needed.
+ *
+ * If the seller clicks "Add Product" without dropping any images (no draft
+ * was created), a fresh INSERT is made instead.
+ *
+ * Risk R4 (design doc): if the browser closes after the draft is created but
+ * before "Add Product" is submitted, a hidden draft (0 images, is_available=false)
+ * is left in the seller's product list. They can open it to edit/delete.
+ */
+import { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -8,9 +29,10 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { X, Upload, Lock } from 'lucide-react'
+import { Lock } from 'lucide-react'
 import { useSellerVerification } from '@/components/seller/SellerGate'
 import { productCategoriesFor } from '@/lib/businessCategories'
+import ProductImageUploader from '@/components/seller/ProductImageUploader'
 
 const schema = z.object({
   name: z.string().min(2, 'Name required'),
@@ -29,6 +51,104 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
+// ─── Inner component: image section for new-product page ─────────────────────
+//
+// Before a draft product exists: shows a placeholder dropzone. On first file
+// drop, calls onEnsureDraft() to create the product, then switches to rendering
+// the full ProductImageUploader.
+//
+// After draft creation: mounts ProductImageUploader with the real productId.
+
+interface NewProductImageSectionProps {
+  storeId: string
+  featuresUnlocked: boolean
+  draftProductId: string | null
+  onEnsureDraft: () => Promise<string | null>
+}
+
+function NewProductImageSection({
+  storeId,
+  featuresUnlocked,
+  draftProductId,
+  onEnsureDraft,
+}: NewProductImageSectionProps) {
+  const [resolvedProductId, setResolvedProductId] = useState<string | null>(draftProductId)
+  const [creatingDraft, setCreatingDraft] = useState(false)
+
+  // Sync in case parent resolved the draft id via a different code path
+  useEffect(() => {
+    if (draftProductId && !resolvedProductId) {
+      setResolvedProductId(draftProductId)
+    }
+  }, [draftProductId])
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept: {
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png'],
+      'image/webp': ['.webp'],
+    },
+    multiple: true,
+    disabled: !!resolvedProductId || !storeId || !featuresUnlocked || creatingDraft,
+    onDrop: async (files: File[]) => {
+      if (files.length === 0) return
+      setCreatingDraft(true)
+      const pid = await onEnsureDraft()
+      setCreatingDraft(false)
+      if (pid) {
+        setResolvedProductId(pid)
+        // The uploader mounts on the next render with resolvedProductId set.
+        // Inform the seller the product was created; they re-drop or browse.
+        toast('Product created — now add your photos.', { icon: 'ℹ️' })
+      }
+    },
+  })
+
+  if (resolvedProductId) {
+    return (
+      <ProductImageUploader
+        productId={resolvedProductId}
+        initialImages={[]}
+        disabled={!featuresUnlocked}
+      />
+    )
+  }
+
+  // Placeholder dropzone — triggers draft creation
+  return (
+    <div className="space-y-3">
+      <div
+        {...getRootProps()}
+        data-testid="image-dropzone"
+        className={`w-20 h-20 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors ${
+          !storeId || !featuresUnlocked
+            ? 'opacity-40 cursor-not-allowed border-[#EEEEEE]'
+            : isDragActive
+              ? 'border-[#FF6B2B] bg-[#FF6B2B]/5 cursor-copy'
+              : 'border-[#EEEEEE] hover:border-[#FF6B2B] cursor-pointer'
+        }`}
+      >
+        <input {...getInputProps()} />
+        {creatingDraft ? (
+          <div className="w-5 h-5 border-2 border-[#FF6B2B] border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <>
+            <svg className="w-4 h-4 text-[#AAAAAA]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            <span className="text-[10px] text-[#AAAAAA] mt-0.5 text-center leading-tight px-1">Add photo</span>
+          </>
+        )}
+      </div>
+      <p className="text-xs text-[#AAAAAA]">
+        Up to 8 photos · JPG / PNG / HEIC · Clear, well-lit, square works best · First photo is the cover.
+      </p>
+    </div>
+  )
+}
+
+// ─── Main Page Component ──────────────────────────────────────────────────────
+
 export default function NewProductPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -36,11 +156,14 @@ export default function NewProductPage() {
   const featuresUnlocked = verification?.features_unlocked ?? true
   const [storeId, setStoreId] = useState('')
   const [storeCategory, setStoreCategory] = useState('')
-  const [images, setImages] = useState<string[]>([])
-  const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
+  // Draft product id — null until the seller drops their first image
+  const [draftProductId, setDraftProductId] = useState<string | null>(null)
+  // Prevent concurrent draft creation if onEnsureDraft is called twice rapidly
+  const creatingDraft = useRef(false)
+
+  const { register, handleSubmit, watch, getValues, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { track_stock: false, is_available: true, low_stock_threshold: 3 },
   })
@@ -61,37 +184,36 @@ export default function NewProductPage() {
     init()
   }, [])
 
-  async function uploadImage(file: File, sid: string): Promise<string | null> {
-    if (!sid) { toast.error('Store not loaded yet, please wait'); return null }
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-    const path = `${sid}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-    const { error } = await supabase.storage.from('product-images').upload(path, file, {
-      upsert: true,
-      contentType: file.type,
-    })
-    if (error) { toast.error(`Upload failed: ${error.message}`); return null }
-    const { data } = supabase.storage.from('product-images').getPublicUrl(path)
-    return data.publicUrl
-  }
+  /**
+   * Creates a hidden draft product on first image drop so the uploader has a
+   * real productId to call the backend image API against.
+   */
+  async function ensureDraftProduct(): Promise<string | null> {
+    if (draftProductId) return draftProductId
+    if (creatingDraft.current) return null
+    if (!storeId) { toast.error('Store not loaded yet. Please wait.'); return null }
+    if (!featuresUnlocked) { toast.error('Adding products is locked until your store is approved.'); return null }
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp'] },
-    maxFiles: 5,
-    maxSize: 2 * 1024 * 1024,
-    disabled: images.length >= 5 || uploading || !storeId,
-    onDropRejected: (files) => {
-      files.forEach(f => f.errors.forEach(e => toast.error(e.message)))
-    },
-    onDrop: async (files) => {
-      if (!storeId) { toast.error('Store not loaded yet'); return }
-      setUploading(true)
-      const urls = await Promise.all(
-        files.slice(0, 5 - images.length).map(f => uploadImage(f, storeId))
-      )
-      setImages(prev => [...prev, ...(urls.filter(Boolean) as string[])])
-      setUploading(false)
-    },
-  })
+    creatingDraft.current = true
+    const formName = getValues('name')?.trim()
+    const draftName = formName && formName.length >= 2 ? formName : 'Draft product'
+
+    const { data, error } = await supabase.from('products').insert({
+      store_id: storeId,
+      name: draftName,
+      price: getValues('price') || 0,
+      is_available: false,
+      images: [],
+    }).select('id').single()
+    creatingDraft.current = false
+
+    if (error || !data) {
+      toast.error('Could not create product. Please try again.')
+      return null
+    }
+    setDraftProductId(data.id)
+    return data.id
+  }
 
   const productCategories = productCategoriesFor(storeCategory)
 
@@ -102,21 +224,41 @@ export default function NewProductPage() {
     }
     if (!storeId) { toast.error('Store not loaded'); return }
     setSaving(true)
-    const { error } = await supabase.from('products').insert({
-      store_id: storeId,
-      name: data.name,
-      description: data.description,
-      price: data.price,
-      compare_price: data.compare_price || null,
-      category: data.category,
-      weight_grams: data.weight_grams ?? null,
-      stock_type: data.track_stock ? 'counted' : 'unlimited',
-      stock_count: data.track_stock ? (data.stock_quantity ?? 0) : 0,
-      low_stock_threshold: data.low_stock_threshold,
-      is_available: data.is_available,
-      images,
-    })
-    if (error) { toast.error(error.message); setSaving(false); return }
+
+    if (draftProductId) {
+      // Draft exists — UPDATE with final form values
+      const { error } = await supabase.from('products').update({
+        name: data.name,
+        description: data.description,
+        price: data.price,
+        compare_price: data.compare_price || null,
+        category: data.category,
+        weight_grams: data.weight_grams ?? null,
+        stock_type: data.track_stock ? 'counted' : 'unlimited',
+        stock_count: data.track_stock ? (data.stock_quantity ?? 0) : 0,
+        low_stock_threshold: data.low_stock_threshold,
+        is_available: data.is_available,
+      }).eq('id', draftProductId)
+      if (error) { toast.error(error.message); setSaving(false); return }
+    } else {
+      // No images were added — INSERT fresh (no draft, no images)
+      const { error } = await supabase.from('products').insert({
+        store_id: storeId,
+        name: data.name,
+        description: data.description,
+        price: data.price,
+        compare_price: data.compare_price || null,
+        category: data.category,
+        weight_grams: data.weight_grams ?? null,
+        stock_type: data.track_stock ? 'counted' : 'unlimited',
+        stock_count: data.track_stock ? (data.stock_quantity ?? 0) : 0,
+        low_stock_threshold: data.low_stock_threshold,
+        is_available: data.is_available,
+        images: [],
+      })
+      if (error) { toast.error(error.message); setSaving(false); return }
+    }
+
     toast.success('Product added!')
     router.push('/seller/products')
   }
@@ -148,35 +290,12 @@ export default function NewProductPage() {
         {/* Photos */}
         <div className="bg-white rounded-xl p-5 shadow-sm space-y-3">
           <h2 className="font-semibold text-[#1A1A1A]">Product Photos</h2>
-          <div className="flex gap-2 flex-wrap">
-            {images.map((url, i) => (
-              <div key={url} className="relative">
-                <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg border border-[#EEEEEE]" />
-                <button type="button" onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#E23744] text-white rounded-full flex items-center justify-center">
-                  <X size={10} />
-                </button>
-              </div>
-            ))}
-            {images.length < 5 && (
-              <div {...getRootProps()}
-                className={`w-20 h-20 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors text-center ${
-                  !storeId ? 'opacity-50 cursor-not-allowed border-[#EEEEEE]' :
-                  isDragActive ? 'border-[#FF6B2B] bg-[#FF6B2B]/5' : 'border-[#EEEEEE] hover:border-[#FF6B2B]'
-                }`}>
-                <input {...getInputProps()} />
-                {uploading ? (
-                  <div className="w-5 h-5 border-2 border-[#FF6B2B] border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <Upload size={16} className="text-[#AAAAAA]" />
-                    <span className="text-[10px] text-[#AAAAAA] mt-0.5">Add photo</span>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-          <p className="text-xs text-[#AAAAAA]">Max 5 photos, 2MB each. First photo is the cover. JPG/PNG/WebP only.</p>
+          <NewProductImageSection
+            storeId={storeId}
+            featuresUnlocked={featuresUnlocked}
+            draftProductId={draftProductId}
+            onEnsureDraft={ensureDraftProduct}
+          />
         </div>
 
         {/* Details */}

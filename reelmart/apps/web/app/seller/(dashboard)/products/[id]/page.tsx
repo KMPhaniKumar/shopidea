@@ -3,12 +3,12 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useDropzone } from 'react-dropzone'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
-import { X, Upload } from 'lucide-react'
 import { productCategoriesFor } from '@/lib/businessCategories'
+import ProductImageUploader from '@/components/seller/ProductImageUploader'
+import type { ProductImageRecord } from '@/lib/imageApi'
 
 const schema = z.object({
   name: z.string().min(2, 'Name required'),
@@ -30,11 +30,12 @@ type FormData = z.infer<typeof schema>
 export default function EditProductPage({ params }: { params: { id: string } }) {
   const supabase = createClient()
   const router = useRouter()
-  const [storeId, setStoreId] = useState('')
   const [storeCategory, setStoreCategory] = useState('')
-  const [images, setImages] = useState<string[]>([])
-  const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
+  // product_images rows fetched from Supabase (new pipeline)
+  const [productImages, setProductImages] = useState<ProductImageRecord[]>([])
+  // loading guard — don't render the uploader until we've attempted to load images
+  const [imagesLoaded, setImagesLoaded] = useState(false)
 
   const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -50,8 +51,8 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
         : supabase.from('stores').select('id, category').limit(1).single()
       const { data: store } = await storeQuery
       if (!store) return
-      setStoreId(store.id)
       setStoreCategory(store.category ?? '')
+
       const { data: product } = await supabase.from('products').select('*').eq('id', params.id).single()
       if (product) {
         reset({
@@ -66,48 +67,27 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
           low_stock_threshold: product.low_stock_threshold ?? 3,
           is_available: product.is_available,
         })
-        setImages(product.images ?? [])
       }
+
+      // Fetch product_images rows (new pipeline). Falls back gracefully if the
+      // table doesn't exist yet (before migration 042 is applied) — the uploader
+      // will show empty and the seller can start fresh.
+      const { data: imgRows } = await supabase
+        .from('product_images')
+        .select('id, thumb_url, medium_url, full_url, position, width, height')
+        .eq('product_id', params.id)
+        .order('position', { ascending: true })
+      setProductImages((imgRows as ProductImageRecord[]) ?? [])
+      setImagesLoaded(true)
     }
     init()
   }, [])
-
-  async function uploadImage(file: File, sid: string): Promise<string | null> {
-    if (!sid) { toast.error('Store not loaded yet'); return null }
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-    const path = `${sid}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-    const { error } = await supabase.storage.from('product-images').upload(path, file, {
-      upsert: true,
-      contentType: file.type,
-    })
-    if (error) { toast.error(`Upload failed: ${error.message}`); return null }
-    const { data } = supabase.storage.from('product-images').getPublicUrl(path)
-    return data.publicUrl
-  }
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp'] },
-    maxFiles: 5,
-    maxSize: 2 * 1024 * 1024,
-    disabled: images.length >= 5 || uploading || !storeId,
-    onDropRejected: (files) => {
-      files.forEach(f => f.errors.forEach(e => toast.error(e.message)))
-    },
-    onDrop: async (files) => {
-      if (!storeId) { toast.error('Store not loaded yet'); return }
-      setUploading(true)
-      const urls = await Promise.all(
-        files.slice(0, 5 - images.length).map(f => uploadImage(f, storeId))
-      )
-      setImages(prev => [...prev, ...(urls.filter(Boolean) as string[])])
-      setUploading(false)
-    },
-  })
 
   const productCategories = productCategoriesFor(storeCategory)
 
   async function onSubmit(data: FormData) {
     setSaving(true)
+    // Images are already persisted server-side via the uploader — no image field needed here.
     const { error } = await supabase.from('products').update({
       name: data.name,
       description: data.description,
@@ -119,7 +99,6 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
       stock_count: data.track_stock ? (data.stock_quantity ?? 0) : 0,
       low_stock_threshold: data.low_stock_threshold,
       is_available: data.is_available,
-      images,
     }).eq('id', params.id)
     if (error) { toast.error(error.message); setSaving(false); return }
     toast.success('Product updated!')
@@ -147,35 +126,16 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
         {/* Photos */}
         <div className="bg-white rounded-xl p-5 shadow-sm space-y-3">
           <h2 className="font-semibold text-[#1A1A1A]">Product Photos</h2>
-          <div className="flex gap-2 flex-wrap">
-            {images.map((url, i) => (
-              <div key={url} className="relative">
-                <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg border border-[#EEEEEE]" />
-                <button type="button" onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#E23744] text-white rounded-full flex items-center justify-center">
-                  <X size={10} />
-                </button>
-              </div>
-            ))}
-            {images.length < 5 && (
-              <div {...getRootProps()}
-                className={`w-20 h-20 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors text-center ${
-                  !storeId ? 'opacity-50 cursor-not-allowed border-[#EEEEEE]' :
-                  isDragActive ? 'border-[#FF6B2B] bg-[#FF6B2B]/5' : 'border-[#EEEEEE] hover:border-[#FF6B2B]'
-                }`}>
-                <input {...getInputProps()} />
-                {uploading ? (
-                  <div className="w-5 h-5 border-2 border-[#FF6B2B] border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <Upload size={16} className="text-[#AAAAAA]" />
-                    <span className="text-[10px] text-[#AAAAAA] mt-0.5">Add photo</span>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-          <p className="text-xs text-[#AAAAAA]">Max 5 photos, 2MB each. First photo is the cover.</p>
+          {imagesLoaded ? (
+            <ProductImageUploader
+              productId={params.id}
+              initialImages={productImages}
+            />
+          ) : (
+            <div className="h-20 flex items-center">
+              <div className="w-5 h-5 border-2 border-[#FF6B2B] border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
         </div>
 
         {/* Details */}
